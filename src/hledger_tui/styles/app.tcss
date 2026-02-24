@@ -36,9 +36,21 @@ TransactionsPane {
     layout: vertical;
 }
 
+TransactionsTable {
+    width: 1fr;
+    height: 1fr;
+    layout: vertical;
+}
+
+/* DataTable inside TransactionsTable fills remaining space */
+TransactionsTable DataTable {
+    width: 1fr;
+    height: 1fr;
+}
+
+/* Generic filter-bar: show/hide only */
 .filter-bar {
     dock: top;
-    height: 3;
     padding: 0 1;
     display: none;
 }
@@ -47,12 +59,48 @@ TransactionsPane {
     display: block;
 }
 
-.filter-bar Input {
+/* AccountsPane: single input row */
+AccountsPane .filter-bar {
+    height: 3;
+}
+
+AccountsPane .filter-bar Input {
     width: 100%;
 }
 
-#transactions-table {
-    height: 1fr;
+/* TransactionsTable: two-row filter panel */
+TransactionsTable .filter-bar {
+    height: auto;
+    layout: vertical;
+}
+
+.filter-inputs-row {
+    height: 3;
+    align: left middle;
+}
+
+.filter-label {
+    width: auto;
+    margin-right: 1;
+    content-align: right middle;
+    height: 3;
+}
+
+.period-buttons {
+    height: 3;
+    align: left middle;
+}
+
+.period-buttons Button {
+    height: 3;
+    min-width: 0;
+    margin-right: 1;
+}
+
+.period-buttons Button.-active {
+    background: $accent;
+    color: $text;
+    text-style: bold;
 }
 
 /* --- Accounts Pane --- */
@@ -89,10 +137,6 @@ AccountTransactionsScreen {
     width: auto;
     text-align: right;
     text-style: italic;
-}
-
-#acctxn-table {
-    height: 1fr;
 }
 
 #acctxn-footer {

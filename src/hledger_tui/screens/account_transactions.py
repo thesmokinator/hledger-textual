@@ -5,24 +5,30 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import DataTable, Label, Static
+from textual.widgets import Label, Static
 
-from hledger_tui.hledger import HledgerError, load_transactions
-from hledger_tui.models import Transaction
+from hledger_tui.widgets.transactions_table import TransactionsTable
 
 
 class AccountTransactionsScreen(Screen):
-    """Full-screen drill-down showing every transaction that touches an account."""
+    """Full-screen drill-down showing every transaction that touches an account.
+
+    Reuses :class:`~hledger_tui.widgets.transactions_table.TransactionsTable`
+    with a pinned account query so the layout, columns, ordering, and filter
+    bar are identical to the main Transactions view.
+    """
 
     BINDINGS = [
         Binding("escape", "back", "Back"),
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
+        Binding("slash", "filter", "Filter", show=True, priority=True),
+        Binding("e", "edit", "Edit", show=True, priority=True),
+        Binding("enter", "edit", "Edit", show=False),
+        Binding("d", "delete", "Delete", show=True, priority=True),
+        Binding("r", "refresh", "Refresh", show=True, priority=True),
     ]
 
     def __init__(
@@ -34,7 +40,7 @@ class AccountTransactionsScreen(Screen):
         """Initialise the screen.
 
         Args:
-            account: Full account name (e.g. 'assets:bank:checking').
+            account: Full account name (e.g. ``'assets:bank:checking'``).
             balance: Pre-formatted current balance string for display.
             journal_file: Path to the hledger journal file.
         """
@@ -42,7 +48,6 @@ class AccountTransactionsScreen(Screen):
         self.account = account
         self.balance = balance
         self.journal_file = journal_file
-        self.transactions: list[Transaction] = []
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
@@ -50,87 +55,39 @@ class AccountTransactionsScreen(Screen):
             yield Label(f"← {self.account}", id="acctxn-title")
             yield Label(self.balance, id="acctxn-balance")
 
-        yield DataTable(id="acctxn-table")
+        fixed_query = f"acct:^{re.escape(self.account)}$"
+        yield TransactionsTable(self.journal_file, fixed_query=fixed_query)
 
         yield Static(
-            "\\[Esc] Back  \\[j/k] Navigate",
+            "\\[Esc] Back  \\[/] Filter  \\[e] Edit  \\[d] Delete  \\[r] Refresh",
             id="acctxn-footer",
         )
 
-    def on_mount(self) -> None:
-        """Set up the DataTable and start loading transactions."""
-        table = self.query_one("#acctxn-table", DataTable)
-        table.cursor_type = "row"
-        table.add_columns("Date", "St", "Description", "Amount")
-        self._load()
-        table.focus()
+    @property
+    def _table(self) -> TransactionsTable:
+        return self.query_one(TransactionsTable)
 
-    # --- Data loading ---
-
-    @work(thread=True)
-    def _load(self) -> None:
-        """Load transactions for this account in a background thread."""
-        query = f"acct:^{re.escape(self.account)}$"
-        try:
-            transactions = load_transactions(self.journal_file, query=query)
-        except HledgerError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
-            return
-        self.app.call_from_thread(self._populate, transactions)
-
-    def _populate(self, transactions: list[Transaction]) -> None:
-        """Populate the DataTable with the loaded transactions."""
-        self.transactions = transactions
-        table = self.query_one("#acctxn-table", DataTable)
-        table.clear()
-        for txn in transactions:
-            amount = self._posting_amount(txn)
-            table.add_row(
-                txn.date,
-                txn.status.symbol,
-                txn.description,
-                amount,
-                key=str(txn.index),
-            )
-
-    def _posting_amount(self, txn: Transaction) -> str:
-        """Return the formatted amount for the posting belonging to this account.
-
-        When the same account appears more than once in a transaction (split
-        postings), the amounts are summed per commodity.
-        """
-        totals: dict[str, object] = {}  # commodity -> Amount
-        for posting in txn.postings:
-            if posting.account != self.account:
-                continue
-            for amount in posting.amounts:
-                if amount.commodity in totals:
-                    from hledger_tui.models import Amount
-                    prev = totals[amount.commodity]
-                    totals[amount.commodity] = Amount(
-                        commodity=amount.commodity,
-                        quantity=prev.quantity + amount.quantity,  # type: ignore[union-attr]
-                        style=amount.style,
-                    )
-                else:
-                    totals[amount.commodity] = amount
-
-        if not totals:
-            return ""
-        return "  ".join(a.format() for a in totals.values())  # type: ignore[union-attr]
-
-    # --- Actions ---
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
 
     def action_back(self) -> None:
-        """Pop this screen and return to the accounts list."""
-        self.app.pop_screen()
+        """Close the filter panel if open, otherwise pop this screen."""
+        if not self._table.dismiss_filter():
+            self.app.pop_screen()
 
-    def action_cursor_down(self) -> None:
-        """Move the cursor down one row."""
-        self.query_one("#acctxn-table", DataTable).action_cursor_down()
+    def action_filter(self) -> None:
+        """Show the filter panel."""
+        self._table.show_filter()
 
-    def action_cursor_up(self) -> None:
-        """Move the cursor up one row."""
-        self.query_one("#acctxn-table", DataTable).action_cursor_up()
+    def action_edit(self) -> None:
+        """Open the form to edit the selected transaction."""
+        self._table.do_edit()
+
+    def action_delete(self) -> None:
+        """Delete the selected transaction (with confirmation)."""
+        self._table.do_delete()
+
+    def action_refresh(self) -> None:
+        """Reload transactions from the journal."""
+        self._table.do_refresh()

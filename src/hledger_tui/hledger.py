@@ -152,7 +152,7 @@ def _parse_transaction(data: dict) -> Transaction:
 
 
 def load_transactions(
-    file: str | Path, query: str | None = None
+    file: str | Path, query: str | None = None, reverse: bool = False
 ) -> list[Transaction]:
     """Load transactions from a journal file, optionally filtered by a query.
 
@@ -161,6 +161,7 @@ def load_transactions(
         query: An hledger query string (e.g. 'acct:^assets:bank$'). When
             provided it is appended to the hledger print command so that only
             matching transactions are returned.
+        reverse: If True, return transactions in reverse order (newest first).
 
     Returns:
         A list of Transaction objects.
@@ -170,10 +171,11 @@ def load_transactions(
     """
     args = ["print", "-O", "json"]
     if query:
-        args.append(query)
+        args.extend(query.split())
     output = run_hledger(*args, file=file)
     data = json.loads(output)
-    return [_parse_transaction(t) for t in data]
+    txns = [_parse_transaction(t) for t in data]
+    return list(reversed(txns)) if reverse else txns
 
 
 def load_account_balances(file: str | Path) -> list[tuple[str, str]]:

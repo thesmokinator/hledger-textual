@@ -2,33 +2,49 @@
 
 from __future__ import annotations
 
-import shutil
-from decimal import Decimal
+from datetime import date
 from pathlib import Path
 
 import pytest
 
 from hledger_tui.app import HledgerTuiApp
-from hledger_tui.models import (
-    Amount,
-    AmountStyle,
-    Posting,
-    Transaction,
-    TransactionStatus,
-)
+from hledger_tui.models import TransactionStatus
 from hledger_tui.screens.transaction_form import TransactionFormScreen
 from hledger_tui.widgets.posting_row import PostingRow
 
-from tests.conftest import FIXTURES_DIR, has_hledger
+from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+
+# Dates within the current month so that the default "thismonth" filter works.
+# Grocery shopping has the latest date so it is the first row (cursor position)
+# after the reverse sort.
+_D1 = date.today().replace(day=1)
+_D2 = date.today().replace(day=2)
+_D3 = date.today().replace(day=3)
 
 
 @pytest.fixture
 def app_journal(tmp_path: Path) -> Path:
-    """A temporary journal for form testing."""
+    """A temporary journal with current-month dates for form testing."""
+    content = (
+        "; Test journal for form integration tests\n"
+        "\n"
+        f"{_D1.isoformat()} Salary\n"
+        "    assets:bank:checking               €3000.00\n"
+        "    income:salary\n"
+        "\n"
+        f"{_D2.isoformat()} ! Office supplies  ; for home office\n"
+        "    expenses:office                      €25.00\n"
+        "    expenses:shipping                    €10.00\n"
+        "    assets:bank:checking\n"
+        "\n"
+        f"{_D3.isoformat()} * (INV-001) Grocery shopping  ; weekly groceries\n"
+        "    expenses:food:groceries              €40.80\n"
+        "    assets:bank:checking\n"
+    )
     dest = tmp_path / "form_test.journal"
-    shutil.copy2(FIXTURES_DIR / "sample.journal", dest)
+    dest.write_text(content)
     return dest
 
 
@@ -82,7 +98,7 @@ class TestFormOpens:
             await pilot.press("e")
             await pilot.pause()
             form = app.screen
-            assert form.query_one("#input-date", Input).value == "2026-01-15"
+            assert form.query_one("#input-date", Input).value == _D3.isoformat()
             assert form.query_one("#input-description", Input).value == "Grocery shopping"
             assert form.query_one("#input-code", Input).value == "INV-001"
 

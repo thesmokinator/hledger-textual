@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from hledger_tui.formatter import format_amount, format_posting, format_transaction
+from hledger_tui.formatter import format_posting, format_transaction
 from hledger_tui.models import (
     Amount,
     AmountStyle,
@@ -10,25 +10,6 @@ from hledger_tui.models import (
     Transaction,
     TransactionStatus,
 )
-
-
-class TestFormatAmount:
-    """Tests for format_amount."""
-
-    def test_left_commodity(self):
-        style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
-        amt = Amount(commodity="€", quantity=Decimal("40.80"), style=style)
-        assert format_amount(amt) == "€40.80"
-
-    def test_right_commodity_spaced(self):
-        style = AmountStyle(commodity_side="R", commodity_spaced=True, precision=2)
-        amt = Amount(commodity="EUR", quantity=Decimal("40.80"), style=style)
-        assert format_amount(amt) == "40.80 EUR"
-
-    def test_negative_amount(self):
-        style = AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
-        amt = Amount(commodity="$", quantity=Decimal("-100.00"), style=style)
-        assert format_amount(amt) == "-$100.00"
 
 
 class TestFormatPosting:

@@ -63,6 +63,8 @@ class TestResolveJournalFile:
 
         monkeypatch.delenv("LEDGER_FILE", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # _CONFIG_PATH is computed at import time, so we must patch it directly
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_file)
 
         result = resolve_journal_file()
         assert result == journal.resolve()

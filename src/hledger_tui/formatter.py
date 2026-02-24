@@ -2,27 +2,7 @@
 
 from __future__ import annotations
 
-from hledger_tui.models import Amount, Posting, Transaction, TransactionStatus
-
-
-def format_amount(amount: Amount) -> str:
-    """Format a single amount for journal output.
-
-    Args:
-        amount: The amount to format.
-
-    Returns:
-        Formatted amount string (e.g. '€40.80' or '40.80 EUR').
-    """
-    qty_str = f"{abs(amount.quantity):.{amount.style.precision}f}"
-    sign = "-" if amount.quantity < 0 else ""
-
-    if amount.style.commodity_side == "L":
-        space = " " if amount.style.commodity_spaced else ""
-        return f"{sign}{amount.commodity}{space}{qty_str}"
-    else:
-        space = " " if amount.style.commodity_spaced else ""
-        return f"{sign}{qty_str}{space}{amount.commodity}"
+from hledger_tui.models import Posting, Transaction, TransactionStatus
 
 
 def format_posting(
@@ -43,7 +23,7 @@ def format_posting(
     if not posting.amounts:
         line = f"    {posting.account}"
     else:
-        amounts_str = ", ".join(format_amount(a) for a in posting.amounts)
+        amounts_str = ", ".join(a.format() for a in posting.amounts)
         padded_account = posting.account.ljust(account_width)
         padded_amount = amounts_str.rjust(amount_width)
         line = f"    {padded_account}  {padded_amount}"
@@ -88,7 +68,7 @@ def format_transaction(transaction: Transaction) -> str:
 
     amount_width = max(
         (
-            len(", ".join(format_amount(a) for a in p.amounts))
+            len(", ".join(a.format() for a in p.amounts))
             for p in transaction.postings
             if p.amounts
         ),
