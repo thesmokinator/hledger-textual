@@ -1,0 +1,34 @@
+[project]
+name = "hledger-tui"
+version = "0.1.0"
+description = "A terminal user interface for managing hledger journal transactions"
+readme = "README.md"
+authors = [
+    { name = "Michele Broggi", email = "213027097+thesmokinator@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE.md"]
+dependencies = [
+    "textual>=3.0.0,<4",
+    "tomli>=2.0.0; python_version < '3.11'",
+]
+
+[project.scripts]
+hledger-tui = "hledger_tui.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.10.5,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=7.0.0",
+    "textual-dev>=1.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

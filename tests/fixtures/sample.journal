@@ -1,0 +1,14 @@
+; A sample journal for testing
+
+2026-01-15 * (INV-001) Grocery shopping  ; weekly groceries
+    expenses:food:groceries              €40.80
+    assets:bank:checking
+
+2026-01-16 Salary
+    assets:bank:checking               €3000.00
+    income:salary
+
+2026-01-17 ! Office supplies  ; for home office
+    expenses:office                      €25.00
+    expenses:shipping                    €10.00
+    assets:bank:checking
