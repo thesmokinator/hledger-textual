@@ -243,10 +243,6 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
             )
             return
 
-        if not description:
-            self.notify("Description is required", severity="error", timeout=3)
-            return
-
         # Parse postings
         container = self.query_one("#postings-container", Vertical)
         posting_rows = list(container.query(PostingRow))

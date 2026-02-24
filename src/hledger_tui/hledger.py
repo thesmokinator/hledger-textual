@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import subprocess
 from decimal import Decimal
@@ -149,11 +151,16 @@ def _parse_transaction(data: dict) -> Transaction:
     )
 
 
-def load_transactions(file: str | Path) -> list[Transaction]:
-    """Load all transactions from a journal file.
+def load_transactions(
+    file: str | Path, query: str | None = None
+) -> list[Transaction]:
+    """Load transactions from a journal file, optionally filtered by a query.
 
     Args:
         file: Path to the journal file.
+        query: An hledger query string (e.g. 'acct:^assets:bank$'). When
+            provided it is appended to the hledger print command so that only
+            matching transactions are returned.
 
     Returns:
         A list of Transaction objects.
@@ -161,9 +168,35 @@ def load_transactions(file: str | Path) -> list[Transaction]:
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    output = run_hledger("print", "-O", "json", file=file)
+    args = ["print", "-O", "json"]
+    if query:
+        args.append(query)
+    output = run_hledger(*args, file=file)
     data = json.loads(output)
     return [_parse_transaction(t) for t in data]
+
+
+def load_account_balances(file: str | Path) -> list[tuple[str, str]]:
+    """Load all accounts with their current balances.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A list of (account_name, balance_string) tuples, ordered as hledger
+        returns them (alphabetical by account name).
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger("balance", "--flat", "--no-total", "-O", "csv", file=file)
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header row ("account","balance")
+    return [
+        (row[0], row[1])
+        for row in reader
+        if len(row) >= 2 and row[0] and row[1]
+    ]
 
 
 def load_accounts(file: str | Path) -> list[str]:

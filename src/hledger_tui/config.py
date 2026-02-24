@@ -14,6 +14,57 @@ import os
 import sys
 from pathlib import Path
 
+_CONFIG_PATH = Path.home() / ".config" / "hledger-tui" / "config.toml"
+
+
+def _load_config_dict() -> dict:
+    """Load the full config.toml as a dict, or return empty dict on failure."""
+    if not _CONFIG_PATH.exists():
+        return {}
+    try:
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            import tomli as tomllib
+
+        with open(_CONFIG_PATH, "rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
+
+
+def _save_config_dict(data: dict) -> None:
+    """Write a flat string-valued dict to config.toml.
+
+    Only string values are supported (sufficient for the current config schema).
+    """
+    _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lines = []
+    for key, value in data.items():
+        escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'{key} = "{escaped}"')
+    _CONFIG_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def load_theme() -> str | None:
+    """Return the saved theme name, or None if not set.
+
+    Returns:
+        Theme name string (e.g. 'textual-dark'), or None.
+    """
+    return _load_config_dict().get("theme")
+
+
+def save_theme(theme: str) -> None:
+    """Persist the selected theme to config.toml.
+
+    Args:
+        theme: Theme name to save (e.g. 'nord').
+    """
+    data = _load_config_dict()
+    data["theme"] = theme
+    _save_config_dict(data)
+
 
 def _load_config_toml() -> str | None:
     """Load journal_file from config.toml if it exists.
@@ -21,21 +72,7 @@ def _load_config_toml() -> str | None:
     Returns:
         The journal_file value, or None if not found.
     """
-    config_path = Path.home() / ".config" / "hledger-tui" / "config.toml"
-    if not config_path.exists():
-        return None
-
-    try:
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            import tomli as tomllib
-
-        with open(config_path, "rb") as f:
-            data = tomllib.load(f)
-        return data.get("journal_file")
-    except Exception:
-        return None
+    return _load_config_dict().get("journal_file")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -4,39 +4,50 @@ Screen {
     background: $surface;
 }
 
-/* --- Transaction List Screen --- */
+/* --- App-level layout --- */
 
-#header-bar {
+#nav-tabs {
     dock: top;
+}
+
+ContentSwitcher {
+    height: 1fr;
+}
+
+#journal-bar {
     height: 1;
-    background: $accent;
-    color: $text;
+    background: $panel;
+    color: $text-muted;
     padding: 0 1;
 }
 
-#header-title {
-    width: 1fr;
-    text-style: bold;
-}
-
-#header-file {
-    width: auto;
-    text-align: right;
+#footer-bar {
+    dock: bottom;
+    height: 1;
+    background: $panel;
     color: $text-muted;
+    padding: 0 1;
 }
 
-#filter-bar {
+/* --- Transactions Pane --- */
+
+TransactionsPane {
+    height: 1fr;
+    layout: vertical;
+}
+
+.filter-bar {
     dock: top;
     height: 3;
     padding: 0 1;
     display: none;
 }
 
-#filter-bar.visible {
+.filter-bar.visible {
     display: block;
 }
 
-#filter-input {
+.filter-bar Input {
     width: 100%;
 }
 
@@ -44,7 +55,47 @@ Screen {
     height: 1fr;
 }
 
-#footer-bar {
+/* --- Accounts Pane --- */
+
+AccountsPane {
+    height: 1fr;
+    layout: vertical;
+}
+
+#accounts-table {
+    height: 1fr;
+}
+
+/* --- Account Transactions Screen --- */
+
+AccountTransactionsScreen {
+    background: $surface;
+}
+
+#acctxn-header {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 1;
+}
+
+#acctxn-title {
+    width: 1fr;
+    text-style: bold;
+}
+
+#acctxn-balance {
+    width: auto;
+    text-align: right;
+    text-style: italic;
+}
+
+#acctxn-table {
+    height: 1fr;
+}
+
+#acctxn-footer {
     dock: bottom;
     height: 1;
     background: $panel;

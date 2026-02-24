@@ -1,4 +1,4 @@
-"""Main transactions list screen."""
+"""Transactions list pane widget."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
-from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Input, Label, Static
+from textual.widget import Widget
+from textual.widgets import DataTable, Input
 
 from hledger_tui.hledger import HledgerError, load_transactions
-from hledger_tui.models import Transaction, TransactionStatus
+from hledger_tui.models import Transaction
 
 
-class TransactionsScreen(Screen):
-    """Screen showing all transactions in a DataTable."""
+class TransactionsPane(Widget):
+    """Widget showing all transactions in a DataTable."""
 
     BINDINGS = [
         Binding("a", "add", "Add", show=True, priority=True),
@@ -28,39 +28,28 @@ class TransactionsScreen(Screen):
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
-        Binding("q", "quit", "Quit", show=True, priority=True),
     ]
 
-    def __init__(self, journal_file: Path) -> None:
-        """Initialize the screen.
+    def __init__(self, journal_file: Path, **kwargs) -> None:
+        """Initialize the pane.
 
         Args:
             journal_file: Path to the hledger journal file.
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.journal_file = journal_file
         self.transactions: list[Transaction] = []
         self.filter_text: str = ""
 
     def compose(self) -> ComposeResult:
-        """Create the screen layout."""
-        with Horizontal(id="header-bar"):
-            yield Label("hledger-tui", id="header-title")
-            yield Label(str(self.journal_file), id="header-file")
-
-        with Horizontal(id="filter-bar"):
+        """Create the pane layout."""
+        with Horizontal(classes="filter-bar"):
             yield Input(
                 placeholder="Filter by description or account...",
-                id="filter-input",
+                id="txn-filter-input",
                 disabled=True,
             )
-
         yield DataTable(id="transactions-table")
-
-        yield Static(
-            "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[/] Filter  \\[r] Refresh  \\[q] Quit",
-            id="footer-bar",
-        )
 
     def on_mount(self) -> None:
         """Set up the DataTable and load transactions."""
@@ -69,6 +58,10 @@ class TransactionsScreen(Screen):
         table.add_columns("Date", "Status", "Description", "Amount")
         self._load_transactions()
         table.focus()
+
+    def on_show(self) -> None:
+        """Restore focus to the table when the pane becomes visible."""
+        self.query_one("#transactions-table", DataTable).focus()
 
     def _load_transactions(self) -> None:
         """Load transactions from the journal and populate the table."""
@@ -139,18 +132,18 @@ class TransactionsScreen(Screen):
 
     def action_filter(self) -> None:
         """Show/focus the filter input."""
-        filter_bar = self.query_one("#filter-bar")
+        filter_bar = self.query_one(".filter-bar")
         filter_bar.add_class("visible")
-        filter_input = self.query_one("#filter-input", Input)
+        filter_input = self.query_one("#txn-filter-input", Input)
         filter_input.disabled = False
         filter_input.focus()
 
     def action_dismiss_filter(self) -> None:
         """Hide the filter input and clear the filter."""
-        filter_bar = self.query_one("#filter-bar")
+        filter_bar = self.query_one(".filter-bar")
         if filter_bar.has_class("visible"):
             filter_bar.remove_class("visible")
-            filter_input = self.query_one("#filter-input", Input)
+            filter_input = self.query_one("#txn-filter-input", Input)
             filter_input.value = ""
             filter_input.disabled = True
             self.filter_text = ""
@@ -159,13 +152,11 @@ class TransactionsScreen(Screen):
 
     def action_cursor_down(self) -> None:
         """Move cursor down in the table."""
-        table = self.query_one("#transactions-table", DataTable)
-        table.action_cursor_down()
+        self.query_one("#transactions-table", DataTable).action_cursor_down()
 
     def action_cursor_up(self) -> None:
         """Move cursor up in the table."""
-        table = self.query_one("#transactions-table", DataTable)
-        table.action_cursor_up()
+        self.query_one("#transactions-table", DataTable).action_cursor_up()
 
     def action_add(self) -> None:
         """Open the form to add a new transaction."""
@@ -216,10 +207,6 @@ class TransactionsScreen(Screen):
 
         self.app.push_screen(DeleteConfirmModal(txn), callback=on_confirm)
 
-    def action_quit(self) -> None:
-        """Quit the application."""
-        self.app.exit()
-
     # --- Mutation helpers ---
 
     @work(thread=True)
@@ -230,18 +217,14 @@ class TransactionsScreen(Screen):
         try:
             append_transaction(self.journal_file, transaction)
             self.app.call_from_thread(self._load_transactions)
-            self.app.call_from_thread(
-                self.notify, "Transaction added", timeout=3
-            )
+            self.app.call_from_thread(self.notify, "Transaction added", timeout=3)
         except JournalError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
             )
 
     @work(thread=True)
-    def _do_replace(
-        self, original: Transaction, updated: Transaction
-    ) -> None:
+    def _do_replace(self, original: Transaction, updated: Transaction) -> None:
         """Replace a transaction and reload."""
         from hledger_tui.journal import JournalError, replace_transaction
 
@@ -274,7 +257,7 @@ class TransactionsScreen(Screen):
 
     # --- Event handlers ---
 
-    @on(Input.Changed, "#filter-input")
+    @on(Input.Changed, "#txn-filter-input")
     def on_filter_changed(self, event: Input.Changed) -> None:
         """Filter transactions as the user types."""
         self.filter_text = event.value
