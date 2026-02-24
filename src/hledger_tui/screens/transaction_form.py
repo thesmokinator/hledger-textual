@@ -11,9 +11,10 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
+from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Select, Static
 
-from hledger_tui.hledger import HledgerError, load_accounts
+from hledger_tui.hledger import HledgerError, load_accounts, load_descriptions
 from hledger_tui.models import (
     Amount,
     AmountStyle,
@@ -21,6 +22,8 @@ from hledger_tui.models import (
     Transaction,
     TransactionStatus,
 )
+from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+from hledger_tui.widgets.date_input import DateInput
 from hledger_tui.widgets.posting_row import PostingRow
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -72,17 +75,15 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 # Date field
                 with Horizontal(classes="form-field"):
                     yield Label("Date:")
-                    yield Input(
+                    yield DateInput(
                         value=self.transaction.date if self.is_edit else date.today().isoformat(),
-                        placeholder="YYYY-MM-DD",
                         id="input-date",
-                        max_length=10,
                     )
 
                 # Description field
                 with Horizontal(classes="form-field"):
                     yield Label("Description:")
-                    yield Input(
+                    yield AutocompleteInput(
                         value=self.transaction.description if self.is_edit else "",
                         placeholder="Transaction description",
                         id="input-description",
@@ -131,11 +132,20 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 yield Button("Save", id="btn-save")
 
     def on_mount(self) -> None:
-        """Load accounts for autocomplete and add initial posting rows."""
+        """Load accounts and descriptions for autocomplete, and add initial posting rows."""
         try:
             self.accounts = load_accounts(self.journal_file)
         except HledgerError:
             self.accounts = []
+
+        try:
+            descriptions = load_descriptions(self.journal_file)
+        except HledgerError:
+            descriptions = []
+        if descriptions:
+            self.query_one("#input-description", AutocompleteInput).suggester = (
+                SuggestFromList(descriptions, case_sensitive=False)
+            )
 
         if self.is_edit and self.transaction:
             for i, posting in enumerate(self.transaction.postings):
@@ -143,7 +153,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 commodity = ""
                 if posting.amounts:
                     amt = posting.amounts[0]
-                    amount_str = str(amt.quantity)
+                    amount_str = f"{amt.quantity:.2f}"
                     commodity = amt.commodity
                 label = f"#{i + 1}:"
                 self._add_posting_row(
@@ -222,6 +232,35 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         except ValueError:
             return False
 
+    @staticmethod
+    def _omit_balancing_amount(postings: list[Posting]) -> list[Posting]:
+        """Clear the last posting's amounts when hledger can infer the balance.
+
+        Only acts when every posting has exactly one amount, all amounts share the
+        same commodity, and the amounts sum to zero.
+
+        Args:
+            postings: The list of postings to process.
+
+        Returns:
+            The (potentially modified) list of postings.
+        """
+        if len(postings) < 2:
+            return postings
+        # Every posting must have exactly one amount.
+        if not all(len(p.amounts) == 1 for p in postings):
+            return postings
+        # All commodities must be the same.
+        commodities = {p.amounts[0].commodity for p in postings}
+        if len(commodities) != 1:
+            return postings
+        # Amounts must sum to zero.
+        total = sum(p.amounts[0].quantity for p in postings)
+        if total != 0:
+            return postings
+        postings[-1].amounts = []
+        return postings
+
     def _save(self) -> None:
         """Validate and save the transaction."""
         date_str = self.query_one("#input-date", Input).value.strip()
@@ -287,6 +326,8 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 timeout=3,
             )
             return
+
+        postings = self._omit_balancing_amount(postings)
 
         transaction = Transaction(
             index=0,

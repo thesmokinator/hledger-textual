@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from hledger_tui.app import HledgerTuiApp
-from hledger_tui.models import TransactionStatus
+from hledger_tui.models import Amount, AmountStyle, Posting, TransactionStatus
 from hledger_tui.screens.transaction_form import TransactionFormScreen
+from hledger_tui.widgets.amount_input import AmountInput
+from hledger_tui.widgets.date_input import DateInput
 from hledger_tui.widgets.posting_row import PostingRow
 
 from tests.conftest import has_hledger
@@ -363,3 +366,228 @@ class TestDateValidation:
     def test_impossible_day(self):
         form = TransactionFormScreen.__new__(TransactionFormScreen)
         assert form._validate_date("2026-01-32") is False
+
+
+class TestDateInputFormat:
+    """Tests for DateInput._format_date and _cursor_for_digit_pos."""
+
+    def test_empty(self):
+        assert DateInput._format_date("") == ""
+
+    def test_partial_year(self):
+        assert DateInput._format_date("20") == "20"
+
+    def test_full_year(self):
+        assert DateInput._format_date("2026") == "2026"
+
+    def test_year_and_one_month_digit(self):
+        assert DateInput._format_date("20260") == "2026-0"
+
+    def test_year_and_full_month(self):
+        assert DateInput._format_date("202601") == "2026-01"
+
+    def test_year_month_and_one_day_digit(self):
+        assert DateInput._format_date("2026011") == "2026-01-1"
+
+    def test_full_date(self):
+        assert DateInput._format_date("20260115") == "2026-01-15"
+
+    def test_truncates_extra_digits(self):
+        assert DateInput._format_date("202601159") == "2026-01-15"
+
+    def test_cursor_within_year(self):
+        assert DateInput._cursor_for_digit_pos(0) == 0
+        assert DateInput._cursor_for_digit_pos(4) == 4
+
+    def test_cursor_within_month(self):
+        # digit_pos 5 → cursor 6 (after first dash)
+        assert DateInput._cursor_for_digit_pos(5) == 6
+
+    def test_cursor_within_day(self):
+        # digit_pos 7 → cursor 9 (after both dashes)
+        assert DateInput._cursor_for_digit_pos(7) == 9
+
+    def test_cursor_at_end(self):
+        # digit_pos 8 → cursor 10 (end of YYYY-MM-DD)
+        assert DateInput._cursor_for_digit_pos(8) == 10
+
+
+class TestOmitBalancingAmount:
+    """Tests for TransactionFormScreen._omit_balancing_amount."""
+
+    @pytest.fixture
+    def style(self):
+        return AmountStyle(commodity_side="L", commodity_spaced=False, precision=2)
+
+    def test_clears_last_posting_when_balanced(self, style):
+        postings = [
+            Posting(
+                account="expenses:food",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("50.00"), style=style)],
+            ),
+            Posting(
+                account="assets:bank",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("-50.00"), style=style)],
+            ),
+        ]
+        result = TransactionFormScreen._omit_balancing_amount(postings)
+        assert len(result) == 2
+        assert result[0].amounts[0].quantity == Decimal("50.00")
+        assert result[1].amounts == []
+
+    def test_preserves_amounts_when_unbalanced(self, style):
+        postings = [
+            Posting(
+                account="expenses:food",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("50.00"), style=style)],
+            ),
+            Posting(
+                account="assets:bank",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("-30.00"), style=style)],
+            ),
+        ]
+        result = TransactionFormScreen._omit_balancing_amount(postings)
+        assert len(result[1].amounts) == 1
+        assert result[1].amounts[0].quantity == Decimal("-30.00")
+
+    def test_preserves_amounts_with_mixed_commodities(self, style):
+        postings = [
+            Posting(
+                account="expenses:food",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("50.00"), style=style)],
+            ),
+            Posting(
+                account="assets:bank",
+                amounts=[Amount(commodity="USD", quantity=Decimal("-50.00"), style=style)],
+            ),
+        ]
+        result = TransactionFormScreen._omit_balancing_amount(postings)
+        assert len(result[1].amounts) == 1
+
+    def test_preserves_when_posting_has_no_amount(self, style):
+        postings = [
+            Posting(
+                account="expenses:food",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("50.00"), style=style)],
+            ),
+            Posting(account="assets:bank", amounts=[]),
+        ]
+        result = TransactionFormScreen._omit_balancing_amount(postings)
+        # Not all postings have exactly 1 amount, so no change
+        assert result[1].amounts == []
+
+    def test_preserves_with_single_posting(self, style):
+        postings = [
+            Posting(
+                account="expenses:food",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("50.00"), style=style)],
+            ),
+        ]
+        result = TransactionFormScreen._omit_balancing_amount(postings)
+        assert len(result[0].amounts) == 1
+
+    def test_three_postings_balanced(self, style):
+        postings = [
+            Posting(
+                account="expenses:food",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("30.00"), style=style)],
+            ),
+            Posting(
+                account="expenses:drink",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("20.00"), style=style)],
+            ),
+            Posting(
+                account="assets:bank",
+                amounts=[Amount(commodity="EUR", quantity=Decimal("-50.00"), style=style)],
+            ),
+        ]
+        result = TransactionFormScreen._omit_balancing_amount(postings)
+        assert result[0].amounts[0].quantity == Decimal("30.00")
+        assert result[1].amounts[0].quantity == Decimal("20.00")
+        assert result[2].amounts == []
+
+
+class TestDescriptionAutocomplete:
+    """Tests for description autocomplete in the form."""
+
+    async def test_description_uses_autocomplete_input(self, app: HledgerTuiApp):
+        from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+
+        async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+            desc_input = form.query_one("#input-description")
+            assert isinstance(desc_input, AutocompleteInput)
+
+    async def test_description_has_suggester(self, app: HledgerTuiApp):
+        from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+
+        async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+            desc_input = form.query_one("#input-description", AutocompleteInput)
+            assert desc_input.suggester is not None
+
+    async def test_date_uses_date_input(self, app: HledgerTuiApp):
+        async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+            date_input = form.query_one("#input-date")
+            assert isinstance(date_input, DateInput)
+
+
+class TestAmountInputFormat:
+    """Tests for AmountInput._format_amount static method."""
+
+    def test_empty(self):
+        assert AmountInput._format_amount("") == ""
+
+    def test_integer(self):
+        assert AmountInput._format_amount("49") == "49.00"
+
+    def test_one_decimal(self):
+        assert AmountInput._format_amount("2.5") == "2.50"
+
+    def test_two_decimals(self):
+        assert AmountInput._format_amount("12.34") == "12.34"
+
+    def test_three_decimals_rounds(self):
+        assert AmountInput._format_amount("1.999") == "2.00"
+
+    def test_negative(self):
+        assert AmountInput._format_amount("-49") == "-49.00"
+
+    def test_negative_decimal(self):
+        assert AmountInput._format_amount("-3.5") == "-3.50"
+
+    def test_leading_dot(self):
+        assert AmountInput._format_amount(".5") == "0.50"
+
+    def test_zero(self):
+        assert AmountInput._format_amount("0") == "0.00"
+
+    def test_whitespace_only(self):
+        assert AmountInput._format_amount("   ") == ""
+
+    def test_invalid_returns_original(self):
+        assert AmountInput._format_amount("abc") == "abc"
+
+
+class TestAmountInputWidget:
+    """Integration tests for AmountInput in the posting row."""
+
+    async def test_amount_uses_amount_input(self, app: HledgerTuiApp):
+        async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+            rows = list(form.query(PostingRow))
+            amount_widget = rows[0].query_one("#amount-0")
+            assert isinstance(amount_widget, AmountInput)

@@ -8,6 +8,7 @@ from textual.suggester import SuggestFromList
 from textual.widget import Widget
 from textual.widgets import Input, Label
 
+from hledger_tui.widgets.amount_input import AmountInput
 from hledger_tui.widgets.autocomplete_input import AutocompleteInput
 
 
@@ -58,9 +59,8 @@ class PostingRow(Widget):
                 id=f"account-{self.row_index}",
                 suggester=suggester,
             )
-            yield Input(
+            yield AmountInput(
                 value=self.initial_amount,
-                placeholder="Amount",
                 classes="amount-input",
                 id=f"amount-{self.row_index}",
             )

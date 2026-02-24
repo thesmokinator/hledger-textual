@@ -280,12 +280,27 @@ PostingRow {
 }
 
 #posting-buttons {
-    height: 3;
-    margin-top: 1;
+    height: auto;
+    margin-top: 0;
 }
 
 #posting-buttons Button {
     margin-right: 1;
+    height: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: $text-muted;
+}
+
+#posting-buttons Button:hover {
+    color: $text;
+    text-style: bold;
+}
+
+#posting-buttons Button:focus {
+    color: $accent;
+    text-style: bold;
 }
 
 /* --- Form Footer Buttons --- */
