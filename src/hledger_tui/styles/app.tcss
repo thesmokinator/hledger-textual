@@ -10,6 +10,10 @@ Screen {
     dock: top;
 }
 
+#nav-tabs Tab {
+    padding: 0 2;
+}
+
 ContentSwitcher {
     height: 1fr;
 }
