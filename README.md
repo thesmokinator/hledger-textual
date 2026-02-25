@@ -64,7 +64,3 @@ uv run pytest -v
 # Run with coverage report
 uv run pytest --cov=hledger_tui --cov-report=term-missing
 ```
-
-## License
-
-[MIT](LICENSE.md)

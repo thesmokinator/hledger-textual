@@ -12,6 +12,7 @@ from pathlib import Path
 from hledger_tui.models import (
     Amount,
     AmountStyle,
+    BudgetRow,
     Posting,
     SourcePosition,
     Transaction,
@@ -231,3 +232,119 @@ def load_descriptions(file: str | Path) -> list[str]:
     """
     output = run_hledger("descriptions", file=file)
     return [line.strip() for line in output.strip().splitlines() if line.strip()]
+
+
+def _parse_budget_amount(s: str) -> tuple[Decimal, str]:
+    """Parse a budget amount string like '€500.00' or '500.00 EUR'.
+
+    Args:
+        s: The amount string from hledger CSV output.
+
+    Returns:
+        A tuple of (quantity, commodity). Returns (0, "") for unparseable values.
+    """
+    import re
+
+    s = s.strip()
+    if not s or s == "0":
+        return Decimal("0"), ""
+
+    # Left-side commodity: €500.00
+    match = re.match(r"^([^\d\s.-]+)\s*(-?[\d,.]+)$", s)
+    if match:
+        commodity = match.group(1)
+        num_str = match.group(2).replace(",", "")
+        try:
+            return Decimal(num_str), commodity
+        except Exception:
+            return Decimal("0"), commodity
+
+    # Right-side commodity: 500.00 EUR
+    match = re.match(r"^(-?[\d,.]+)\s*([^\d\s.-]+)$", s)
+    if match:
+        num_str = match.group(1).replace(",", "")
+        commodity = match.group(2)
+        try:
+            return Decimal(num_str), commodity
+        except Exception:
+            return Decimal("0"), commodity
+
+    # Plain number
+    try:
+        return Decimal(s.replace(",", "")), ""
+    except Exception:
+        return Decimal("0"), ""
+
+
+def load_budget_report(file: str | Path, period: str) -> list[BudgetRow]:
+    """Load budget vs actual data for a given period.
+
+    Runs ``hledger balance --budget`` and parses the CSV output.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like '2026-02' for hledger's -p flag.
+
+    Returns:
+        A list of BudgetRow objects with actual and budget amounts.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "--budget", "-p", period, "-O", "csv",
+        "--no-total", "Expenses",
+        file=file,
+    )
+
+    if not output.strip():
+        return []
+
+    reader = csv.reader(io.StringIO(output))
+    header = next(reader, None)
+    if not header or len(header) < 2:
+        return []
+
+    rows: list[BudgetRow] = []
+    for row in reader:
+        if not row or not row[0]:
+            continue
+
+        account = row[0].strip().strip('"')
+
+        # hledger --budget CSV has columns: Account, <period>, <period> budget
+        # or: Account, <period>
+        # The period column contains "actual [=budget]" format
+        actual = Decimal("0")
+        budget = Decimal("0")
+        commodity = ""
+
+        if len(row) >= 2:
+            cell = row[1].strip().strip('"')
+            # Parse "actual [=budget]" format or just "actual"
+            if "=" in cell:
+                # Format: "€500.00 [=€800.00]" or similar
+                parts = cell.split("=")
+                actual_str = parts[0].strip().rstrip("[").strip()
+                budget_str = parts[1].strip().rstrip("]").strip()
+                actual, commodity = _parse_budget_amount(actual_str)
+                budget, _ = _parse_budget_amount(budget_str)
+            else:
+                actual, commodity = _parse_budget_amount(cell)
+
+        # Check if there's a separate budget column
+        if len(row) >= 3 and not budget:
+            budget_cell = row[2].strip().strip('"')
+            budget, bcom = _parse_budget_amount(budget_cell)
+            if not commodity:
+                commodity = bcom
+
+        if account and (actual or budget):
+            rows.append(BudgetRow(
+                account=account,
+                actual=actual,
+                budget=budget,
+                commodity=commodity,
+            ))
+
+    return rows

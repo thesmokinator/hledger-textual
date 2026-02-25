@@ -10,11 +10,13 @@ from textual.widgets import ContentSwitcher, Static, Tab, Tabs
 
 from hledger_tui.config import load_theme
 from hledger_tui.widgets.accounts_pane import AccountsPane
+from hledger_tui.widgets.budget_pane import BudgetPane
 from hledger_tui.widgets.transactions_pane import TransactionsPane
 
 _FOOTER_TEXTS: dict[str, str] = {
     "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[/] Filter  \\[r] Refresh  \\[q] Quit",
     "accounts": "\\[Enter] View  \\[/] Filter  \\[r] Refresh  \\[q] Quit",
+    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[/] Filter  \\[◄/►] Month  \\[r] Refresh  \\[q] Quit",
 }
 
 
@@ -27,6 +29,7 @@ class HledgerTuiApp(App):
     BINDINGS = [
         Binding("1", "switch_section('transactions')", "Transactions", show=False),
         Binding("2", "switch_section('accounts')", "Accounts", show=False),
+        Binding("3", "switch_section('budget')", "Budget", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -47,6 +50,7 @@ class HledgerTuiApp(App):
         yield Tabs(
             Tab("Transactions", id="tab-transactions"),
             Tab("Accounts", id="tab-accounts"),
+            Tab("Budget", id="tab-budget"),
             id="nav-tabs",
         )
 
@@ -55,6 +59,7 @@ class HledgerTuiApp(App):
         with ContentSwitcher(initial="transactions", id="content-switcher"):
             yield TransactionsPane(self.journal_file, id="transactions")
             yield AccountsPane(self.journal_file, id="accounts")
+            yield BudgetPane(self.journal_file, id="budget")
 
         yield Static(_FOOTER_TEXTS["transactions"], id="footer-bar")
 

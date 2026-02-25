@@ -118,3 +118,33 @@ class Transaction:
                 if amount.commodity == commodity:
                     return amount.style
         return AmountStyle()
+
+
+@dataclass
+class BudgetRule:
+    """A single budget rule mapping an account to a monthly amount."""
+
+    account: str
+    amount: Amount
+
+
+@dataclass
+class BudgetRow:
+    """A row in the budget report comparing actual vs budgeted spending."""
+
+    account: str
+    actual: Decimal
+    budget: Decimal
+    commodity: str
+
+    @property
+    def remaining(self) -> Decimal:
+        """Return the remaining budget (budget - actual)."""
+        return self.budget - self.actual
+
+    @property
+    def usage_pct(self) -> float:
+        """Return the usage percentage (actual / budget * 100)."""
+        if self.budget == 0:
+            return 0.0
+        return float(self.actual / self.budget * 100)

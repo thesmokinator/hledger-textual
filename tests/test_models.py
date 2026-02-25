@@ -5,6 +5,7 @@ from decimal import Decimal
 from hledger_tui.models import (
     Amount,
     AmountStyle,
+    BudgetRow,
     Posting,
     Transaction,
     TransactionStatus,
@@ -114,3 +115,27 @@ class TestTransaction:
             ],
         )
         assert txn.total_amount == "€35.00"
+
+
+class TestBudgetRow:
+    """Tests for BudgetRow properties."""
+
+    def test_remaining_under_budget(self):
+        row = BudgetRow(account="Expenses:Food", actual=Decimal("500"), budget=Decimal("800"), commodity="€")
+        assert row.remaining == Decimal("300")
+
+    def test_remaining_over_budget(self):
+        row = BudgetRow(account="Expenses:Food", actual=Decimal("900"), budget=Decimal("800"), commodity="€")
+        assert row.remaining == Decimal("-100")
+
+    def test_usage_pct_normal(self):
+        row = BudgetRow(account="Expenses:Food", actual=Decimal("400"), budget=Decimal("800"), commodity="€")
+        assert row.usage_pct == 50.0
+
+    def test_usage_pct_over(self):
+        row = BudgetRow(account="Expenses:Food", actual=Decimal("1200"), budget=Decimal("800"), commodity="€")
+        assert row.usage_pct == 150.0
+
+    def test_usage_pct_zero_budget(self):
+        row = BudgetRow(account="Expenses:Food", actual=Decimal("100"), budget=Decimal("0"), commodity="€")
+        assert row.usage_pct == 0.0
