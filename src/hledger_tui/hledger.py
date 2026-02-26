@@ -396,7 +396,12 @@ def load_journal_stats(file: str | Path) -> JournalStats:
 
 
 def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
-    """Load income and expense totals for a single period.
+    """Load income, expense, and investment totals for a single period.
+
+    Two separate queries are used: one for income/expenses (unmodified) and
+    one for investment accounts with ``-B`` (at cost) so that non-EUR
+    commodities are converted to the purchase price without affecting the
+    income/expense amounts.
 
     Args:
         file: Path to the journal file.
@@ -408,6 +413,7 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
     Raises:
         HledgerError: If hledger fails or is not found.
     """
+    # Query 1: income and expenses (no -B, keeps original amounts)
     output = run_hledger(
         "balance", "income", "expenses",
         "-p", period, "--flat", "--no-total", "-O", "csv",
@@ -432,7 +438,31 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
         elif account.startswith("expenses"):
             expenses += abs(qty)
 
-    return PeriodSummary(income=income, expenses=expenses, commodity=commodity)
+    # Query 2: investments at cost (-B converts units to purchase price)
+    investments = Decimal("0")
+    try:
+        inv_output = run_hledger(
+            "balance", "assets:investments",
+            "-B",
+            "-p", period, "--flat", "--no-total", "-O", "csv",
+            file=file,
+        )
+        inv_reader = csv.reader(io.StringIO(inv_output))
+        next(inv_reader, None)  # skip header
+        for row in inv_reader:
+            if len(row) < 2 or not row[0]:
+                continue
+            qty, com = _parse_budget_amount(row[1].strip())
+            if not commodity and com:
+                commodity = com
+            investments += abs(qty)
+    except HledgerError:
+        pass  # no investments or hledger error, keep 0
+
+    return PeriodSummary(
+        income=income, expenses=expenses,
+        commodity=commodity, investments=investments,
+    )
 
 
 def load_expense_breakdown(

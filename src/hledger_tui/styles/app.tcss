@@ -101,7 +101,14 @@ ContentSwitcher {
 }
 
 #card-net-value.net-negative {
-    color: red;
+    color: tomato;
+}
+
+#card-net-note {
+    width: 100%;
+    text-align: center;
+    color: $text-muted;
+    height: 1;
 }
 
 /* --- Transactions Pane --- */

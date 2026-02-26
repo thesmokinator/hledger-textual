@@ -117,6 +117,7 @@ class SummaryPane(Widget):
             with Vertical(classes="summary-card", id="card-net"):
                 yield Static("Net", classes="summary-card-title")
                 yield Digits("--", id="card-net-value", classes="summary-card-value")
+                yield Static("", id="card-net-note")
 
         # Investments section
         with Vertical(id="summary-portfolio"):
@@ -305,6 +306,13 @@ class SummaryPane(Widget):
                 net_widget.update(f"-{net_text}")
                 net_widget.remove_class("net-positive")
                 net_widget.add_class("net-negative")
+
+            note = self.query_one("#card-net-note", Static)
+            if summary.investments > 0:
+                inv_text = _fmt_amount(summary.investments, com)
+                note.update(f"incl. {inv_text} invested")
+            else:
+                note.update("")
         else:
             for widget_id in (
                 "#card-income-value",
@@ -312,6 +320,7 @@ class SummaryPane(Widget):
                 "#card-net-value",
             ):
                 self.query_one(widget_id, Digits).update("--")
+            self.query_one("#card-net-note", Static).update("")
 
         # Investments table — columns are fixed; clear rows only
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)

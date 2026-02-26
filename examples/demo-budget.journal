@@ -1,0 +1,10 @@
+; Budget rules for hledger-tui demo
+
+~ monthly
+    expenses:food:groceries              €400.00
+    expenses:food:restaurant             €150.00
+    expenses:housing:rent                €800.00
+    expenses:housing:utilities           €120.00
+    expenses:transport                    €80.00
+    expenses:subscriptions                €50.00
+    assets:budget

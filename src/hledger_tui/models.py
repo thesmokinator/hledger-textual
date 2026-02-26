@@ -131,16 +131,21 @@ class JournalStats:
 
 @dataclass
 class PeriodSummary:
-    """Financial summary for a single period (e.g. one month)."""
+    """Financial summary for a single period (e.g. one month).
+
+    The net value represents disposable income: income minus expenses minus
+    new investment purchases, i.e. what actually stays in the bank account.
+    """
 
     income: Decimal
     expenses: Decimal
     commodity: str
+    investments: Decimal = Decimal("0")
 
     @property
     def net(self) -> Decimal:
-        """Return net income (income minus expenses)."""
-        return self.income - self.expenses
+        """Return net disposable income (income minus expenses minus investments)."""
+        return self.income - self.expenses - self.investments
 
 
 @dataclass

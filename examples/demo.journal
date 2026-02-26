@@ -1,0 +1,162 @@
+; hledger-tui demo journal
+; Two months of realistic personal finance data (Jan-Feb 2026)
+
+include demo-budget.journal
+
+; === January 2026 ===
+
+2026-01-02 * (SAL-202601) Monthly salary
+    assets:bank:checking               €3200.00
+    income:salary
+
+2026-01-03 * Rent payment
+    expenses:housing:rent                €800.00
+    assets:bank:checking
+
+2026-01-05 * Supermarket
+    expenses:food:groceries               €62.30
+    assets:bank:checking
+
+2026-01-06 Transfer to savings
+    assets:bank:savings                  €500.00
+    assets:bank:checking
+
+2026-01-08 * Electricity bill
+    expenses:housing:utilities            €85.40
+    assets:bank:checking
+
+2026-01-10 * Monthly subscriptions  ; streaming + cloud
+    expenses:subscriptions                €24.99
+    expenses:subscriptions                €12.99
+    assets:bank:checking
+
+2026-01-11 * Sushi restaurant
+    expenses:food:restaurant              €38.50
+    assets:bank:checking
+
+2026-01-12 * Supermarket
+    expenses:food:groceries               €91.20
+    assets:bank:checking
+
+2026-01-13 * Monthly train pass
+    expenses:transport                    €49.00
+    assets:bank:checking
+
+2026-01-15 * Buy XDWD  ; world equity ETF
+    assets:investments:XDWD            10 XDWD @ €118.50
+    assets:bank:checking            €-1185.00
+
+2026-01-15 * Buy XEON  ; euro money market ETF
+    assets:investments:XEON             5 XEON @ €147.80
+    assets:bank:checking             €-739.00
+
+2026-01-17 * Pizzeria
+    expenses:food:restaurant              €22.00
+    assets:bank:checking
+
+2026-01-19 * Supermarket
+    expenses:food:groceries              €108.45
+    assets:bank:checking
+
+2026-01-20 ! Freelance invoice  ; pending payment
+    assets:bank:checking                 €450.00
+    income:freelance
+
+2026-01-22 * Gas bill
+    expenses:housing:utilities            €42.70
+    assets:bank:checking
+
+2026-01-25 * Supermarket
+    expenses:food:groceries               €73.60
+    assets:bank:checking
+
+2026-01-27 * Buy XGDU  ; gold ETC
+    assets:investments:XGDU             8 XGDU @ €63.20
+    assets:bank:checking             €-505.60
+
+2026-01-28 * Taxi ride
+    expenses:transport                    €18.50
+    assets:bank:checking
+
+2026-01-30 * Thai restaurant
+    expenses:food:restaurant              €31.00
+    assets:bank:checking
+
+; === February 2026 ===
+
+2026-02-01 * (SAL-202602) Monthly salary
+    assets:bank:checking               €3200.00
+    income:salary
+
+2026-02-02 * Rent payment
+    expenses:housing:rent                €800.00
+    assets:bank:checking
+
+2026-02-03 * Supermarket
+    expenses:food:groceries               €55.80
+    assets:bank:checking
+
+2026-02-04 Transfer to savings
+    assets:bank:savings                  €500.00
+    assets:bank:checking
+
+2026-02-06 * Water bill
+    expenses:housing:utilities            €38.20
+    assets:bank:checking
+
+2026-02-07 * Burger restaurant
+    expenses:food:restaurant              €27.50
+    assets:bank:checking
+
+2026-02-08 * Monthly subscriptions  ; streaming + cloud
+    expenses:subscriptions                €24.99
+    expenses:subscriptions                €12.99
+    assets:bank:checking
+
+2026-02-10 * Supermarket
+    expenses:food:groceries               €82.15
+    assets:bank:checking
+
+2026-02-11 * Monthly train pass
+    expenses:transport                    €49.00
+    assets:bank:checking
+
+2026-02-12 * Buy XDWD  ; world equity ETF
+    assets:investments:XDWD             5 XDWD @ €124.70
+    assets:bank:checking             €-623.50
+
+2026-02-14 * Valentine's dinner
+    expenses:food:restaurant              €85.00
+    assets:bank:checking
+
+2026-02-15 * Supermarket
+    expenses:food:groceries               €67.90
+    assets:bank:checking
+
+2026-02-17 * Electricity bill
+    expenses:housing:utilities            €79.60
+    assets:bank:checking
+
+2026-02-18 * Freelance project
+    assets:bank:checking                 €600.00
+    income:freelance
+
+2026-02-20 * Supermarket
+    expenses:food:groceries               €94.30
+    assets:bank:checking
+
+2026-02-21 * Buy XEON  ; euro money market ETF
+    assets:investments:XEON             3 XEON @ €148.50
+    assets:bank:checking             €-445.50
+
+2026-02-22 * Trattoria
+    expenses:food:restaurant              €42.00
+    assets:bank:checking
+
+2026-02-24 * Taxi ride
+    expenses:transport                    €15.00
+    assets:bank:checking
+
+2026-02-25 * Supermarket
+    expenses:food:groceries               €71.40
+    assets:bank:checking

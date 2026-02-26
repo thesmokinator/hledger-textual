@@ -1,0 +1,6 @@
+journal_file = "examples/demo.journal"
+
+[prices]
+XDWD = "XDWD.MI"
+XEON = "XEON.MI"
+XGDU = "XGDU.MI"

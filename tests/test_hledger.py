@@ -248,6 +248,40 @@ class TestLoadPeriodSummary:
         summary = load_period_summary(current_month_journal, period)
         assert summary.commodity == "€"
 
+    def test_investments_zero_when_absent(self, current_month_journal: Path):
+        """Without investment transactions, investments should be zero."""
+        period = date.today().strftime("%Y-%m")
+        summary = load_period_summary(current_month_journal, period)
+        assert summary.investments == Decimal("0")
+
+    def test_investments_included(self, tmp_path: Path):
+        """Investment purchases at cost are included in the summary."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        d3 = today.replace(day=3)
+        content = (
+            f"{d1.isoformat()} Salary\n"
+            f"    assets:bank  €3000.00\n"
+            f"    income:salary\n"
+            f"\n"
+            f"{d2.isoformat()} * Groceries\n"
+            f"    expenses:food  €100.00\n"
+            f"    assets:bank\n"
+            f"\n"
+            f"{d3.isoformat()} * Buy ETF\n"
+            f"    assets:investments:XDWD  5 XDWD @ €120.00\n"
+            f"    assets:bank  €-600.00\n"
+        )
+        journal = tmp_path / "invest.journal"
+        journal.write_text(content)
+        period = today.strftime("%Y-%m")
+        summary = load_period_summary(journal, period)
+        assert summary.income == Decimal("3000.00")
+        assert summary.expenses == Decimal("100.00")
+        assert summary.investments == Decimal("600.00")
+        assert summary.net == Decimal("2300.00")
+
 
 class TestLoadExpenseBreakdown:
     """Tests for load_expense_breakdown."""
