@@ -7,6 +7,7 @@ import pytest
 from hledger_tui.config import (
     _load_config_dict,
     _save_config_dict,
+    load_price_tickers,
     load_theme,
     parse_args,
     resolve_journal_file,
@@ -163,3 +164,24 @@ class TestSaveAndLoadTheme:
         save_theme("nord")
         save_theme("gruvbox")
         assert load_theme() == "gruvbox"
+
+
+class TestLoadPriceTickers:
+    """Tests for load_price_tickers configuration helper."""
+
+    def test_returns_empty_when_no_prices_section(self, tmp_path, monkeypatch):
+        """Returns an empty dict when config.toml has no [prices] section."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('theme = "nord"\n')
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        assert load_price_tickers() == {}
+
+    def test_returns_tickers_from_config(self, tmp_path, monkeypatch):
+        """Returns the commodity-to-ticker mapping from the [prices] section."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            '[prices]\nXDWD = "XDWD.DE"\nXEON = "XEON.DE"\n'
+        )
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        result = load_price_tickers()
+        assert result == {"XDWD": "XDWD.DE", "XEON": "XEON.DE"}

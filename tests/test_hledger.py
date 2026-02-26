@@ -1,5 +1,6 @@
 """Tests for hledger CLI reader."""
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -10,6 +11,12 @@ from hledger_tui.hledger import (
     _parse_budget_amount,
     load_accounts,
     load_descriptions,
+    load_expense_breakdown,
+    load_investment_cost,
+    load_investment_eur_by_account,
+    load_investment_positions,
+    load_journal_stats,
+    load_period_summary,
     load_transactions,
 )
 from hledger_tui.models import TransactionStatus
@@ -174,3 +181,151 @@ class TestParseBudgetAmount:
         qty, commodity = _parse_budget_amount("not-a-number")
         assert qty == Decimal("0")
         assert commodity == ""
+
+
+class TestLoadJournalStats:
+    """Tests for load_journal_stats."""
+
+    def test_transaction_count(self, sample_journal_path: Path):
+        """The sample journal has exactly 3 transactions."""
+        stats = load_journal_stats(sample_journal_path)
+        assert stats.transaction_count == 3
+
+    def test_account_count(self, sample_journal_path: Path):
+        """The sample journal uses 5 distinct accounts."""
+        stats = load_journal_stats(sample_journal_path)
+        assert stats.account_count == 5
+
+    def test_commodities(self, sample_journal_path: Path):
+        """The sample journal uses a single commodity: Euro."""
+        stats = load_journal_stats(sample_journal_path)
+        assert stats.commodities == ["€"]
+
+
+class TestLoadPeriodSummary:
+    """Tests for load_period_summary."""
+
+    @pytest.fixture
+    def current_month_journal(self, tmp_path: Path) -> Path:
+        """Create a journal with transactions in the current month."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            f"{d1.isoformat()} * Groceries\n"
+            f"    expenses:food  €40.00\n"
+            f"    assets:bank\n"
+            f"\n"
+            f"{d2.isoformat()} Salary\n"
+            f"    assets:bank  €3000.00\n"
+            f"    income:salary\n"
+        )
+        journal = tmp_path / "period.journal"
+        journal.write_text(content)
+        return journal
+
+    def test_income(self, current_month_journal: Path):
+        """Income should equal the salary amount."""
+        period = date.today().strftime("%Y-%m")
+        summary = load_period_summary(current_month_journal, period)
+        assert summary.income == Decimal("3000.00")
+
+    def test_expenses(self, current_month_journal: Path):
+        """Expenses should equal the grocery amount."""
+        period = date.today().strftime("%Y-%m")
+        summary = load_period_summary(current_month_journal, period)
+        assert summary.expenses == Decimal("40.00")
+
+    def test_net(self, current_month_journal: Path):
+        """Net should be income minus expenses."""
+        period = date.today().strftime("%Y-%m")
+        summary = load_period_summary(current_month_journal, period)
+        assert summary.net == Decimal("2960.00")
+
+    def test_commodity(self, current_month_journal: Path):
+        """The detected commodity should be Euro."""
+        period = date.today().strftime("%Y-%m")
+        summary = load_period_summary(current_month_journal, period)
+        assert summary.commodity == "€"
+
+
+class TestLoadExpenseBreakdown:
+    """Tests for load_expense_breakdown."""
+
+    @pytest.fixture
+    def expense_journal(self, tmp_path: Path) -> Path:
+        """Create a journal with two expense accounts in the current month."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            f"{d1.isoformat()} * Groceries\n"
+            f"    expenses:food  €120.00\n"
+            f"    assets:bank\n"
+            f"\n"
+            f"{d2.isoformat()} * Electricity\n"
+            f"    expenses:utilities  €80.00\n"
+            f"    assets:bank\n"
+        )
+        journal = tmp_path / "expenses.journal"
+        journal.write_text(content)
+        return journal
+
+    def test_returns_expense_accounts(self, expense_journal: Path):
+        """Both expense accounts should be returned."""
+        period = date.today().strftime("%Y-%m")
+        breakdown = load_expense_breakdown(expense_journal, period)
+        accounts = [row[0] for row in breakdown]
+        assert "expenses:food" in accounts
+        assert "expenses:utilities" in accounts
+
+    def test_sorted_by_amount_descending(self, expense_journal: Path):
+        """Results should be sorted by amount descending."""
+        period = date.today().strftime("%Y-%m")
+        breakdown = load_expense_breakdown(expense_journal, period)
+        assert len(breakdown) == 2
+        assert breakdown[0][1] >= breakdown[1][1]
+        # food (€120) should come before utilities (€80)
+        assert breakdown[0][0] == "expenses:food"
+        assert breakdown[0][1] == Decimal("120.00")
+        assert breakdown[1][0] == "expenses:utilities"
+        assert breakdown[1][1] == Decimal("80.00")
+
+    def test_empty_period_returns_empty(self, expense_journal: Path):
+        """A period with no transactions should return an empty list."""
+        breakdown = load_expense_breakdown(expense_journal, "1999-01")
+        assert breakdown == []
+
+
+class TestLoadInvestmentFunctions:
+    """Tests for investment-related functions."""
+
+    @pytest.fixture
+    def empty_journal(self, tmp_path: Path) -> Path:
+        """Create a minimal journal with no investment accounts."""
+        journal = tmp_path / "empty.journal"
+        today = date.today()
+        content = (
+            f"{today.isoformat()} * Coffee\n"
+            f"    expenses:food  €5.00\n"
+            f"    assets:bank\n"
+        )
+        journal.write_text(content)
+        return journal
+
+    def test_positions_empty_journal(self, empty_journal: Path):
+        """A journal with no investments should return an empty list."""
+        positions = load_investment_positions(empty_journal)
+        assert positions == []
+
+    def test_cost_empty_journal(self, empty_journal: Path):
+        """A journal with no investments should return an empty dict."""
+        cost = load_investment_cost(empty_journal)
+        assert cost == {}
+
+    def test_eur_with_empty_prices_file(self, empty_journal: Path, tmp_path: Path):
+        """An empty prices file should yield an empty dict."""
+        prices_file = tmp_path / "prices.journal"
+        prices_file.write_text("; no price directives\n")
+        result = load_investment_eur_by_account(empty_journal, prices_file)
+        assert result == {}

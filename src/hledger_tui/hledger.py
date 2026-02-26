@@ -9,10 +9,14 @@ import subprocess
 from decimal import Decimal
 from pathlib import Path
 
+import re
+
 from hledger_tui.models import (
     Amount,
     AmountStyle,
     BudgetRow,
+    JournalStats,
+    PeriodSummary,
     Posting,
     SourcePosition,
     Transaction,
@@ -243,8 +247,6 @@ def _parse_budget_amount(s: str) -> tuple[Decimal, str]:
     Returns:
         A tuple of (quantity, commodity). Returns (0, "") for unparseable values.
     """
-    import re
-
     s = s.strip()
     if not s or s == "0":
         return Decimal("0"), ""
@@ -348,3 +350,230 @@ def load_budget_report(file: str | Path, period: str) -> list[BudgetRow]:
             ))
 
     return rows
+
+
+def load_journal_stats(file: str | Path) -> JournalStats:
+    """Load journal statistics (transaction count, account count, commodities).
+
+    Runs ``hledger stats`` for counts and ``hledger commodities`` for the list.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A :class:`JournalStats` instance.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger("stats", file=file)
+
+    txn_count = 0
+    acct_count = 0
+    for line in output.splitlines():
+        if re.match(r"^Txns\s+:", line):
+            # "Txns                : 3 (1.0 per day)"
+            match = re.search(r":\s*(\d+)", line)
+            if match:
+                txn_count = int(match.group(1))
+        elif line.startswith("Accounts"):
+            match = re.search(r":\s*(\d+)", line)
+            if match:
+                acct_count = int(match.group(1))
+
+    commodities_output = run_hledger("commodities", file=file)
+    commodities = [
+        line.strip()
+        for line in commodities_output.strip().splitlines()
+        if line.strip()
+    ]
+
+    return JournalStats(
+        transaction_count=txn_count,
+        account_count=acct_count,
+        commodities=commodities,
+    )
+
+
+def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
+    """Load income and expense totals for a single period.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like ``'2026-02'`` for hledger's ``-p`` flag.
+
+    Returns:
+        A :class:`PeriodSummary` instance.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "income", "expenses",
+        "-p", period, "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+
+    income = Decimal("0")
+    expenses = Decimal("0")
+    commodity = ""
+
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        qty, com = _parse_budget_amount(row[1].strip())
+        if not commodity and com:
+            commodity = com
+        if account.startswith("income"):
+            income += abs(qty)
+        elif account.startswith("expenses"):
+            expenses += abs(qty)
+
+    return PeriodSummary(income=income, expenses=expenses, commodity=commodity)
+
+
+def load_expense_breakdown(
+    file: str | Path, period: str
+) -> list[tuple[str, Decimal, str]]:
+    """Load per-account expense breakdown for a single period.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like ``'2026-02'``.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples sorted by amount
+        descending.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "expenses",
+        "-p", period, "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+
+    results: list[tuple[str, Decimal, str]] = []
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        qty, com = _parse_budget_amount(row[1].strip())
+        if qty:
+            results.append((account, abs(qty), com))
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
+
+
+def load_investment_positions(
+    file: str | Path,
+) -> list[tuple[str, Decimal, str]]:
+    """Load current investment positions (account, quantity, commodity).
+
+    Returns one entry per account holding a non-EUR commodity under
+    ``assets:investments``.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "acct:assets:investments",
+        "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+
+    results: list[tuple[str, Decimal, str]] = []
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        qty, com = _parse_budget_amount(row[1].strip())
+        # Skip pure-currency balances (e.g. €)
+        if com and len(com) > 1 and qty:
+            results.append((account, qty, com))
+
+    return results
+
+
+def load_investment_cost(
+    file: str | Path,
+) -> dict[str, tuple[Decimal, str]]:
+    """Load the book value (purchase cost) of investment accounts.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A dict mapping account name to ``(amount, commodity)``.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "acct:assets:investments",
+        "--flat", "--no-total", "--cost", "-O", "csv",
+        file=file,
+    )
+
+    result: dict[str, tuple[Decimal, str]] = {}
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        qty, com = _parse_budget_amount(row[1].strip())
+        result[account] = (qty, com)
+
+    return result
+
+
+def load_investment_eur_by_account(
+    file: str | Path,
+    prices_file: Path,
+) -> dict[str, tuple[Decimal, str]]:
+    """Load the market value of investment accounts using a prices file.
+
+    Args:
+        file: Path to the journal file.
+        prices_file: Path to a journal file containing ``P`` price directives.
+
+    Returns:
+        A dict mapping account name to ``(amount, commodity)``.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger(
+        "balance", "acct:assets:investments",
+        "--flat", "--no-total", "-V", "-O", "csv",
+        "-f", str(prices_file),
+        file=file,
+    )
+
+    result: dict[str, tuple[Decimal, str]] = {}
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        qty, com = _parse_budget_amount(row[1].strip())
+        result[account] = (qty, com)
+
+    return result

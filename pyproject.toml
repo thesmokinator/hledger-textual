@@ -10,9 +10,13 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE.md"]
 dependencies = [
+    "pricehist>=1.4.14",
     "textual>=3.0.0,<4",
     "tomli>=2.0.0; python_version < '3.11'",
 ]
+
+[project.urls]
+Repository = "https://github.com/thesmokinator/hledger-tui"
 
 [project.scripts]
 hledger-tui = "hledger_tui.__main__:main"

@@ -121,6 +121,29 @@ class Transaction:
 
 
 @dataclass
+class JournalStats:
+    """Journal statistics from hledger stats."""
+
+    transaction_count: int
+    account_count: int
+    commodities: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PeriodSummary:
+    """Financial summary for a single period (e.g. one month)."""
+
+    income: Decimal
+    expenses: Decimal
+    commodity: str
+
+    @property
+    def net(self) -> Decimal:
+        """Return net income (income minus expenses)."""
+        return self.income - self.expenses
+
+
+@dataclass
 class BudgetRule:
     """A single budget rule mapping an account to a monthly amount."""
 

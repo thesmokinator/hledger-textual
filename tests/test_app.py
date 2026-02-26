@@ -168,3 +168,41 @@ class TestDelete:
             await pilot.pause(delay=1.0)
             txns = load_transactions(app_journal)
             assert len(txns) == 2
+
+
+class TestTabNavigation:
+    """Tests for the on_key handler that activates a section from the tab bar."""
+
+    async def test_enter_on_tab_bar_activates_section(self, app: HledgerTuiApp):
+        """Pressing Enter on the tab bar activates the highlighted section."""
+        from textual.widgets import ContentSwitcher, Tabs
+
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            # Focus the tab bar and move to the Accounts tab
+            app.query_one("#nav-tabs", Tabs).focus()
+            await pilot.pause()
+            await pilot.press("right")
+            await pilot.pause()
+            # Press Enter to activate — should trigger on_key and switch content
+            await pilot.press("enter")
+            await pilot.pause()
+            switcher = app.screen.query_one("#content-switcher", ContentSwitcher)
+            assert switcher.current == "accounts"
+
+    async def test_down_on_tab_bar_activates_section(self, app: HledgerTuiApp):
+        """Pressing Down on the tab bar activates the highlighted section."""
+        from textual.widgets import ContentSwitcher, Tabs
+
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            # Focus the tab bar and move to the Accounts tab
+            app.query_one("#nav-tabs", Tabs).focus()
+            await pilot.pause()
+            await pilot.press("right")
+            await pilot.pause()
+            # Press Down to activate — should trigger on_key and switch content
+            await pilot.press("down")
+            await pilot.pause()
+            switcher = app.screen.query_one("#content-switcher", ContentSwitcher)
+            assert switcher.current == "accounts"

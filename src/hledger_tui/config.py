@@ -66,6 +66,24 @@ def save_theme(theme: str) -> None:
     _save_config_dict(data)
 
 
+def load_price_tickers() -> dict[str, str]:
+    """Load commodity-to-ticker mappings from the ``[prices]`` section of config.toml.
+
+    Example config.toml::
+
+        [prices]
+        XDWD = "XDWD.DE"
+        XEON = "XEON.DE"
+
+    Returns:
+        A dict mapping journal commodity names to Yahoo Finance tickers.
+        Returns an empty dict when no ``[prices]`` section exists.
+    """
+    config = _load_config_dict()
+    prices = config.get("prices", {})
+    return {str(k): str(v) for k, v in prices.items()}
+
+
 def _load_config_toml() -> str | None:
     """Load journal_file from config.toml if it exists.
 
