@@ -32,9 +32,15 @@ class _NavTab(Tab):
 
 
 class _NavTabs(Tabs):
-    """Tab bar that never receives keyboard focus."""
+    """Tab bar that never receives keyboard focus and ignores arrow keys."""
 
     ALLOW_FOCUS = False
+
+    def action_previous_tab(self) -> None:
+        """Disable arrow-key tab switching."""
+
+    def action_next_tab(self) -> None:
+        """Disable arrow-key tab switching."""
 
 
 class HledgerTuiApp(App):

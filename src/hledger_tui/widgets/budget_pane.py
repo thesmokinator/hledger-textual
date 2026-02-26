@@ -35,8 +35,8 @@ class BudgetPane(Widget):
         Binding("slash", "filter", "Filter", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
-        Binding("left,h", "prev_month", "Prev month", show=False),
-        Binding("right,l", "next_month", "Next month", show=False),
+        Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
+        Binding("right,l", "next_month", "Next month", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]

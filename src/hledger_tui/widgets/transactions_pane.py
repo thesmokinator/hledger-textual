@@ -29,8 +29,8 @@ class TransactionsPane(Widget):
         Binding("slash", "filter", "Search", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
-        Binding("left", "prev_month", "Previous month", show=False),
-        Binding("right", "next_month", "Next month", show=False),
+        Binding("left", "prev_month", "Previous month", show=False, priority=True),
+        Binding("right", "next_month", "Next month", show=False, priority=True),
     ]
 
     def __init__(self, journal_file: Path, **kwargs) -> None:
