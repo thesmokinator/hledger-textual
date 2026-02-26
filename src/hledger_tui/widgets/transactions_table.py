@@ -1,58 +1,27 @@
-"""Shared transactions table widget with an integrated filter bar."""
+"""Shared transactions table widget with month navigation and search."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import Button, DataTable, Input, Label
+from textual.widgets import DataTable, Input, Static
 
-from hledger_tui.hledger import HledgerError, load_accounts, load_transactions
+from hledger_tui.hledger import HledgerError, load_transactions
 from hledger_tui.models import Transaction
-from hledger_tui.widgets.autocomplete_input import AutocompleteInput
-
-_PERIOD_BUTTONS = [
-    ("This month", "thismonth"),
-    ("7d", "7"),
-    ("15d", "15"),
-    ("30d", "30"),
-    ("60d", "60"),
-    ("90d", "90"),
-    ("1y", "365"),
-    ("All", "all"),
-]
-
-
-def _period_query(period_id: str) -> str:
-    """Return an hledger date query string for the given period identifier.
-
-    Args:
-        period_id: One of the period identifiers from ``_PERIOD_BUTTONS``.
-
-    Returns:
-        An hledger query fragment, e.g. ``'date:thismonth'``, ``'date:2024-01-01..'``,
-        or an empty string for "all time".
-    """
-    if period_id == "thismonth":
-        return "date:thismonth"
-    if period_id == "all":
-        return ""
-    start = date.today() - timedelta(days=int(period_id))
-    return f"date:{start.isoformat()}.."
 
 
 class TransactionsTable(Widget):
-    """Transactions DataTable with an integrated two-row filter bar.
+    """Transactions DataTable with month navigation and an hledger-query search bar.
 
-    Used both in :class:`~hledger_tui.widgets.transactions_pane.TransactionsPane`
-    (full CRUD) and in
-    :class:`~hledger_tui.screens.account_transactions.AccountTransactionsScreen`
-    (drill-down, read-only) so both views share identical columns, filters, and
-    ordering.
+    Month navigation (◄/►) lets the user browse one calendar month at a time.
+    The search bar (toggled with ``/``) accepts raw hledger query syntax
+    (``desc:grocery``, ``acct:food``, ``amt:>100``) and searches the entire
+    journal.
 
     Args:
         journal_file: Path to the hledger journal file.
@@ -72,38 +41,70 @@ class TransactionsTable(Widget):
         super().__init__(**kwargs)
         self.journal_file = journal_file
         self._fixed_query = fixed_query
-        # When pinned to a specific account show all time by default so the
-        # user immediately sees every transaction for that account.
-        self._initial_period_id: str = "all" if fixed_query else "thismonth"
-        self._date_query: str = _period_query(self._initial_period_id)
-        self._account_filter: str = ""
-        self._desc_filter: str = ""
+        self._current_month: date = date.today().replace(day=1)
+        self._date_query: str = "" if fixed_query else self._month_query()
+        self._search_query: str = ""
         self._all_transactions: list[Transaction] = []
+
+    # ------------------------------------------------------------------
+    # Month helpers
+    # ------------------------------------------------------------------
+
+    def _month_query(self) -> str:
+        """Return hledger date query for the current month."""
+        return f"date:{self._current_month.strftime('%Y-%m')}"
+
+    def _period_label(self) -> str:
+        """Return a human-readable label for the current month."""
+        return self._current_month.strftime("%B %Y")
+
+    def _update_period_label(self) -> None:
+        """Refresh the month label widget."""
+        self.query_one("#txn-period-label", Static).update(self._period_label())
+
+    def prev_month(self) -> None:
+        """Navigate to the previous month and reload."""
+        m = self._current_month
+        month, year = m.month - 1, m.year
+        if month < 1:
+            month, year = 12, year - 1
+        self._current_month = m.replace(year=year, month=month)
+        self._date_query = self._month_query()
+        self._update_period_label()
+        self._load_transactions()
+
+    def next_month(self) -> None:
+        """Navigate to the next month and reload."""
+        m = self._current_month
+        month, year = m.month + 1, m.year
+        if month > 12:
+            month, year = 1, year + 1
+        self._current_month = m.replace(year=year, month=month)
+        self._date_query = self._month_query()
+        self._update_period_label()
+        self._load_transactions()
 
     # ------------------------------------------------------------------
     # Composition
     # ------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        """Create the filter bar and table layout."""
+        """Create the month nav, search bar, and table layout."""
+        if not self._fixed_query:
+            with Horizontal(id="txn-period-nav"):
+                yield Static(
+                    "\u25c4 Prev", id="txn-btn-prev-month", classes="period-btn"
+                )
+                yield Static(self._period_label(), id="txn-period-label")
+                yield Static(
+                    "Next \u25ba", id="txn-btn-next-month", classes="period-btn"
+                )
         with Vertical(classes="filter-bar"):
-            with Horizontal(classes="filter-inputs-row"):
-                yield Label("Desc:", classes="filter-label")
-                yield Input(
-                    placeholder="search...",
-                    id="txn-desc-input",
-                    disabled=True,
-                )
-                yield Label("Account:", classes="filter-label")
-                yield AutocompleteInput(
-                    placeholder="account...",
-                    id="txn-acct-input",
-                    disabled=True,
-                )
-            with Horizontal(classes="period-buttons"):
-                for label, period_id in _PERIOD_BUTTONS:
-                    classes = "-active" if period_id == self._initial_period_id else ""
-                    yield Button(label, id=f"period-{period_id}", classes=classes)
+            yield Input(
+                placeholder="Search... (e.g. desc:grocery, acct:food, amt:>100)",
+                id="txn-search-input",
+                disabled=True,
+            )
         yield DataTable(id="transactions-table")
 
     def on_mount(self) -> None:
@@ -111,9 +112,8 @@ class TransactionsTable(Widget):
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.show_row_labels = False
-        table.add_columns("Date", "St", "Description", "Accounts", "Amount")
+        table.add_columns("Date", "Status", "Description", "Accounts", "Amount")
         self._load_transactions()
-        self._load_accounts()
         table.focus()
 
     def on_show(self) -> None:
@@ -133,39 +133,40 @@ class TransactionsTable(Widget):
         self._load_transactions()
 
     def show_filter(self) -> None:
-        """Show the filter panel and move focus to the description input."""
+        """Show the search bar and hide the month navigation."""
+        nav = self.query("#txn-period-nav")
+        if nav:
+            nav.first().add_class("hidden")
         filter_bar = self.query_one(".filter-bar")
         filter_bar.add_class("visible")
-        desc_input = self.query_one("#txn-desc-input", Input)
-        desc_input.disabled = False
-        acct_input = self.query_one("#txn-acct-input", AutocompleteInput)
-        acct_input.disabled = False
-        desc_input.focus()
+        search_input = self.query_one("#txn-search-input", Input)
+        search_input.disabled = False
+        search_input.focus()
 
     def dismiss_filter(self) -> bool:
-        """Hide the filter panel and reset all user-set filters.
+        """Hide the search bar and restore month navigation.
 
         Returns:
             ``True`` if the panel was open and has been closed,
-            ``False`` if it was already hidden (so the caller can decide to
-            take a different action, e.g. pop a screen).
+            ``False`` if it was already hidden.
         """
         filter_bar = self.query_one(".filter-bar")
         if not filter_bar.has_class("visible"):
             return False
         filter_bar.remove_class("visible")
-        desc_input = self.query_one("#txn-desc-input", Input)
-        desc_input.value = ""
-        desc_input.disabled = True
-        acct_input = self.query_one("#txn-acct-input", AutocompleteInput)
-        acct_input.value = ""
-        acct_input.disabled = True
-        self._desc_filter = ""
-        self._account_filter = ""
-        for btn in self.query(".period-buttons Button"):
-            btn.remove_class("-active")
-        self.query_one(f"#period-{self._initial_period_id}", Button).add_class("-active")
-        self._date_query = _period_query(self._initial_period_id)
+        search_input = self.query_one("#txn-search-input", Input)
+        search_input.value = ""
+        search_input.disabled = True
+        self._search_query = ""
+        # Restore month filter
+        self._current_month = date.today().replace(day=1)
+        nav = self.query("#txn-period-nav")
+        if nav:
+            self._date_query = self._month_query()
+            self._update_period_label()
+            nav.first().remove_class("hidden")
+        else:
+            self._date_query = ""
         self._load_transactions()
         self.query_one(DataTable).focus()
         return True
@@ -267,7 +268,7 @@ class TransactionsTable(Widget):
         """Load transactions from hledger in a background thread."""
         parts = [
             q
-            for q in [self._fixed_query, self._date_query, self._account_filter_query()]
+            for q in [self._fixed_query, self._date_query, self._search_query]
             if q
         ]
         query = " ".join(parts) or None
@@ -280,36 +281,17 @@ class TransactionsTable(Widget):
             txns = []
         self.app.call_from_thread(self._set_transactions, txns)
 
-    def _account_filter_query(self) -> str:
-        """Return the hledger account query fragment, or empty string."""
-        return f"acct:{self._account_filter}" if self._account_filter else ""
-
     def _set_transactions(self, txns: list[Transaction]) -> None:
-        """Store loaded transactions and apply the current description filter."""
+        """Store loaded transactions and refresh the table."""
         self._all_transactions = txns
-        self._apply_desc_filter()
-
-    def _apply_desc_filter(self) -> None:
-        """Filter by description client-side and refresh the table."""
-        if not self._desc_filter:
-            visible = self._all_transactions
-        else:
-            term = self._desc_filter.lower()
-            visible = [
-                t for t in self._all_transactions if term in t.description.lower()
-            ]
-        self._update_table(visible)
+        self._update_table(txns)
 
     def _update_table(self, transactions: list[Transaction]) -> None:
-        """Repopulate the DataTable with *transactions*.
-
-        Args:
-            transactions: The rows to display.
-        """
+        """Repopulate the DataTable with *transactions*."""
         table = self.query_one(DataTable)
         table.clear()
         for txn in transactions:
-            accounts = " · ".join(p.account for p in txn.postings)
+            accounts = " \u00b7 ".join(p.account for p in txn.postings)
             table.add_row(
                 txn.date,
                 txn.status.symbol,
@@ -331,66 +313,42 @@ class TransactionsTable(Widget):
         if len(cols) != 5:
             return
 
-        padding_per_col = 2  # DataTable default cell_padding is 1 per side
+        padding_per_col = 2
         total_overhead = len(cols) * padding_per_col
         usable = available - total_overhead
 
         date_w = 12
-        st_w = 3
+        status_w = 8
         amount_w = 16
-        fixed = date_w + st_w + amount_w
+        fixed = date_w + status_w + amount_w
         remaining = max(usable - fixed, 20)
 
         desc_w = remaining * 2 // 5
         accts_w = remaining - desc_w
 
-        widths = [date_w, st_w, desc_w, accts_w, amount_w]
+        widths = [date_w, status_w, desc_w, accts_w, amount_w]
         for col, w in zip(cols, widths):
             col.auto_width = False
             col.width = w
 
         table.refresh(layout=True)
 
-    @work(thread=True)
-    def _load_accounts(self) -> None:
-        """Load account names for the autocomplete suggester."""
-        try:
-            accounts = load_accounts(self.journal_file)
-        except HledgerError:
-            accounts = []
-        self.app.call_from_thread(self._set_account_suggester, accounts)
-
-    def _set_account_suggester(self, accounts: list[str]) -> None:
-        """Attach *accounts* as suggestions to the account input."""
-        from textual.suggester import SuggestFromList
-
-        self.query_one("#txn-acct-input", AutocompleteInput).suggester = (
-            SuggestFromList(accounts, case_sensitive=False)
-        )
-
     # ------------------------------------------------------------------
     # Event handlers
     # ------------------------------------------------------------------
 
-    @on(Input.Changed, "#txn-desc-input")
-    def on_desc_changed(self, event: Input.Changed) -> None:
-        """Filter by description in real-time as the user types."""
-        self._desc_filter = event.value
-        self._apply_desc_filter()
-
-    @on(Input.Submitted, "#txn-acct-input")
-    def on_acct_submitted(self, event: Input.Submitted) -> None:
-        """Reload with the typed account filter when the user presses Enter."""
-        self._account_filter = event.value
+    @on(Input.Submitted, "#txn-search-input")
+    def on_search_submitted(self, event: Input.Submitted) -> None:
+        """Execute the search query when the user presses Enter."""
+        self._search_query = event.value
+        if self._search_query:
+            self._date_query = ""  # search entire journal
         self._load_transactions()
 
-    @on(Button.Pressed, ".period-buttons Button")
-    def on_period_pressed(self, event: Button.Pressed) -> None:
-        """Switch the active period and reload when a period button is clicked."""
-        event.stop()
-        for btn in self.query(".period-buttons Button"):
-            btn.remove_class("-active")
-        event.button.add_class("-active")
-        period_id = event.button.id.removeprefix("period-")
-        self._date_query = _period_query(period_id)
-        self._load_transactions()
+    def on_click(self, event) -> None:
+        """Handle clicks on the month navigation arrows."""
+        widget_id = getattr(event.widget, "id", None)
+        if widget_id == "txn-btn-prev-month":
+            self.prev_month()
+        elif widget_id == "txn-btn-next-month":
+            self.next_month()

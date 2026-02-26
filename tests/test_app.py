@@ -56,19 +56,23 @@ def app(app_journal: Path) -> HledgerTuiApp:
 class TestAppStartup:
     """Tests for application startup."""
 
-    async def test_app_starts_and_shows_transactions(self, app: HledgerTuiApp):
+    async def test_app_starts_on_summary(self, app: HledgerTuiApp):
+        """The app opens on the Summary tab by default."""
+        from textual.widgets import ContentSwitcher
+
         async with app.run_test() as pilot:
+            await pilot.pause()
+            switcher = app.screen.query_one("#content-switcher", ContentSwitcher)
+            assert switcher.current == "summary"
+
+    async def test_switch_to_transactions_shows_table(self, app: HledgerTuiApp):
+        """Switching to Transactions shows the data table with rows."""
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
-
-    async def test_journal_bar_shows_file_path(
-        self, app: HledgerTuiApp, app_journal: Path
-    ):
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            journal_bar = app.screen.query_one("#journal-bar")
-            assert str(app_journal) in str(journal_bar.renderable)
 
     async def test_quit_key(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
@@ -82,43 +86,61 @@ class TestFilter:
     async def test_filter_shows_input(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("slash")
             from hledger_tui.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
             filter_bar = txn_table.query_one(".filter-bar")
             assert filter_bar.has_class("visible")
 
-    async def test_filter_narrows_results(self, app: HledgerTuiApp):
+    async def test_search_narrows_results(self, app: HledgerTuiApp):
+        """Searching with hledger query narrows results."""
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("slash")
-            desc_input = app.screen.query_one("#txn-desc-input")
-            desc_input.value = "Grocery"
+            await pilot.press("2")
             await pilot.pause()
+            await pilot.press("slash")
+            search_input = app.screen.query_one("#txn-search-input")
+            search_input.value = "desc:Grocery"
+            await pilot.press("enter")
+            await pilot.pause(delay=1.0)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 1
 
-    async def test_escape_clears_filter(self, app: HledgerTuiApp):
+    async def test_escape_clears_search(self, app: HledgerTuiApp):
+        """Pressing escape clears the search and restores all results."""
         async with app.run_test() as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("slash")
-            desc_input = app.screen.query_one("#txn-desc-input")
-            desc_input.value = "Grocery"
-            await pilot.pause()
+            search_input = app.screen.query_one("#txn-search-input")
+            search_input.value = "desc:Grocery"
+            await pilot.press("enter")
+            await pilot.pause(delay=1.0)
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=1.0)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
-    async def test_filter_by_account(self, app: HledgerTuiApp):
+    async def test_search_by_account(self, app: HledgerTuiApp):
+        """Searching with acct: query filters by account."""
+        from textual.widgets import Input
+
         async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             from hledger_tui.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
-            txn_table._account_filter = "office"
-            worker = txn_table._load_transactions()
-            await worker.wait()
+            txn_table.show_filter()
             await pilot.pause()
+            search_input = txn_table.query_one("#txn-search-input", Input)
+            search_input.focus()
+            search_input.value = "acct:office"
+            await pilot.press("enter")
+            await pilot.pause(delay=1.0)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 1
 
@@ -128,6 +150,8 @@ class TestRefresh:
 
     async def test_refresh_reloads(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
@@ -142,6 +166,8 @@ class TestDelete:
     async def test_delete_shows_modal(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("d")
             await pilot.pause()
             from hledger_tui.screens.delete_confirm import DeleteConfirmModal
@@ -150,6 +176,8 @@ class TestDelete:
 
     async def test_delete_cancel(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("d")
             await pilot.pause()
@@ -161,6 +189,8 @@ class TestDelete:
     async def test_delete_confirm(self, app: HledgerTuiApp, app_journal: Path):
         async with app.run_test() as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("d")
             await pilot.pause()
             delete_btn = app.screen.query_one("#btn-delete")
@@ -171,38 +201,38 @@ class TestDelete:
 
 
 class TestTabNavigation:
-    """Tests for the on_key handler that activates a section from the tab bar."""
+    """Tests for keyboard number shortcuts that switch sections."""
 
-    async def test_enter_on_tab_bar_activates_section(self, app: HledgerTuiApp):
-        """Pressing Enter on the tab bar activates the highlighted section."""
-        from textual.widgets import ContentSwitcher, Tabs
-
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            # Focus the tab bar and move to the Accounts tab
-            app.query_one("#nav-tabs", Tabs).focus()
-            await pilot.pause()
-            await pilot.press("right")
-            await pilot.pause()
-            # Press Enter to activate — should trigger on_key and switch content
-            await pilot.press("enter")
-            await pilot.pause()
-            switcher = app.screen.query_one("#content-switcher", ContentSwitcher)
-            assert switcher.current == "accounts"
-
-    async def test_down_on_tab_bar_activates_section(self, app: HledgerTuiApp):
-        """Pressing Down on the tab bar activates the highlighted section."""
-        from textual.widgets import ContentSwitcher, Tabs
+    async def test_number_keys_switch_sections(self, app: HledgerTuiApp):
+        """Pressing 1-5 switches to the corresponding section."""
+        from textual.widgets import ContentSwitcher
 
         async with app.run_test() as pilot:
             await pilot.pause()
-            # Focus the tab bar and move to the Accounts tab
-            app.query_one("#nav-tabs", Tabs).focus()
+            sections = [
+                ("1", "summary"),
+                ("2", "transactions"),
+                ("3", "accounts"),
+                ("4", "budget"),
+                ("5", "info"),
+            ]
+            for key, expected in sections:
+                await pilot.press(key)
+                await pilot.pause()
+                switcher = app.screen.query_one(
+                    "#content-switcher", ContentSwitcher
+                )
+                assert switcher.current == expected
+
+    async def test_footer_updates_on_switch(self, app: HledgerTuiApp):
+        """Footer help text updates when switching sections."""
+        from textual.widgets import Static
+
+        async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("right")
+            await pilot.press("2")
             await pilot.pause()
-            # Press Down to activate — should trigger on_key and switch content
-            await pilot.press("down")
-            await pilot.pause()
-            switcher = app.screen.query_one("#content-switcher", ContentSwitcher)
-            assert switcher.current == "accounts"
+            footer = app.screen.query_one("#footer-bar", Static)
+            rendered = str(footer.renderable)
+            assert "Add" in rendered
+            assert "Search" in rendered

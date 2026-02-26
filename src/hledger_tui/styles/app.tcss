@@ -14,15 +14,13 @@ Screen {
     padding: 0 2;
 }
 
-ContentSwitcher {
-    height: 1fr;
+#nav-tabs Tab.-active {
+    background: transparent;
+    text-style: bold;
 }
 
-#journal-bar {
-    height: 1;
-    background: $panel;
-    color: $text-muted;
-    padding: 0 1;
+ContentSwitcher {
+    height: 1fr;
 }
 
 #footer-bar {
@@ -31,6 +29,79 @@ ContentSwitcher {
     background: $panel;
     color: $text-muted;
     padding: 0 1;
+}
+
+/* --- Summary Cards --- */
+
+#summary-cards {
+    height: auto;
+    padding: 1 1 0 1;
+}
+
+.summary-card {
+    width: 1fr;
+    height: auto;
+    margin: 0 1;
+}
+
+.summary-card-title {
+    width: 100%;
+    text-align: center;
+    color: $text-muted;
+}
+
+.summary-card Digits {
+    width: 1fr;
+    text-align: center;
+}
+
+/* --- Summary Sections --- */
+
+#summary-portfolio {
+    height: auto;
+    padding: 0 1;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
+#summary-portfolio-table {
+    height: auto;
+    max-height: 10;
+}
+
+.summary-portfolio-loading-line {
+    padding: 0 1;
+    margin-top: 1;
+    color: $text-muted;
+}
+
+#summary-breakdown {
+    height: auto;
+    padding: 0 1;
+}
+
+#summary-breakdown-table {
+    height: auto;
+    max-height: 20;
+}
+
+.summary-section-title {
+    text-style: bold;
+    color: $accent;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#card-income-value {
+    color: green;
+}
+
+#card-net-value.net-positive {
+    color: green;
+}
+
+#card-net-value.net-negative {
+    color: red;
 }
 
 /* --- Transactions Pane --- */
@@ -72,39 +143,33 @@ AccountsPane .filter-bar Input {
     width: 100%;
 }
 
-/* TransactionsTable: two-row filter panel */
-TransactionsTable .filter-bar {
-    height: auto;
-    layout: vertical;
-}
-
-.filter-inputs-row {
+/* TransactionsTable: month navigation */
+#txn-period-nav {
+    dock: top;
     height: 3;
-    align: left middle;
+    align: center middle;
+    padding: 0 1;
 }
 
-.filter-label {
-    width: auto;
-    margin-right: 1;
-    content-align: right middle;
-    height: 3;
+#txn-period-nav.hidden {
+    display: none;
 }
 
-.period-buttons {
-    height: 3;
-    align: left middle;
-}
-
-.period-buttons Button {
-    height: 3;
-    min-width: 0;
-    margin-right: 1;
-}
-
-.period-buttons Button.-active {
-    background: $accent;
-    color: $text;
+#txn-period-label {
+    width: 1fr;
+    text-align: center;
     text-style: bold;
+    height: 3;
+    content-align: center middle;
+}
+
+/* TransactionsTable: single search input */
+TransactionsTable .filter-bar {
+    height: 3;
+}
+
+TransactionsTable .filter-bar Input {
+    width: 100%;
 }
 
 /* --- Accounts Pane --- */
@@ -442,4 +507,34 @@ BudgetDeleteConfirmModal {
 
 #btn-budget-delete {
     background: $error;
+}
+
+/* --- Info Pane --- */
+
+InfoPane {
+    height: 1fr;
+    layout: vertical;
+    overflow-y: auto;
+}
+
+.info-section {
+    height: auto;
+    padding: 0 1;
+}
+
+.info-section-title {
+    text-style: bold;
+    color: $accent;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+.info-row {
+    height: 1;
+    padding: 0 1;
+}
+
+.info-label {
+    width: 16;
+    color: $text-muted;
 }

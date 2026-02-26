@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import pytest
 
 from textual.app import App, ComposeResult
+from textual.widgets import Input
 
 from hledger_tui.app import HledgerTuiApp
-from hledger_tui.widgets.transactions_table import TransactionsTable, _period_query
+from hledger_tui.widgets.transactions_table import TransactionsTable
 from tests.conftest import has_hledger
 
 
@@ -55,90 +56,181 @@ def empty_table_journal(tmp_path: Path) -> Path:
     return journal
 
 
-class TestPeriodQuery:
-    """Tests for _period_query helper."""
-
-    def test_thismonth(self):
-        """'thismonth' returns hledger date:thismonth."""
-        assert _period_query("thismonth") == "date:thismonth"
-
-    def test_all(self):
-        """'all' returns empty string (no date filter)."""
-        assert _period_query("all") == ""
-
-    def test_numeric_days(self):
-        """Numeric period returns date range from N days ago."""
-        result = _period_query("30")
-        expected_start = (date.today() - timedelta(days=30)).isoformat()
-        assert result == f"date:{expected_start}.."
-
-    def test_seven_days(self):
-        """7-day period returns correct start date."""
-        result = _period_query("7")
-        expected_start = (date.today() - timedelta(days=7)).isoformat()
-        assert result == f"date:{expected_start}.."
-
-    def test_365_days(self):
-        """365-day period (1 year) returns correct start date."""
-        result = _period_query("365")
-        expected_start = (date.today() - timedelta(days=365)).isoformat()
-        assert result == f"date:{expected_start}.."
+@pytest.fixture
+def multi_month_journal(tmp_path: Path) -> Path:
+    """A journal with transactions in the current and previous month."""
+    today = date.today()
+    cur = today.replace(day=1)
+    prev_month = cur.month - 1
+    prev_year = cur.year
+    if prev_month < 1:
+        prev_month, prev_year = 12, prev_year - 1
+    prev = cur.replace(year=prev_year, month=prev_month)
+    content = (
+        f"{cur.isoformat()} * Current month txn\n"
+        "    expenses:food              €10.00\n"
+        "    assets:bank:checking\n"
+        "\n"
+        f"{prev.isoformat()} * Previous month txn\n"
+        "    expenses:food              €20.00\n"
+        "    assets:bank:checking\n"
+    )
+    journal = tmp_path / "multi.journal"
+    journal.write_text(content)
+    return journal
 
 
-@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
-class TestTransactionsTablePeriodButtons:
-    """Tests for period button click handling."""
+# ------------------------------------------------------------------
+# Month query helper tests (pure, no hledger needed)
+# ------------------------------------------------------------------
 
-    async def test_period_button_activates(self, table_journal: Path):
-        """Clicking a period button adds the -active class to that button."""
-        from textual.widgets import Button
 
-        app = _TableApp(table_journal)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            btn_30 = app.query_one("#period-30", Button)
-            await pilot.click(btn_30)
-            await pilot.pause()
-            assert btn_30.has_class("-active")
+class TestMonthQuery:
+    """Tests for the _month_query helper on TransactionsTable."""
 
-    async def test_period_button_deactivates_previous(self, table_journal: Path):
-        """Clicking a period button removes -active from the previously active one."""
-        from textual.widgets import Button
+    def test_month_query_format(self):
+        """_month_query returns hledger date:YYYY-MM format."""
+        table = TransactionsTable.__new__(TransactionsTable)
+        table._current_month = date(2026, 2, 1)
+        assert table._month_query() == "date:2026-02"
 
-        app = _TableApp(table_journal)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            initial_btn = app.query_one("#period-thismonth", Button)
-            assert initial_btn.has_class("-active")
-            btn_30 = app.query_one("#period-30", Button)
-            await pilot.click(btn_30)
-            await pilot.pause()
-            assert not initial_btn.has_class("-active")
-            assert btn_30.has_class("-active")
+    def test_period_label_format(self):
+        """_period_label returns a human-readable month label."""
+        table = TransactionsTable.__new__(TransactionsTable)
+        table._current_month = date(2026, 2, 1)
+        assert table._period_label() == "February 2026"
+
+
+# ------------------------------------------------------------------
+# Integration tests (require hledger)
+# ------------------------------------------------------------------
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
-class TestTransactionsTableAccountFilter:
-    """Tests for account filter input submission."""
+class TestTransactionsTableMount:
+    """Tests for TransactionsTable initial mount."""
 
-    async def test_acct_filter_submit_filters_results(self, table_journal: Path):
-        """Submitting the account filter reloads with only matching transactions."""
-        from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+    async def test_table_mounts_with_rows(self, table_journal: Path):
+        """Table loads current-month transactions on mount."""
+        app = _TableApp(table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#transactions-table")
+            assert table.row_count == 2
 
+    async def test_period_nav_visible(self, table_journal: Path):
+        """Month navigation bar is visible (not pinned)."""
+        app = _TableApp(table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            nav = app.query_one("#txn-period-nav")
+            assert not nav.has_class("hidden")
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestTransactionsTableMonthNav:
+    """Tests for month-based navigation."""
+
+    async def test_prev_month_navigates(self, multi_month_journal: Path):
+        """Navigating to the previous month shows previous-month transactions."""
+        app = _TableApp(multi_month_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#transactions-table")
+            assert table.row_count == 1  # only current month txn
+            txn_table = app.query_one(TransactionsTable)
+            txn_table.prev_month()
+            await pilot.pause(delay=1.0)
+            assert table.row_count == 1  # only previous month txn
+
+    async def test_next_month_after_prev_returns(self, multi_month_journal: Path):
+        """Navigating back to the current month after prev_month."""
+        app = _TableApp(multi_month_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            txn_table = app.query_one(TransactionsTable)
+            txn_table.prev_month()
+            await pilot.pause(delay=1.0)
+            txn_table.next_month()
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#transactions-table")
+            assert table.row_count == 1  # back to current month
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestTransactionsTableSearch:
+    """Tests for hledger-query search functionality."""
+
+    async def test_show_filter_reveals_search_bar(self, table_journal: Path):
+        """show_filter makes the filter bar visible."""
+        app = _TableApp(table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            txn_table = app.query_one(TransactionsTable)
+            txn_table.show_filter()
+            await pilot.pause()
+            filter_bar = txn_table.query_one(".filter-bar")
+            assert filter_bar.has_class("visible")
+
+    async def test_search_filters_by_description(self, table_journal: Path):
+        """Submitting a desc: query narrows results."""
         app = _TableApp(table_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             txn_table = app.query_one(TransactionsTable)
             txn_table.show_filter()
             await pilot.pause()
-            acct_input = txn_table.query_one("#txn-acct-input", AutocompleteInput)
-            acct_input.focus()
-            acct_input.value = "income"
-            await pilot.pause()
+            search_input = txn_table.query_one("#txn-search-input", Input)
+            search_input.focus()
+            search_input.value = "desc:Grocery"
             await pilot.press("enter")
             await pilot.pause(delay=1.0)
             table = app.query_one("#transactions-table")
             assert table.row_count == 1
+
+    async def test_search_filters_by_account(self, table_journal: Path):
+        """Submitting an acct: query narrows results."""
+        app = _TableApp(table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            txn_table = app.query_one(TransactionsTable)
+            txn_table.show_filter()
+            await pilot.pause()
+            search_input = txn_table.query_one("#txn-search-input", Input)
+            search_input.focus()
+            search_input.value = "acct:income"
+            await pilot.press("enter")
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#transactions-table")
+            assert table.row_count == 1
+
+    async def test_dismiss_filter_restores_month_view(self, table_journal: Path):
+        """dismiss_filter clears search and restores month navigation."""
+        app = _TableApp(table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            txn_table = app.query_one(TransactionsTable)
+            txn_table.show_filter()
+            await pilot.pause()
+            search_input = txn_table.query_one("#txn-search-input", Input)
+            search_input.value = "desc:Grocery"
+            await pilot.press("enter")
+            await pilot.pause(delay=1.0)
+            result = txn_table.dismiss_filter()
+            assert result is True
+            await pilot.pause(delay=1.0)
+            table = app.query_one("#transactions-table")
+            assert table.row_count == 2  # all current-month txns restored
+
+    async def test_dismiss_filter_returns_false_when_hidden(
+        self, table_journal: Path
+    ):
+        """dismiss_filter returns False if the filter bar is already hidden."""
+        app = _TableApp(table_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            txn_table = app.query_one(TransactionsTable)
+            assert txn_table.dismiss_filter() is False
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -183,6 +275,8 @@ class TestTransactionsTableEditFlow:
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
+            await pilot.press("2")
+            await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
             from hledger_tui.screens.transaction_form import TransactionFormScreen
@@ -209,6 +303,8 @@ class TestTransactionsTableEditFlow:
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
+            await pilot.press("2")
+            await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
             from hledger_tui.screens.transaction_form import TransactionFormScreen
@@ -219,7 +315,6 @@ class TestTransactionsTableEditFlow:
             )
             await pilot.click(app.screen.query_one("#btn-save"))
             await pilot.pause(delay=1.5)
-            # App must not crash
             assert app.query_one("#transactions-table") is not None
 
     async def test_do_delete_journal_error_does_not_crash(
@@ -234,6 +329,8 @@ class TestTransactionsTableEditFlow:
         monkeypatch.setattr("hledger_tui.journal.delete_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            await pilot.press("2")
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
@@ -264,21 +361,3 @@ class TestTransactionsTableLoadErrors:
             await pilot.pause(delay=0.5)
             table = app.query_one("#transactions-table")
             assert table.row_count == 0
-
-    async def test_load_accounts_error_does_not_crash(
-        self, table_journal: Path, monkeypatch
-    ):
-        """HledgerError during _load_accounts is silently handled."""
-        from hledger_tui.hledger import HledgerError
-
-        def _raise(*args, **kwargs):
-            raise HledgerError("accounts failed")
-
-        monkeypatch.setattr(
-            "hledger_tui.widgets.transactions_table.load_accounts", _raise
-        )
-        app = _TableApp(table_journal)
-        async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
-            # App should not crash
-            assert app.query_one(TransactionsTable) is not None

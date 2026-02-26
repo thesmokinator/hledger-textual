@@ -423,7 +423,7 @@ def load_period_summary(file: str | Path, period: str) -> PeriodSummary:
     for row in reader:
         if len(row) < 2 or not row[0]:
             continue
-        account = row[0].strip()
+        account = row[0].strip().lower()
         qty, com = _parse_budget_amount(row[1].strip())
         if not commodity and com:
             commodity = com

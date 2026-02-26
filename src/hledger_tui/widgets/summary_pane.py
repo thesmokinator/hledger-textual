@@ -11,7 +11,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Digits, Static
 
 from hledger_tui.config import load_price_tickers
 from hledger_tui.hledger import (
@@ -48,6 +48,22 @@ def _fmt_amount(qty: Decimal, commodity: str) -> str:
     if len(commodity) == 1:
         return f"{commodity}{qty:,.2f}"
     return f"{qty:,.2f} {commodity}"
+
+
+def _fmt_digits(qty: Decimal, commodity: str) -> str:
+    """Format a decimal amount for the Digits widget.
+
+    Like _fmt_amount but uses spaces as thousands separator instead of commas,
+    since the Digits widget does not support comma characters.
+
+    Args:
+        qty: The numeric quantity.
+        commodity: The commodity symbol (e.g. '€', 'EUR').
+
+    Returns:
+        A formatted string like '€1 234.56' or '0.00' if no commodity.
+    """
+    return _fmt_amount(qty, commodity).replace(",", "")
 
 
 def _progress_bar(pct: float, width: int = 8) -> str:
@@ -94,13 +110,13 @@ class SummaryPane(Widget):
         with Horizontal(id="summary-cards"):
             with Vertical(classes="summary-card", id="card-income"):
                 yield Static("Income", classes="summary-card-title")
-                yield Static("\u2014", id="card-income-value", classes="summary-card-value")
+                yield Digits("--", id="card-income-value", classes="summary-card-value")
             with Vertical(classes="summary-card", id="card-expenses"):
                 yield Static("Expenses", classes="summary-card-title")
-                yield Static("\u2014", id="card-expenses-value", classes="summary-card-value")
+                yield Digits("--", id="card-expenses-value", classes="summary-card-value")
             with Vertical(classes="summary-card", id="card-net"):
                 yield Static("Net", classes="summary-card-title")
-                yield Static("\u2014", id="card-net-value", classes="summary-card-value")
+                yield Digits("--", id="card-net-value", classes="summary-card-value")
 
         # Investments section
         with Vertical(id="summary-portfolio"):
@@ -272,31 +288,30 @@ class SummaryPane(Widget):
         # Income / Expenses / Net cards
         if summary is not None:
             com = summary.commodity
-            income_text = _fmt_amount(summary.income, com)
-            expense_text = _fmt_amount(summary.expenses, com)
+            income_text = _fmt_digits(summary.income, com)
+            expense_text = _fmt_digits(summary.expenses, com)
             net = summary.net
-            net_text = _fmt_amount(abs(net), com)
+            net_text = _fmt_digits(abs(net), com)
 
-            self.query_one("#card-income-value", Static).update(
-                f"[green]{income_text}[/green]"
-            )
-            self.query_one("#card-expenses-value", Static).update(expense_text)
+            self.query_one("#card-income-value", Digits).update(income_text)
+            self.query_one("#card-expenses-value", Digits).update(expense_text)
 
+            net_widget = self.query_one("#card-net-value", Digits)
             if net >= 0:
-                self.query_one("#card-net-value", Static).update(
-                    f"[green]{net_text}[/green]"
-                )
+                net_widget.update(net_text)
+                net_widget.remove_class("net-negative")
+                net_widget.add_class("net-positive")
             else:
-                self.query_one("#card-net-value", Static).update(
-                    f"[red]-{net_text}[/red]"
-                )
+                net_widget.update(f"-{net_text}")
+                net_widget.remove_class("net-positive")
+                net_widget.add_class("net-negative")
         else:
             for widget_id in (
                 "#card-income-value",
                 "#card-expenses-value",
                 "#card-net-value",
             ):
-                self.query_one(widget_id, Static).update("\u2014")
+                self.query_one(widget_id, Digits).update("--")
 
         # Investments table — columns are fixed; clear rows only
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)

@@ -63,12 +63,16 @@ class TestFormOpens:
     async def test_add_opens_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             assert isinstance(app.screen, TransactionFormScreen)
 
     async def test_edit_opens_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("e")
             await pilot.pause()
@@ -80,6 +84,8 @@ class TestFormOpens:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             date_input = app.screen.query_one("#input-date", Input)
@@ -87,6 +93,8 @@ class TestFormOpens:
 
     async def test_new_form_has_two_posting_rows(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -98,6 +106,8 @@ class TestFormOpens:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("e")
             await pilot.pause()
             form = app.screen
@@ -108,6 +118,8 @@ class TestFormOpens:
     async def test_edit_form_has_correct_posting_count(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("e")
             await pilot.pause()
             rows = app.screen.query(PostingRow)
@@ -116,6 +128,8 @@ class TestFormOpens:
 
     async def test_escape_cancels_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -133,6 +147,8 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -148,6 +164,8 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -161,6 +179,8 @@ class TestFormValidation:
         from textual.widgets import Input
 
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -177,6 +197,8 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -190,6 +212,8 @@ class TestFormValidation:
         from textual.widgets import Input
 
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -205,6 +229,8 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -218,6 +244,8 @@ class TestFormValidation:
         from textual.widgets import Input
 
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -239,6 +267,8 @@ class TestFormPostings:
     async def test_add_posting_row(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -251,6 +281,8 @@ class TestFormPostings:
 
     async def test_remove_posting_row(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -269,6 +301,8 @@ class TestFormPostings:
 
     async def test_cannot_remove_below_two(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -290,6 +324,8 @@ class TestFormSave:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -310,6 +346,8 @@ class TestFormSave:
         from textual.widgets import Input, Select
 
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -515,6 +553,8 @@ class TestDescriptionAutocomplete:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -526,6 +566,8 @@ class TestDescriptionAutocomplete:
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
             form = app.screen
@@ -534,6 +576,8 @@ class TestDescriptionAutocomplete:
 
     async def test_date_uses_date_input(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()
@@ -584,6 +628,8 @@ class TestAmountInputWidget:
 
     async def test_amount_uses_amount_input(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("a")
             await pilot.pause()

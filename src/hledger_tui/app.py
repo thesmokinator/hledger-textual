@@ -6,18 +6,35 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import ContentSwitcher, Static, Tab, Tabs
+from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
 from hledger_tui.config import load_theme
 from hledger_tui.widgets.accounts_pane import AccountsPane
 from hledger_tui.widgets.budget_pane import BudgetPane
+from hledger_tui.widgets.info_pane import InfoPane
+from hledger_tui.widgets.summary_pane import SummaryPane
 from hledger_tui.widgets.transactions_pane import TransactionsPane
+from hledger_tui.widgets.transactions_table import TransactionsTable
 
-_FOOTER_TEXTS: dict[str, str] = {
-    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[/] Filter  \\[r] Refresh  \\[q] Quit",
-    "accounts": "\\[Enter] View  \\[/] Filter  \\[r] Refresh  \\[q] Quit",
-    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[/] Filter  \\[◄/►] Month  \\[r] Refresh  \\[q] Quit",
+_FOOTER_COMMANDS: dict[str, str] = {
+    "summary": "\\[r] Reload  \\[q] Quit",
+    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[r] Reload  \\[q] Quit",
+    "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[q] Quit",
+    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[q] Quit",
+    "info": "\\[r] Reload  \\[q] Quit",
 }
+
+
+class _NavTab(Tab):
+    """Tab that never receives keyboard focus."""
+
+    ALLOW_FOCUS = False
+
+
+class _NavTabs(Tabs):
+    """Tab bar that never receives keyboard focus."""
+
+    ALLOW_FOCUS = False
 
 
 class HledgerTuiApp(App):
@@ -27,9 +44,11 @@ class HledgerTuiApp(App):
     CSS_PATH = "styles/app.tcss"
 
     BINDINGS = [
-        Binding("1", "switch_section('transactions')", "Transactions", show=False),
-        Binding("2", "switch_section('accounts')", "Accounts", show=False),
-        Binding("3", "switch_section('budget')", "Budget", show=False),
+        Binding("1", "switch_section('summary')", "Summary", show=False),
+        Binding("2", "switch_section('transactions')", "Transactions", show=False),
+        Binding("3", "switch_section('accounts')", "Accounts", show=False),
+        Binding("4", "switch_section('budget')", "Budget", show=False),
+        Binding("5", "switch_section('info')", "Info", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -47,36 +66,56 @@ class HledgerTuiApp(App):
 
     def compose(self) -> ComposeResult:
         """Create the app layout."""
-        yield Tabs(
-            Tab("Transactions", id="tab-transactions"),
-            Tab("Accounts", id="tab-accounts"),
-            Tab("Budget", id="tab-budget"),
+        yield _NavTabs(
+            _NavTab("1. Summary", id="tab-summary"),
+            _NavTab("2. Transactions", id="tab-transactions"),
+            _NavTab("3. Accounts", id="tab-accounts"),
+            _NavTab("4. Budget", id="tab-budget"),
+            _NavTab("5. Info", id="tab-info"),
             id="nav-tabs",
         )
 
-        yield Static(str(self.journal_file), id="journal-bar")
-
-        with ContentSwitcher(initial="transactions", id="content-switcher"):
+        with ContentSwitcher(initial="summary", id="content-switcher"):
+            yield SummaryPane(self.journal_file, id="summary")
             yield TransactionsPane(self.journal_file, id="transactions")
             yield AccountsPane(self.journal_file, id="accounts")
             yield BudgetPane(self.journal_file, id="budget")
+            yield InfoPane(self.journal_file, id="info")
 
-        yield Static(_FOOTER_TEXTS["transactions"], id="footer-bar")
+        yield Static(_FOOTER_COMMANDS["summary"], id="footer-bar")
 
-    def on_key(self, event) -> None:
-        """Enter the highlighted section when Enter or Down is pressed on the tab bar."""
-        if isinstance(self.focused, Tabs) and event.key in ("enter", "down"):
-            active = self.query_one("#nav-tabs", Tabs).active
-            if active:
-                self._activate_section(active.removeprefix("tab-"))
-                event.stop()
+    def on_mount(self) -> None:
+        """Focus the default section after mount."""
+        self._focus_section("summary")
+
+    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+        """Handle tab activation (click) — switch content and focus."""
+        if not event.tab or not event.tab.id:
+            return
+        section = event.tab.id.removeprefix("tab-")
+        self.query_one("#content-switcher", ContentSwitcher).current = section
+        self.query_one("#footer-bar", Static).update(
+            _FOOTER_COMMANDS.get(section, "")
+        )
+        self._focus_section(section)
 
     def _activate_section(self, section: str) -> None:
-        """Switch the content pane and update the footer for the given section."""
-        self.query_one("#content-switcher", ContentSwitcher).current = section
-        self.query_one("#footer-bar", Static).update(_FOOTER_TEXTS.get(section, ""))
+        """Set the active tab — triggers on_tabs_tab_activated."""
+        self.query_one("#nav-tabs", _NavTabs).active = f"tab-{section}"
+
+    def _focus_section(self, section: str) -> None:
+        """Move keyboard focus to the main widget in the given section."""
+        if section == "summary":
+            self.query_one("#summary-breakdown-table", DataTable).focus()
+        elif section == "transactions":
+            self.query_one(TransactionsTable).query_one(DataTable).focus()
+        elif section == "accounts":
+            self.query_one("#accounts-table", DataTable).focus()
+        elif section == "budget":
+            self.query_one("#budget-table", DataTable).focus()
+        elif section == "info":
+            self.query_one(InfoPane).focus()
 
     def action_switch_section(self, section: str) -> None:
-        """Switch to the given section via keyboard shortcut (1/2)."""
-        self.query_one("#nav-tabs", Tabs).active = f"tab-{section}"
+        """Switch to the given section via keyboard shortcut (1-5)."""
         self._activate_section(section)

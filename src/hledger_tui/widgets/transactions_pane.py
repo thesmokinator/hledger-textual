@@ -26,9 +26,11 @@ class TransactionsPane(Widget):
         Binding("e", "edit", "Edit", show=True, priority=True),
         Binding("enter", "edit", "Edit", show=False),
         Binding("d", "delete", "Delete", show=True, priority=True),
-        Binding("slash", "filter", "Filter", show=True, priority=True),
+        Binding("slash", "filter", "Search", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
+        Binding("left", "prev_month", "Previous month", show=False),
+        Binding("right", "next_month", "Next month", show=False),
     ]
 
     def __init__(self, journal_file: Path, **kwargs) -> None:
@@ -65,8 +67,16 @@ class TransactionsPane(Widget):
         self._table.show_filter()
 
     def action_dismiss_filter(self) -> None:
-        """Hide the filter panel and reset all filters."""
+        """Hide the search bar and reset all filters."""
         self._table.dismiss_filter()
+
+    def action_prev_month(self) -> None:
+        """Navigate to the previous month."""
+        self._table.prev_month()
+
+    def action_next_month(self) -> None:
+        """Navigate to the next month."""
+        self._table.next_month()
 
     def action_add(self) -> None:
         """Open the form to add a new transaction."""

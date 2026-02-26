@@ -9,9 +9,14 @@ from pathlib import Path
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Digits, Static
 
-from hledger_tui.widgets.summary_pane import SummaryPane, _fmt_amount, _progress_bar
+from hledger_tui.widgets.summary_pane import (
+    SummaryPane,
+    _fmt_amount,
+    _fmt_digits,
+    _progress_bar,
+)
 from tests.conftest import has_hledger
 
 
@@ -75,6 +80,26 @@ class TestFmtAmount:
     def test_no_commodity(self):
         """Without a commodity, only the number is returned."""
         assert _fmt_amount(Decimal("42.00"), "") == "42.00"
+
+
+class TestFmtDigits:
+    """Tests for _fmt_digits helper (Digits-compatible formatting)."""
+
+    def test_removes_commas(self):
+        """Commas are removed for Digits widget compatibility."""
+        assert _fmt_digits(Decimal("1234.56"), "€") == "€1234.56"
+
+    def test_no_comma_passthrough(self):
+        """Small amounts without commas pass through unchanged."""
+        assert _fmt_digits(Decimal("42.00"), "€") == "€42.00"
+
+    def test_right_code(self):
+        """Multi-char commodity codes work correctly."""
+        assert _fmt_digits(Decimal("1000.00"), "EUR") == "1000.00 EUR"
+
+    def test_no_commodity(self):
+        """Without a commodity, only the number is returned."""
+        assert _fmt_digits(Decimal("1234.00"), "") == "1234.00"
 
 
 class TestProgressBar:
@@ -229,18 +254,16 @@ class TestSummaryPaneCards:
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            income_widget = app.query_one("#card-income-value", Static)
-            text = str(income_widget.renderable)
-            assert "3,000" in text or "3000" in text
+            income_widget = app.query_one("#card-income-value", Digits)
+            assert "3000" in income_widget.value
 
     async def test_cards_show_expenses_after_load(self, summary_journal: Path):
         """After loading, the expenses card shows the expected amount."""
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            expenses_widget = app.query_one("#card-expenses-value", Static)
-            text = str(expenses_widget.renderable)
-            assert "40" in text
+            expenses_widget = app.query_one("#card-expenses-value", Digits)
+            assert "40" in expenses_widget.value
 
     async def test_empty_journal_shows_zeros(self, empty_summary_journal: Path):
         """An empty journal shows zero amounts in all cards."""
@@ -252,14 +275,13 @@ class TestSummaryPaneCards:
                 "#card-expenses-value",
                 "#card-net-value",
             ):
-                widget = app.query_one(widget_id, Static)
-                text = str(widget.renderable)
-                assert "0.00" in text
+                widget = app.query_one(widget_id, Digits)
+                assert "0.00" in widget.value
 
     async def test_period_error_shows_dashes(
         self, summary_journal: Path, monkeypatch
     ):
-        """When load_period_summary raises HledgerError, cards show em-dashes."""
+        """When load_period_summary raises HledgerError, cards show double-dashes."""
         from hledger_tui.hledger import HledgerError
 
         def _raise(*args, **kwargs):
@@ -276,8 +298,8 @@ class TestSummaryPaneCards:
                 "#card-expenses-value",
                 "#card-net-value",
             ):
-                widget = app.query_one(widget_id, Static)
-                assert "\u2014" in str(widget.renderable)
+                widget = app.query_one(widget_id, Digits)
+                assert widget.value == "--"
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
