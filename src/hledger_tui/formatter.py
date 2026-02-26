@@ -4,6 +4,29 @@ from __future__ import annotations
 
 from hledger_tui.models import Posting, Transaction, TransactionStatus
 
+# Mapping from ISO 4217 currency codes to their common symbols.
+_CURRENCY_SYMBOLS: dict[str, str] = {
+    "EUR": "€",
+    "USD": "$",
+    "GBP": "£",
+}
+
+
+def normalize_commodity(commodity: str) -> str:
+    """Convert well-known currency codes to their symbol.
+
+    Converts ISO 4217 codes like ``EUR``, ``USD``, ``GBP`` to the
+    corresponding symbol (``€``, ``$``, ``£``).  Unknown codes are
+    returned unchanged.
+
+    Args:
+        commodity: A commodity string, e.g. ``'EUR'`` or ``'XDWD'``.
+
+    Returns:
+        The symbol if known, otherwise the original string.
+    """
+    return _CURRENCY_SYMBOLS.get(commodity, commodity)
+
 
 def format_posting(
     posting: Posting,

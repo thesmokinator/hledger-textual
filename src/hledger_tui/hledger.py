@@ -77,7 +77,13 @@ def check_journal(file: str | Path) -> None:
 
 
 def _parse_amount(data: dict) -> Amount:
-    """Parse an amount from hledger JSON."""
+    """Parse an amount from hledger JSON.
+
+    When a cost annotation is present (``acost``), it is parsed and stored on
+    the returned :class:`Amount`.  For per-unit costs (``UnitCost`` / ``@``)
+    the cost is multiplied by the quantity to produce a total cost, so callers
+    always see the total EUR value regardless of annotation style.
+    """
     qty_data = data["aquantity"]
     mantissa = qty_data["decimalMantissa"]
     places = qty_data["decimalPlaces"]
@@ -100,10 +106,25 @@ def _parse_amount(data: dict) -> Amount:
         precision=style_data.get("asprecision", 2),
     )
 
+    # Parse cost annotation (@/@@) if present
+    cost: Amount | None = None
+    acost = data.get("acost")
+    if acost and isinstance(acost, dict) and "contents" in acost:
+        tag = acost.get("tag", "")
+        cost_amount = _parse_amount(acost["contents"])
+        if tag == "UnitCost":
+            cost_amount = Amount(
+                commodity=cost_amount.commodity,
+                quantity=abs(cost_amount.quantity * quantity),
+                style=cost_amount.style,
+            )
+        cost = cost_amount
+
     return Amount(
         commodity=data["acommodity"],
         quantity=quantity,
         style=style,
+        cost=cost,
     )
 
 

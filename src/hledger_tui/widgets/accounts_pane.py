@@ -12,6 +12,7 @@ from textual.widget import Widget
 from textual.widgets import DataTable, Input
 
 from hledger_tui.hledger import HledgerError, load_account_balances
+from hledger_tui.widgets import distribute_column_widths
 
 
 class AccountsPane(Widget):
@@ -47,17 +48,25 @@ class AccountsPane(Widget):
             )
         yield DataTable(id="accounts-table")
 
+    _ACCOUNTS_FIXED = {1: 20}
+
     def on_mount(self) -> None:
         """Set up the DataTable and load account balances."""
         table = self.query_one("#accounts-table", DataTable)
         table.cursor_type = "row"
-        table.add_columns("Account", "Balance")
+        table.add_column("Account", width=20)
+        table.add_column("Balance", width=self._ACCOUNTS_FIXED[1])
         self._load_balances()
         table.focus()
 
     def on_show(self) -> None:
         """Restore focus to the table when the pane becomes visible."""
         self.query_one("#accounts-table", DataTable).focus()
+
+    def on_resize(self) -> None:
+        """Recalculate column widths when the pane is resized."""
+        table = self.query_one("#accounts-table", DataTable)
+        distribute_column_widths(table, self._ACCOUNTS_FIXED)
 
     def _load_balances(self) -> None:
         """Load account balances from hledger and populate the table."""

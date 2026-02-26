@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from hledger_tui.formatter import format_posting, format_transaction
+from hledger_tui.formatter import format_posting, format_transaction, normalize_commodity
 from hledger_tui.models import (
     Amount,
     AmountStyle,
@@ -10,6 +10,34 @@ from hledger_tui.models import (
     Transaction,
     TransactionStatus,
 )
+
+
+class TestNormalizeCommodity:
+    """Tests for normalize_commodity helper."""
+
+    def test_eur_to_symbol(self):
+        """EUR is converted to the Euro sign."""
+        assert normalize_commodity("EUR") == "€"
+
+    def test_usd_to_symbol(self):
+        """USD is converted to the Dollar sign."""
+        assert normalize_commodity("USD") == "$"
+
+    def test_gbp_to_symbol(self):
+        """GBP is converted to the Pound sign."""
+        assert normalize_commodity("GBP") == "£"
+
+    def test_unknown_code_unchanged(self):
+        """Unknown commodity codes are returned as-is."""
+        assert normalize_commodity("XDWD") == "XDWD"
+
+    def test_symbol_unchanged(self):
+        """Already-symbol commodities pass through unchanged."""
+        assert normalize_commodity("€") == "€"
+
+    def test_empty_string(self):
+        """Empty string is returned as-is."""
+        assert normalize_commodity("") == ""
 
 
 class TestFormatPosting:

@@ -13,6 +13,7 @@ from textual.widgets import DataTable, Input, Static
 
 from hledger_tui.hledger import HledgerError, load_transactions
 from hledger_tui.models import Transaction
+from hledger_tui.widgets import distribute_column_widths
 
 
 class TransactionsTable(Widget):
@@ -107,12 +108,19 @@ class TransactionsTable(Widget):
             )
         yield DataTable(id="transactions-table")
 
+    # Date, Status, Accounts, Amount fixed; Description flex
+    _TXN_FIXED = {0: 12, 1: 8, 3: 30, 4: 22}
+
     def on_mount(self) -> None:
         """Set up the DataTable columns and start loading."""
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.show_row_labels = False
-        table.add_columns("Date", "Status", "Description", "Accounts", "Amount")
+        table.add_column("Date", width=self._TXN_FIXED[0])
+        table.add_column("Status", width=self._TXN_FIXED[1])
+        table.add_column("Description", width=20)
+        table.add_column("Accounts", width=self._TXN_FIXED[3])
+        table.add_column("Amount", width=self._TXN_FIXED[4])
         self._load_transactions()
         table.focus()
 
@@ -122,7 +130,8 @@ class TransactionsTable(Widget):
 
     def on_resize(self) -> None:
         """Recalculate column widths when the widget is resized."""
-        self._distribute_column_widths()
+        table = self.query_one(DataTable)
+        distribute_column_widths(table, self._TXN_FIXED)
 
     # ------------------------------------------------------------------
     # Public interface (for parent widgets / screens)
@@ -300,38 +309,8 @@ class TransactionsTable(Widget):
                 txn.total_amount,
                 key=str(txn.index),
             )
-        self._distribute_column_widths()
-
-    def _distribute_column_widths(self) -> None:
-        """Set column widths proportionally to fill the available width."""
         table = self.query_one(DataTable)
-        available = self.size.width
-        if available <= 0:
-            return
-
-        cols = table.ordered_columns
-        if len(cols) != 5:
-            return
-
-        padding_per_col = 2
-        total_overhead = len(cols) * padding_per_col
-        usable = available - total_overhead
-
-        date_w = 12
-        status_w = 8
-        amount_w = 16
-        fixed = date_w + status_w + amount_w
-        remaining = max(usable - fixed, 20)
-
-        desc_w = remaining * 2 // 5
-        accts_w = remaining - desc_w
-
-        widths = [date_w, status_w, desc_w, accts_w, amount_w]
-        for col, w in zip(cols, widths):
-            col.auto_width = False
-            col.width = w
-
-        table.refresh(layout=True)
+        distribute_column_widths(table, self._TXN_FIXED)
 
     # ------------------------------------------------------------------
     # Event handlers

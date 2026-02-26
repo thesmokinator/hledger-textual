@@ -14,6 +14,8 @@ from textual.widget import Widget
 from textual.widgets import DataTable, Digits, Static
 
 from hledger_tui.config import load_price_tickers
+from hledger_tui.formatter import normalize_commodity
+from hledger_tui.widgets import distribute_column_widths
 from hledger_tui.hledger import (
     HledgerError,
     load_expense_breakdown,
@@ -138,22 +140,36 @@ class SummaryPane(Widget):
             )
             yield DataTable(id="summary-breakdown-table")
 
+    # Column index → fixed width for portfolio table (col 0 = flex)
+    _PORTFOLIO_FIXED = {1: 12, 2: 18, 3: 18}
+    # Column index → fixed width for breakdown table (col 0 = flex)
+    _BREAKDOWN_FIXED = {1: 14, 2: 24}
+
     def on_mount(self) -> None:
         """Set up data tables and start loading data."""
         portfolio_table = self.query_one("#summary-portfolio-table", _DisplayTable)
         portfolio_table.cursor_type = "none"
         portfolio_table.add_column("Asset", width=12)
-        portfolio_table.add_column("Quantity", width=12)
-        portfolio_table.add_column("Balance", width=18)
-        portfolio_table.add_column("Market Value", width=18)
+        portfolio_table.add_column("Quantity", width=self._PORTFOLIO_FIXED[1])
+        portfolio_table.add_column("Balance", width=self._PORTFOLIO_FIXED[2])
+        portfolio_table.add_column("Market Value", width=self._PORTFOLIO_FIXED[3])
 
         breakdown_table = self.query_one("#summary-breakdown-table", DataTable)
         breakdown_table.cursor_type = "none"
         breakdown_table.show_cursor = False
-        breakdown_table.add_columns("Account", "Amount", "% of total")
+        breakdown_table.add_column("Account", width=20)
+        breakdown_table.add_column("Amount", width=self._BREAKDOWN_FIXED[1])
+        breakdown_table.add_column("% of total", width=self._BREAKDOWN_FIXED[2])
 
         self._load_static_data()
         self._load_breakdown_data()
+
+    def on_resize(self) -> None:
+        """Recalculate flex column widths for all tables."""
+        ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
+        distribute_column_widths(ptable, self._PORTFOLIO_FIXED)
+        btable = self.query_one("#summary-breakdown-table", DataTable)
+        distribute_column_widths(btable, self._BREAKDOWN_FIXED)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -405,6 +421,7 @@ class SummaryPane(Widget):
                     (eur_by_account[acc][1] for acc, _ in accs if acc in eur_by_account),
                     "",
                 )
+                eur_com = normalize_commodity(eur_com)
                 # If hledger couldn't convert (returned original commodity), show —
                 if eur_com == com:
                     ptable.add_row(com, f"{total_qty:g}", book_str, "\u2014")

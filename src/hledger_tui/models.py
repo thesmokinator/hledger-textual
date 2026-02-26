@@ -49,11 +49,17 @@ class AmountStyle:
 
 @dataclass
 class Amount:
-    """A monetary amount with commodity and style."""
+    """A monetary amount with commodity and style.
+
+    The optional ``cost`` field holds the cost annotation (``@`` or ``@@``)
+    already converted to a total cost, so that callers do not need to
+    distinguish between per-unit and total cost.
+    """
 
     commodity: str
     quantity: Decimal
     style: AmountStyle = field(default_factory=AmountStyle)
+    cost: Amount | None = None
 
     def format(self) -> str:
         """Format the amount as a string for display."""
@@ -95,18 +101,31 @@ class Transaction:
 
     @property
     def total_amount(self) -> str:
-        """Return the sum of positive amounts for display."""
+        """Return the sum of positive amounts for display.
+
+        When a posting carries a cost annotation (e.g. ``10 XDWD @@ €1185``),
+        the cost is included in the totals so that the display shows the EUR
+        value invested rather than unrelated small amounts like bank fees.
+        """
         positive_amounts: dict[str, Decimal] = {}
+        styles: dict[str, AmountStyle] = {}
         for posting in self.postings:
             for amount in posting.amounts:
                 if amount.quantity > 0:
                     key = amount.commodity
                     positive_amounts[key] = positive_amounts.get(key, Decimal(0)) + amount.quantity
+                    if key not in styles:
+                        styles[key] = amount.style
+                    if amount.cost is not None:
+                        ck = amount.cost.commodity
+                        positive_amounts[ck] = positive_amounts.get(ck, Decimal(0)) + abs(amount.cost.quantity)
+                        if ck not in styles:
+                            styles[ck] = amount.cost.style
         if not positive_amounts:
             return ""
         parts = []
         for commodity, qty in positive_amounts.items():
-            style = self._find_style(commodity)
+            style = styles.get(commodity, AmountStyle())
             amt = Amount(commodity=commodity, quantity=qty, style=style)
             parts.append(amt.format())
         return ", ".join(parts)
