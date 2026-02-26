@@ -73,8 +73,7 @@ class AccountsPane(Widget):
         table = self.query_one("#accounts-table", DataTable)
         table.clear()
         for account, balance in self._filtered_balances():
-            display_name = self._format_account_name(account)
-            table.add_row(display_name, balance, key=account)
+            table.add_row(account, balance, key=account)
 
     def _filtered_balances(self) -> list[tuple[str, str]]:
         """Return balances filtered by the current filter text."""
@@ -86,15 +85,6 @@ class AccountsPane(Widget):
             for account, balance in self._balances
             if term in account.lower()
         ]
-
-    @staticmethod
-    def _format_account_name(account: str) -> str:
-        """Return the full account path for display.
-
-        Shows the complete colon-separated path so users can always see
-        the full account context and filter on any part of the name.
-        """
-        return account
 
     # --- Actions ---
 

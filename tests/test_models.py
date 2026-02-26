@@ -117,6 +117,50 @@ class TestTransaction:
         assert txn.total_amount == "€35.00"
 
 
+class TestFindStyle:
+    """Tests for Transaction._find_style."""
+
+    def test_finds_style_for_known_commodity(self):
+        """Returns the AmountStyle for a commodity present in the postings."""
+        custom_style = AmountStyle(commodity_side="R", commodity_spaced=True, precision=4)
+        txn = Transaction(
+            index=1,
+            date="2026-01-01",
+            description="Test",
+            postings=[
+                Posting(
+                    account="expenses:food",
+                    amounts=[Amount(commodity="BTC", quantity=Decimal("0.001"), style=custom_style)],
+                ),
+            ],
+        )
+        style = txn._find_style("BTC")
+        assert style.commodity_side == "R"
+        assert style.commodity_spaced is True
+        assert style.precision == 4
+
+    def test_returns_default_style_for_unknown_commodity(self):
+        """Returns a default AmountStyle when the commodity is not found."""
+        txn = Transaction(
+            index=1,
+            date="2026-01-01",
+            description="Test",
+            postings=[
+                Posting(
+                    account="expenses:food",
+                    amounts=[Amount(commodity="€", quantity=Decimal("10.00"))],
+                ),
+            ],
+        )
+        style = txn._find_style("USD")
+        assert style == AmountStyle()
+
+    def test_returns_default_style_for_empty_postings(self):
+        """Returns a default AmountStyle when there are no postings."""
+        txn = Transaction(index=1, date="2026-01-01", description="Test")
+        assert txn._find_style("€") == AmountStyle()
+
+
 class TestBudgetRow:
     """Tests for BudgetRow properties."""
 

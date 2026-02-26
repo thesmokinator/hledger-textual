@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.hledger import HledgerError, load_accounts, load_descriptions, load_transactions
+from hledger_tui.hledger import (
+    HledgerError,
+    _parse_budget_amount,
+    load_accounts,
+    load_descriptions,
+    load_transactions,
+)
 from hledger_tui.models import TransactionStatus
 
 from tests.conftest import has_hledger
@@ -95,3 +101,76 @@ class TestLoadDescriptions:
     def test_description_count(self, sample_journal_path: Path):
         descriptions = load_descriptions(sample_journal_path)
         assert len(descriptions) == 3
+
+
+class TestParseBudgetAmount:
+    """Tests for the _parse_budget_amount pure function."""
+
+    def test_left_side_currency_symbol(self):
+        """Euro symbol on the left: €500.00."""
+        qty, commodity = _parse_budget_amount("€500.00")
+        assert qty == pytest.approx(500.00, abs=1e-2)
+        assert commodity == "€"
+
+    def test_right_side_currency_code(self):
+        """Currency code on the right: 500.00 EUR."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("500.00 EUR")
+        assert qty == Decimal("500.00")
+        assert commodity == "EUR"
+
+    def test_plain_number(self):
+        """Plain integer with no commodity."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("500")
+        assert qty == Decimal("500")
+        assert commodity == ""
+
+    def test_empty_string(self):
+        """Empty string returns zero with no commodity."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("")
+        assert qty == Decimal("0")
+        assert commodity == ""
+
+    def test_zero_string(self):
+        """The literal '0' returns zero with no commodity."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("0")
+        assert qty == Decimal("0")
+        assert commodity == ""
+
+    def test_dollar_sign_left(self):
+        """Dollar sign on the left: $1200.50."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("$1200.50")
+        assert qty == Decimal("1200.50")
+        assert commodity == "$"
+
+    def test_number_with_comma_separator(self):
+        """Numbers with comma thousand-separators are handled."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("1,500.00")
+        assert qty == Decimal("1500.00")
+        assert commodity == ""
+
+    def test_left_currency_with_comma(self):
+        """Left-side currency with comma-separated number."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("€1,200.00")
+        assert qty == Decimal("1200.00")
+        assert commodity == "€"
+
+    def test_whitespace_stripped(self):
+        """Leading/trailing whitespace is stripped."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("  €300.00  ")
+        assert qty == Decimal("300.00")
+        assert commodity == "€"
+
+    def test_unparseable_returns_zero(self):
+        """Garbage input returns zero with no commodity."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("not-a-number")
+        assert qty == Decimal("0")
+        assert commodity == ""

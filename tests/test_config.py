@@ -4,7 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.config import parse_args, resolve_journal_file
+from hledger_tui.config import (
+    _load_config_dict,
+    _save_config_dict,
+    load_theme,
+    parse_args,
+    resolve_journal_file,
+    save_theme,
+)
 
 
 class TestParseArgs:
@@ -86,3 +93,73 @@ class TestResolveJournalFile:
 
         with pytest.raises(SystemExit):
             resolve_journal_file()
+
+    def test_config_toml_missing_journal_exits(self, tmp_path: Path, monkeypatch):
+        """resolve_journal_file exits when config.toml references a missing journal."""
+        config_path = tmp_path / "config.toml"
+        missing = tmp_path / "nonexistent.journal"
+        config_path.write_text(f'journal_file = "{missing}"\n')
+
+        monkeypatch.delenv("LEDGER_FILE", raising=False)
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+
+        with pytest.raises(SystemExit):
+            resolve_journal_file()
+
+
+class TestLoadConfigDict:
+    """Tests for the _load_config_dict private helper."""
+
+    def test_returns_empty_dict_when_config_missing(self, tmp_path, monkeypatch):
+        """Returns an empty dict when the config file does not exist."""
+        monkeypatch.setattr(
+            "hledger_tui.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        assert _load_config_dict() == {}
+
+    def test_returns_empty_dict_on_malformed_toml(self, tmp_path, monkeypatch):
+        """Returns an empty dict when the TOML file is invalid."""
+        bad_toml = tmp_path / "bad.toml"
+        bad_toml.write_text("not valid toml === !!!")
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", bad_toml)
+        assert _load_config_dict() == {}
+
+    def test_returns_parsed_dict_from_valid_toml(self, tmp_path, monkeypatch):
+        """Returns the correct dict when the TOML file is valid."""
+        config = tmp_path / "config.toml"
+        config.write_text('theme = "nord"\n')
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config)
+        assert _load_config_dict() == {"theme": "nord"}
+
+
+class TestSaveAndLoadTheme:
+    """Tests for save_theme and load_theme round-trip."""
+
+    def test_save_theme_creates_config_file(self, tmp_path, monkeypatch):
+        """save_theme creates the config file with the theme entry."""
+        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        save_theme("nord")
+        assert config_path.exists()
+        assert "nord" in config_path.read_text()
+
+    def test_load_theme_returns_saved_value(self, tmp_path, monkeypatch):
+        """load_theme returns the theme name that was previously saved."""
+        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        save_theme("textual-dark")
+        assert load_theme() == "textual-dark"
+
+    def test_load_theme_returns_none_when_not_set(self, tmp_path, monkeypatch):
+        """load_theme returns None when no theme has been saved."""
+        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        assert load_theme() is None
+
+    def test_save_theme_overwrites_previous_value(self, tmp_path, monkeypatch):
+        """Calling save_theme twice keeps only the most recent value."""
+        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        save_theme("nord")
+        save_theme("gruvbox")
+        assert load_theme() == "gruvbox"

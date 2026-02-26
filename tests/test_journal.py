@@ -10,8 +10,8 @@ from hledger_tui.journal import (
     delete_transaction,
     replace_transaction,
 )
-from hledger_tui.hledger import load_transactions
-from hledger_tui.models import Transaction
+from hledger_tui.hledger import HledgerError, load_transactions
+from hledger_tui.models import SourcePosition, Transaction
 
 from tests.conftest import has_hledger
 
@@ -106,3 +106,137 @@ class TestReplaceTransaction:
         replace_transaction(tmp_journal, txns[0], new_transaction)
         backup = tmp_journal.with_suffix(tmp_journal.suffix + ".bak")
         assert not backup.exists()
+
+
+class TestValidationFailure:
+    """Tests for backup/restore when hledger validation fails after a write."""
+
+    def test_append_restores_original_on_invalid_journal(
+        self, tmp_journal: Path, new_transaction: Transaction, monkeypatch
+    ):
+        """Original content is restored when hledger check rejects the result."""
+        original = tmp_journal.read_text()
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_tui.journal.check_journal", _fail_check)
+
+        with pytest.raises(JournalError, match="validation failed"):
+            append_transaction(tmp_journal, new_transaction)
+
+        assert tmp_journal.read_text() == original
+        assert not tmp_journal.with_suffix(tmp_journal.suffix + ".bak").exists()
+
+    def test_replace_restores_original_on_invalid_journal(
+        self, tmp_journal: Path, new_transaction: Transaction, monkeypatch
+    ):
+        """Replace restores original content when validation fails."""
+        txns = load_transactions(tmp_journal)
+        original = tmp_journal.read_text()
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_tui.journal.check_journal", _fail_check)
+
+        with pytest.raises(JournalError, match="validation failed"):
+            replace_transaction(tmp_journal, txns[0], new_transaction)
+
+        assert tmp_journal.read_text() == original
+        assert not tmp_journal.with_suffix(tmp_journal.suffix + ".bak").exists()
+
+    def test_delete_restores_original_on_invalid_journal(
+        self, tmp_journal: Path, monkeypatch
+    ):
+        """Delete restores original content when validation fails."""
+        txns = load_transactions(tmp_journal)
+        original = tmp_journal.read_text()
+
+        def _fail_check(file):
+            raise HledgerError("journal invalid")
+
+        monkeypatch.setattr("hledger_tui.journal.check_journal", _fail_check)
+
+        with pytest.raises(JournalError, match="validation failed"):
+            delete_transaction(tmp_journal, txns[0])
+
+        assert tmp_journal.read_text() == original
+        assert not tmp_journal.with_suffix(tmp_journal.suffix + ".bak").exists()
+
+
+class TestExceptExceptionPaths:
+    """Tests for the generic except-Exception safety net in each operation."""
+
+    def test_append_restores_on_format_exception(
+        self, tmp_journal: Path, new_transaction: Transaction, monkeypatch
+    ):
+        """append_transaction restores the file when format_transaction raises."""
+        original = tmp_journal.read_text()
+
+        def _fail_format(txn):
+            raise RuntimeError("format failed")
+
+        monkeypatch.setattr("hledger_tui.journal.format_transaction", _fail_format)
+
+        with pytest.raises(JournalError, match="Failed to append"):
+            append_transaction(tmp_journal, new_transaction)
+
+        assert tmp_journal.read_text() == original
+        assert not tmp_journal.with_suffix(tmp_journal.suffix + ".bak").exists()
+
+    def test_replace_restores_on_format_exception(
+        self, tmp_journal: Path, new_transaction: Transaction, monkeypatch
+    ):
+        """replace_transaction restores the file when format_transaction raises."""
+        txns = load_transactions(tmp_journal)
+        original = tmp_journal.read_text()
+
+        def _fail_format(txn):
+            raise RuntimeError("format failed")
+
+        monkeypatch.setattr("hledger_tui.journal.format_transaction", _fail_format)
+
+        with pytest.raises(JournalError, match="Failed to replace"):
+            replace_transaction(tmp_journal, txns[0], new_transaction)
+
+        assert tmp_journal.read_text() == original
+        assert not tmp_journal.with_suffix(tmp_journal.suffix + ".bak").exists()
+
+    def test_delete_restores_on_out_of_bounds_source_pos(self, tmp_journal: Path):
+        """delete_transaction restores the file when source positions are invalid."""
+        original = tmp_journal.read_text()
+
+        # A transaction whose source_pos points far beyond the file causes
+        # an IndexError inside the try block, triggering the except Exception path.
+        fake_txn = Transaction(
+            index=999,
+            date="2026-01-01",
+            description="Out of bounds",
+            source_pos=(
+                SourcePosition("test.journal", 1000, 1),
+                SourcePosition("test.journal", 1003, 1),
+            ),
+        )
+
+        with pytest.raises(JournalError, match="Failed to delete"):
+            delete_transaction(tmp_journal, fake_txn)
+
+        assert tmp_journal.read_text() == original
+        assert not tmp_journal.with_suffix(tmp_journal.suffix + ".bak").exists()
+
+
+class TestAppendEdgeCases:
+    """Edge cases for append_transaction."""
+
+    def test_append_to_file_without_trailing_newline(
+        self, tmp_journal: Path, new_transaction: Transaction
+    ):
+        """append_transaction correctly handles files that don't end with '\\n'."""
+        content = tmp_journal.read_text().rstrip("\n")
+        tmp_journal.write_text(content)
+
+        append_transaction(tmp_journal, new_transaction)
+
+        result = tmp_journal.read_text()
+        assert "Rent payment" in result
