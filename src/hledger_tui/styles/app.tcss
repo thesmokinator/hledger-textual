@@ -8,6 +8,7 @@ Screen {
 
 #nav-tabs {
     dock: top;
+    margin: 1 0;
 }
 
 #nav-tabs Tab {

@@ -54,6 +54,10 @@ The journal file is resolved in this order:
 | `j` / `k`     | Navigate up/down                |
 | `q`           | Quit                             |
 
+## Documentation
+
+See [DOCS.md](DOCS.md) for the full documentation: feature overview, configuration, investment tracking, and per-tab reference.
+
 ## Testing
 
 ```bash
