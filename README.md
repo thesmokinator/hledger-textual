@@ -4,6 +4,8 @@ A terminal user interface for managing [hledger](https://hledger.org) journal tr
 
 Built with [Textual](https://textual.textualize.io) and Python.
 
+![hledger-tui summary](screenshots/001.png)
+
 ## Stack
 
 - **Python 3.12+**
