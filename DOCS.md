@@ -3,7 +3,7 @@
 A terminal user interface for [hledger](https://hledger.org) plain-text accounting.
 Browse transactions, track budgets, monitor investments, and manage your journal — all from the terminal.
 
-![hledger-textual summary](screenshots/001.png)
+![hledger-textual summary](https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/001.png)
 
 ## Table of Contents
 

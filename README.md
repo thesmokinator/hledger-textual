@@ -1,12 +1,13 @@
 # hledger-textual
 
-[![PyPI](https://img.shields.io/pypi/v/hledger-textual)](https://pypi.org/project/hledger-textual/)
+[![PyPI](https://img.shields.io/pypi/v/hledger-textual?label=PyPI&color=blue)](https://pypi.org/project/hledger-textual/)
+[![GitHub Release](https://img.shields.io/github/v/release/thesmokinator/hledger-textual?label=GitHub&color=blue)](https://github.com/thesmokinator/hledger-textual/releases)
 
 A terminal user interface for managing [hledger](https://hledger.org) journal transactions. View, create, edit, and delete transactions from your terminal.
 
 Built with [Textual](https://textual.textualize.io) and Python.
 
-![hledger-textual summary](screenshots/001.png)
+![hledger-textual summary](https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/screenshots/001.png)
 
 ## Stack
 
@@ -29,9 +30,6 @@ pipx install hledger-textual
 
 # With uv
 uv tool install hledger-textual
-
-# With Homebrew
-brew tap thesmokinator/hledger-textual && brew install hledger-textual
 ```
 
 ## Usage
