@@ -5,7 +5,7 @@ from __future__ import annotations
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable
 
-from hledger_tui.widgets import distribute_column_widths
+from hledger_textual.widgets import distribute_column_widths
 
 
 class _TableApp(App):

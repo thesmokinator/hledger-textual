@@ -9,14 +9,14 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widget import Widget
 
-from hledger_tui.models import Transaction
-from hledger_tui.widgets.transactions_table import TransactionsTable
+from hledger_textual.models import Transaction
+from hledger_textual.widgets.transactions_table import TransactionsTable
 
 
 class TransactionsPane(Widget):
     """Widget showing all transactions with add / edit / delete actions.
 
-    Composes a :class:`~hledger_tui.widgets.transactions_table.TransactionsTable`
+    Composes a :class:`~hledger_textual.widgets.transactions_table.TransactionsTable`
     for the shared filter bar and DataTable, and adds journal-mutation bindings
     on top.
     """
@@ -80,7 +80,7 @@ class TransactionsPane(Widget):
 
     def action_add(self) -> None:
         """Open the form to add a new transaction."""
-        from hledger_tui.screens.transaction_form import TransactionFormScreen
+        from hledger_textual.screens.transaction_form import TransactionFormScreen
 
         def on_save(result: Transaction | None) -> None:
             if result is not None:
@@ -106,7 +106,7 @@ class TransactionsPane(Widget):
     @work(thread=True)
     def _do_append(self, transaction: Transaction) -> None:
         """Append a transaction to the journal and reload."""
-        from hledger_tui.journal import JournalError, append_transaction
+        from hledger_textual.journal import JournalError, append_transaction
 
         try:
             append_transaction(self.journal_file, transaction)

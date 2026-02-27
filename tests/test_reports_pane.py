@@ -10,8 +10,8 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Select
 
-from hledger_tui.models import ReportData, ReportRow
-from hledger_tui.widgets.reports_pane import ReportsPane
+from hledger_textual.models import ReportData, ReportRow
+from hledger_textual.widgets.reports_pane import ReportsPane
 from tests.conftest import has_hledger
 
 
@@ -80,7 +80,7 @@ class TestReportsPaneMount:
     ):
         """ReportsPane mounts without raising exceptions."""
         monkeypatch.setattr(
-            "hledger_tui.widgets.reports_pane.load_report",
+            "hledger_textual.widgets.reports_pane.load_report",
             lambda *args, **kwargs: ReportData(
                 title="Test", period_headers=["Jan"], rows=[]
             ),
@@ -94,11 +94,11 @@ class TestReportsPaneMount:
         self, reports_journal: Path, monkeypatch
     ):
         """After loading, the table should have Account + period columns."""
-        from hledger_tui.hledger import _parse_report_csv
+        from hledger_textual.hledger import _parse_report_csv
 
         data = _parse_report_csv(_SAMPLE_IS_CSV)
         monkeypatch.setattr(
-            "hledger_tui.widgets.reports_pane.load_report",
+            "hledger_textual.widgets.reports_pane.load_report",
             lambda *args, **kwargs: data,
         )
         app = _ReportsApp(reports_journal)
@@ -119,7 +119,7 @@ class TestReportsPaneMount:
             return ReportData(title="IS", period_headers=["Jan"], rows=[])
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.reports_pane.load_report", _mock_load
+            "hledger_textual.widgets.reports_pane.load_report", _mock_load
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
@@ -130,11 +130,11 @@ class TestReportsPaneMount:
         self, reports_journal: Path, monkeypatch
     ):
         """Table rows match parsed report data."""
-        from hledger_tui.hledger import _parse_report_csv
+        from hledger_textual.hledger import _parse_report_csv
 
         data = _parse_report_csv(_SAMPLE_IS_CSV)
         monkeypatch.setattr(
-            "hledger_tui.widgets.reports_pane.load_report",
+            "hledger_textual.widgets.reports_pane.load_report",
             lambda *args, **kwargs: data,
         )
         app = _ReportsApp(reports_journal)
@@ -159,7 +159,7 @@ class TestReportsPaneReload:
             return ReportData(title="IS", period_headers=["Jan"], rows=[])
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.reports_pane.load_report", _mock_load
+            "hledger_textual.widgets.reports_pane.load_report", _mock_load
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
@@ -179,13 +179,13 @@ class TestReportsPaneErrors:
         self, reports_journal: Path, monkeypatch
     ):
         """HledgerError during load is handled gracefully."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("report failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.reports_pane.load_report", _raise
+            "hledger_textual.widgets.reports_pane.load_report", _raise
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:

@@ -11,9 +11,9 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Static
 
-from hledger_tui.config import _CONFIG_PATH
-from hledger_tui.hledger import HledgerError, get_hledger_version, load_journal_stats
-from hledger_tui.prices import get_pricehist_version, has_pricehist
+from hledger_textual.config import _CONFIG_PATH
+from hledger_textual.hledger import HledgerError, get_hledger_version, load_journal_stats
+from hledger_textual.prices import get_pricehist_version, has_pricehist
 
 
 def _fmt_size(n: int) -> str:
@@ -122,8 +122,8 @@ class InfoPane(Widget):
     def _apply_project_metadata(self) -> None:
         """Read project metadata from package info and display it."""
         try:
-            meta = importlib.metadata.metadata("hledger-tui")
-            name = meta.get("Name", "hledger-tui")
+            meta = importlib.metadata.metadata("hledger-textual")
+            name = meta.get("Name", "hledger-textual")
             version = meta.get("Version", "?")
             author = meta.get("Author", "")
             if not author:
@@ -139,7 +139,7 @@ class InfoPane(Widget):
                     repo = url_entry.split(",", 1)[-1].strip()
                     break
         except importlib.metadata.PackageNotFoundError:
-            name = "hledger-tui"
+            name = "hledger-textual"
             version = "?"
             author = ""
             license_name = "?"
@@ -147,7 +147,7 @@ class InfoPane(Widget):
 
         # Fallback for repo URL when metadata doesn't include it
         if not repo:
-            repo = "https://github.com/thesmokinator/hledger-tui"
+            repo = "https://github.com/thesmokinator/hledger-textual"
 
         self.query_one("#info-name", Static).update(name)
         self.query_one("#info-version", Static).update(version)

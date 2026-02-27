@@ -2,8 +2,8 @@
 
 from decimal import Decimal
 
-from hledger_tui.formatter import format_posting, format_transaction, normalize_commodity
-from hledger_tui.models import (
+from hledger_textual.formatter import format_posting, format_transaction, normalize_commodity
+from hledger_textual.models import (
     Amount,
     AmountStyle,
     Posting,

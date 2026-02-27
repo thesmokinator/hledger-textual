@@ -1,6 +1,6 @@
 include budget.journal
 
-; hledger-tui demo journal
+; hledger-textual demo journal
 ; Two months of realistic personal finance data (Jan-Feb 2026)
 
 include demo-budget.journal

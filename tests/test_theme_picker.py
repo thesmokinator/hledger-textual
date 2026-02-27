@@ -10,9 +10,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import OptionList
 
-from hledger_tui.config import save_theme
-from hledger_tui.screens.theme_picker import THEMES, ThemePickerModal
-from hledger_tui.widgets.info_pane import InfoPane
+from hledger_textual.config import save_theme
+from hledger_textual.screens.theme_picker import THEMES, ThemePickerModal
+from hledger_textual.widgets.info_pane import InfoPane
 from tests.conftest import has_hledger
 
 

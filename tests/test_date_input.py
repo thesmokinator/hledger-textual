@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 
-from hledger_tui.widgets.date_input import DateInput
+from hledger_textual.widgets.date_input import DateInput
 
 
 class _DateApp(App):

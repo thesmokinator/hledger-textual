@@ -11,7 +11,7 @@ from pathlib import Path
 
 import re
 
-from hledger_tui.models import (
+from hledger_textual.models import (
     Amount,
     AmountStyle,
     BudgetRow,

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.app import HledgerTuiApp
-from hledger_tui.hledger import load_transactions
+from hledger_textual.app import HledgerTuiApp
+from hledger_textual.hledger import load_transactions
 from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -89,7 +89,7 @@ class TestFilter:
             await pilot.press("2")
             await pilot.pause()
             await pilot.press("slash")
-            from hledger_tui.widgets.transactions_table import TransactionsTable
+            from hledger_textual.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
             filter_bar = txn_table.query_one(".filter-bar")
             assert filter_bar.has_class("visible")
@@ -132,7 +132,7 @@ class TestFilter:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause()
-            from hledger_tui.widgets.transactions_table import TransactionsTable
+            from hledger_textual.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
             txn_table.show_filter()
             await pilot.pause()
@@ -170,7 +170,7 @@ class TestDelete:
             await pilot.pause()
             await pilot.press("d")
             await pilot.pause()
-            from hledger_tui.screens.delete_confirm import DeleteConfirmModal
+            from hledger_textual.screens.delete_confirm import DeleteConfirmModal
 
             assert isinstance(app.screen, DeleteConfirmModal)
 

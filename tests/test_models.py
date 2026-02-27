@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from hledger_tui.models import (
+from hledger_textual.models import (
     Amount,
     AmountStyle,
     BudgetRow,

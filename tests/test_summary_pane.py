@@ -11,11 +11,12 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Digits, Static
 
-from hledger_tui.widgets.summary_pane import (
+from hledger_textual.widgets.summary_pane import (
     SummaryPane,
     _fmt_amount,
     _fmt_digits,
     _progress_bar,
+    compute_saving_rate,
 )
 from tests.conftest import has_hledger
 
@@ -124,6 +125,38 @@ class TestProgressBar:
         assert bar == "██░░"
 
 
+class TestComputeSavingRate:
+    """Tests for compute_saving_rate helper."""
+
+    def test_positive_saving(self):
+        """Saving rate for income > expenses is positive."""
+        rate = compute_saving_rate(Decimal("3000"), Decimal("1200"))
+        assert rate == pytest.approx(60.0)
+
+    def test_zero_saving(self):
+        """Saving rate is 0% when expenses equal income."""
+        rate = compute_saving_rate(Decimal("1000"), Decimal("1000"))
+        assert rate == pytest.approx(0.0)
+
+    def test_negative_saving(self):
+        """Saving rate is negative when expenses exceed income."""
+        rate = compute_saving_rate(Decimal("1000"), Decimal("1500"))
+        assert rate == pytest.approx(-50.0)
+
+    def test_zero_income_returns_none(self):
+        """Returns None when income is zero (division by zero guard)."""
+        assert compute_saving_rate(Decimal("0"), Decimal("500")) is None
+
+    def test_negative_income_returns_none(self):
+        """Returns None when income is negative."""
+        assert compute_saving_rate(Decimal("-100"), Decimal("50")) is None
+
+    def test_no_expenses(self):
+        """Saving rate is 100% when there are no expenses."""
+        rate = compute_saving_rate(Decimal("2000"), Decimal("0"))
+        assert rate == pytest.approx(100.0)
+
+
 # ------------------------------------------------------------------
 # Integration tests (require hledger)
 # ------------------------------------------------------------------
@@ -166,13 +199,13 @@ class TestSummaryPaneDataLoad:
         self, summary_journal: Path, monkeypatch
     ):
         """HledgerError during investment positions load is silently handled."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("investments failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.summary_pane.load_investment_positions", _raise
+            "hledger_textual.widgets.summary_pane.load_investment_positions", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
@@ -183,13 +216,13 @@ class TestSummaryPaneDataLoad:
         self, summary_journal: Path, monkeypatch
     ):
         """HledgerError during investment cost load is silently handled."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("cost failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.summary_pane.load_investment_cost", _raise
+            "hledger_textual.widgets.summary_pane.load_investment_cost", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
@@ -200,13 +233,13 @@ class TestSummaryPaneDataLoad:
         self, summary_journal: Path, monkeypatch
     ):
         """HledgerError during period summary load is silently handled."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("period failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.summary_pane.load_period_summary", _raise
+            "hledger_textual.widgets.summary_pane.load_period_summary", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
@@ -217,13 +250,13 @@ class TestSummaryPaneDataLoad:
         self, summary_journal: Path, monkeypatch
     ):
         """HledgerError during breakdown load is silently handled."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("breakdown failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.summary_pane.load_expense_breakdown", _raise
+            "hledger_textual.widgets.summary_pane.load_expense_breakdown", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
@@ -282,13 +315,13 @@ class TestSummaryPaneCards:
         self, summary_journal: Path, monkeypatch
     ):
         """When load_period_summary raises HledgerError, cards show double-dashes."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("period failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.summary_pane.load_period_summary", _raise
+            "hledger_textual.widgets.summary_pane.load_period_summary", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
@@ -300,6 +333,33 @@ class TestSummaryPaneCards:
             ):
                 widget = app.query_one(widget_id, Digits)
                 assert widget.value == "--"
+
+    async def test_saving_rate_displayed(self, summary_journal: Path):
+        """After loading, the saving rate is shown in the Net card."""
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            rate_widget = app.query_one("#card-saving-rate", Static)
+            assert "Saving rate:" in rate_widget.renderable
+            assert "99%" in rate_widget.renderable
+
+    async def test_saving_rate_cleared_on_error(
+        self, summary_journal: Path, monkeypatch
+    ):
+        """When period summary fails, saving rate widget is empty."""
+        from hledger_textual.hledger import HledgerError
+
+        def _raise(*args, **kwargs):
+            raise HledgerError("period failed")
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_summary", _raise
+        )
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            rate_widget = app.query_one("#card-saving-rate", Static)
+            assert rate_widget.renderable == ""
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")

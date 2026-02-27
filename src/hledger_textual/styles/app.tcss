@@ -1,4 +1,4 @@
-/* hledger-tui stylesheet */
+/* hledger-textual stylesheet */
 
 Screen {
     background: $surface;
@@ -111,6 +111,13 @@ SummaryPane {
 }
 
 #card-net-note {
+    width: 100%;
+    text-align: center;
+    color: $text-muted;
+    height: 1;
+}
+
+#card-saving-rate {
     width: 100%;
     text-align: center;
     color: $text-muted;

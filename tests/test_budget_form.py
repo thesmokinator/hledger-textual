@@ -10,8 +10,8 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Input, Static
 
-from hledger_tui.models import Amount, AmountStyle, BudgetRule
-from hledger_tui.screens.budget_form import BudgetFormScreen
+from hledger_textual.models import Amount, AmountStyle, BudgetRule
+from hledger_textual.screens.budget_form import BudgetFormScreen
 
 
 class _FormApp(App):

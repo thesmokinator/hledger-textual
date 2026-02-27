@@ -8,8 +8,8 @@ from textual.suggester import SuggestFromList
 from textual.widget import Widget
 from textual.widgets import Input, Label
 
-from hledger_tui.widgets.amount_input import AmountInput
-from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+from hledger_textual.widgets.amount_input import AmountInput
+from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
 class PostingRow(Widget):

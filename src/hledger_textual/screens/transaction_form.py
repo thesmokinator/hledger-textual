@@ -14,17 +14,17 @@ from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Select, Static
 
-from hledger_tui.hledger import HledgerError, load_accounts, load_descriptions
-from hledger_tui.models import (
+from hledger_textual.hledger import HledgerError, load_accounts, load_descriptions
+from hledger_textual.models import (
     Amount,
     AmountStyle,
     Posting,
     Transaction,
     TransactionStatus,
 )
-from hledger_tui.widgets.autocomplete_input import AutocompleteInput
-from hledger_tui.widgets.date_input import DateInput
-from hledger_tui.widgets.posting_row import PostingRow
+from hledger_textual.widgets.autocomplete_input import AutocompleteInput
+from hledger_textual.widgets.date_input import DateInput
+from hledger_textual.widgets.posting_row import PostingRow
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 

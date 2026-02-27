@@ -5,7 +5,7 @@ from __future__ import annotations
 from textual.app import App, ComposeResult
 from textual.widgets import Input
 
-from hledger_tui.widgets.amount_input import AmountInput
+from hledger_textual.widgets.amount_input import AmountInput
 
 
 class _AmountApp(App):

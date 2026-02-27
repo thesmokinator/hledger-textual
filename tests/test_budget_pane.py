@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.app import HledgerTuiApp
-from hledger_tui.budget import parse_budget_rules
+from hledger_textual.app import HledgerTuiApp
+from hledger_textual.budget import parse_budget_rules
 from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -118,7 +118,7 @@ class TestBudgetAdd:
             await pilot.pause(delay=1.0)
             await pilot.press("a")
             await pilot.pause()
-            from hledger_tui.screens.budget_form import BudgetFormScreen
+            from hledger_textual.screens.budget_form import BudgetFormScreen
             assert isinstance(budget_app.screen, BudgetFormScreen)
 
     async def test_add_cancel(self, budget_app: HledgerTuiApp):
@@ -146,7 +146,7 @@ class TestBudgetDelete:
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
-            from hledger_tui.screens.budget_delete_confirm import BudgetDeleteConfirmModal
+            from hledger_textual.screens.budget_delete_confirm import BudgetDeleteConfirmModal
             assert isinstance(budget_app.screen, BudgetDeleteConfirmModal)
 
     async def test_delete_cancel(self, budget_app: HledgerTuiApp):
@@ -191,7 +191,7 @@ class TestBudgetFilter:
             await pilot.pause(delay=1.0)
             await pilot.press("slash")
             await pilot.pause()
-            from hledger_tui.widgets.budget_pane import BudgetPane
+            from hledger_textual.widgets.budget_pane import BudgetPane
             pane = budget_app.screen.query_one(BudgetPane)
             filter_bar = pane.query_one(".filter-bar")
             assert filter_bar.has_class("visible")
@@ -206,7 +206,7 @@ class TestBudgetFilter:
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause()
-            from hledger_tui.widgets.budget_pane import BudgetPane
+            from hledger_textual.widgets.budget_pane import BudgetPane
             pane = budget_app.screen.query_one(BudgetPane)
             filter_bar = pane.query_one(".filter-bar")
             assert not filter_bar.has_class("visible")
@@ -237,7 +237,7 @@ class TestBudgetEdit:
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
-            from hledger_tui.screens.budget_form import BudgetFormScreen
+            from hledger_textual.screens.budget_form import BudgetFormScreen
             assert isinstance(budget_app.screen, BudgetFormScreen)
             assert budget_app.screen.is_edit is True
 
@@ -277,7 +277,7 @@ class TestBudgetMonthNavigation:
 
     async def test_prev_month_moves_back(self, budget_app: HledgerTuiApp):
         """Pressing 'h' decrements the current month."""
-        from hledger_tui.widgets.budget_pane import BudgetPane
+        from hledger_textual.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -290,7 +290,7 @@ class TestBudgetMonthNavigation:
 
     async def test_next_month_moves_forward(self, budget_app: HledgerTuiApp):
         """Pressing 'l' increments the current month."""
-        from hledger_tui.widgets.budget_pane import BudgetPane
+        from hledger_textual.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -306,7 +306,7 @@ class TestBudgetMonthNavigation:
     ):
         """Navigating back from January wraps to December of the previous year."""
         from datetime import date
-        from hledger_tui.widgets.budget_pane import BudgetPane
+        from hledger_textual.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -323,7 +323,7 @@ class TestBudgetMonthNavigation:
     ):
         """Navigating forward from December wraps to January of the next year."""
         from datetime import date
-        from hledger_tui.widgets.budget_pane import BudgetPane
+        from hledger_textual.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -401,8 +401,8 @@ class TestBudgetColorCoding:
     async def test_over_budget_row_renders(self, budget_app: HledgerTuiApp):
         """Over-budget usage (>100%) uses red markup without crashing."""
         from decimal import Decimal
-        from hledger_tui.models import BudgetRow
-        from hledger_tui.widgets.budget_pane import BudgetPane
+        from hledger_textual.models import BudgetRow
+        from hledger_textual.widgets.budget_pane import BudgetPane
 
         async with budget_app.run_test() as pilot:
             await pilot.pause()
@@ -426,8 +426,8 @@ class TestBudgetColorCoding:
     async def test_near_budget_row_renders(self, budget_app: HledgerTuiApp):
         """Near-budget usage (75–100%) uses yellow markup without crashing."""
         from decimal import Decimal
-        from hledger_tui.models import BudgetRow
-        from hledger_tui.widgets.budget_pane import BudgetPane
+        from hledger_textual.models import BudgetRow
+        from hledger_textual.widgets.budget_pane import BudgetPane
 
         async with budget_app.run_test() as pilot:
             await pilot.pause()
@@ -462,7 +462,7 @@ class TestBudgetNoSelection:
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
-            from hledger_tui.screens.budget_form import BudgetFormScreen
+            from hledger_textual.screens.budget_form import BudgetFormScreen
             assert not isinstance(empty_budget_app.screen, BudgetFormScreen)
 
     async def test_delete_no_rule_stays_on_main_screen(
@@ -475,7 +475,7 @@ class TestBudgetNoSelection:
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
-            from hledger_tui.screens.budget_delete_confirm import BudgetDeleteConfirmModal
+            from hledger_textual.screens.budget_delete_confirm import BudgetDeleteConfirmModal
             assert not isinstance(empty_budget_app.screen, BudgetDeleteConfirmModal)
 
 
@@ -506,12 +506,12 @@ class TestBudgetAddSave:
 
     async def test_add_error_does_not_crash(self, budget_app: HledgerTuiApp, monkeypatch):
         """BudgetError during _do_add is caught and notified."""
-        from hledger_tui.budget import BudgetError
+        from hledger_textual.budget import BudgetError
 
         def _raise(*args, **kwargs):
             raise BudgetError("add failed")
 
-        monkeypatch.setattr("hledger_tui.widgets.budget_pane.add_budget_rule", _raise)
+        monkeypatch.setattr("hledger_textual.widgets.budget_pane.add_budget_rule", _raise)
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -555,12 +555,12 @@ class TestBudgetEditSave:
 
     async def test_edit_error_does_not_crash(self, budget_app: HledgerTuiApp, monkeypatch):
         """BudgetError during _do_update is caught and notified."""
-        from hledger_tui.budget import BudgetError
+        from hledger_textual.budget import BudgetError
 
         def _raise(*args, **kwargs):
             raise BudgetError("update failed")
 
-        monkeypatch.setattr("hledger_tui.widgets.budget_pane.update_budget_rule", _raise)
+        monkeypatch.setattr("hledger_textual.widgets.budget_pane.update_budget_rule", _raise)
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -582,12 +582,12 @@ class TestBudgetDeleteError:
         self, budget_app: HledgerTuiApp, monkeypatch
     ):
         """BudgetError during _do_delete is caught and notified."""
-        from hledger_tui.budget import BudgetError
+        from hledger_textual.budget import BudgetError
 
         def _raise(*args, **kwargs):
             raise BudgetError("delete failed")
 
-        monkeypatch.setattr("hledger_tui.widgets.budget_pane.delete_budget_rule", _raise)
+        monkeypatch.setattr("hledger_textual.widgets.budget_pane.delete_budget_rule", _raise)
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("3")
@@ -607,13 +607,13 @@ class TestBudgetLoadErrors:
         self, budget_app: HledgerTuiApp, monkeypatch
     ):
         """BudgetError from ensure_budget_file is caught without crashing."""
-        from hledger_tui.budget import BudgetError
+        from hledger_textual.budget import BudgetError
 
         def _raise(*args, **kwargs):
             raise BudgetError("no budget file")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.budget_pane.ensure_budget_file", _raise
+            "hledger_textual.widgets.budget_pane.ensure_budget_file", _raise
         )
         async with budget_app.run_test() as pilot:
             await pilot.pause()
@@ -626,13 +626,13 @@ class TestBudgetLoadErrors:
         self, budget_app: HledgerTuiApp, monkeypatch
     ):
         """HledgerError from load_budget_report is silently handled."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("hledger failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.budget_pane.load_budget_report", _raise
+            "hledger_textual.widgets.budget_pane.load_budget_report", _raise
         )
         async with budget_app.run_test() as pilot:
             await pilot.pause()

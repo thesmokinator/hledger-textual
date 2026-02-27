@@ -11,10 +11,10 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
-from hledger_tui.hledger import HledgerError, expand_search_query, load_transactions
-from hledger_tui.models import Transaction
-from hledger_tui.widgets import distribute_column_widths
-from hledger_tui.widgets.pane_toolbar import PaneToolbar
+from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
+from hledger_textual.models import Transaction
+from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
 class TransactionsTable(Widget):
@@ -213,7 +213,7 @@ class TransactionsTable(Widget):
             self.notify("No transaction selected", severity="warning", timeout=3)
             return
 
-        from hledger_tui.screens.transaction_form import TransactionFormScreen
+        from hledger_textual.screens.transaction_form import TransactionFormScreen
 
         def on_save(result: Transaction | None) -> None:
             if result is not None:
@@ -234,7 +234,7 @@ class TransactionsTable(Widget):
             self.notify("No transaction selected", severity="warning", timeout=3)
             return
 
-        from hledger_tui.screens.delete_confirm import DeleteConfirmModal
+        from hledger_textual.screens.delete_confirm import DeleteConfirmModal
 
         def on_confirm(confirmed: bool) -> None:
             if confirmed:
@@ -245,7 +245,7 @@ class TransactionsTable(Widget):
     @work(thread=True)
     def _do_replace(self, original: Transaction, updated: Transaction) -> None:
         """Replace a transaction in the journal and reload."""
-        from hledger_tui.journal import JournalError, replace_transaction
+        from hledger_textual.journal import JournalError, replace_transaction
 
         try:
             replace_transaction(self.journal_file, original, updated)
@@ -259,7 +259,7 @@ class TransactionsTable(Widget):
     @work(thread=True)
     def _do_delete(self, transaction: Transaction) -> None:
         """Delete a transaction from the journal and reload."""
-        from hledger_tui.journal import JournalError, delete_transaction
+        from hledger_textual.journal import JournalError, delete_transaction
 
         try:
             delete_transaction(self.journal_file, transaction)

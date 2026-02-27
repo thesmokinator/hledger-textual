@@ -13,10 +13,10 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import DataTable, Digits, Static
 
-from hledger_tui.config import load_price_tickers
-from hledger_tui.formatter import normalize_commodity
-from hledger_tui.widgets import distribute_column_widths
-from hledger_tui.hledger import (
+from hledger_textual.config import load_price_tickers
+from hledger_textual.formatter import normalize_commodity
+from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.hledger import (
     HledgerError,
     load_expense_breakdown,
     load_investment_cost,
@@ -24,7 +24,7 @@ from hledger_tui.hledger import (
     load_investment_positions,
     load_period_summary,
 )
-from hledger_tui.prices import PriceError, get_prices_file, has_pricehist
+from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
 
 
 class _DisplayTable(DataTable):
@@ -66,6 +66,24 @@ def _fmt_digits(qty: Decimal, commodity: str) -> str:
         A formatted string like '€1 234.56' or '0.00' if no commodity.
     """
     return _fmt_amount(qty, commodity).replace(",", "")
+
+
+def compute_saving_rate(income: Decimal, expenses: Decimal) -> float | None:
+    """Compute the saving rate as a percentage of income.
+
+    Saving rate = (income - expenses) / income * 100.
+    Investments count as savings (they are not included in expenses).
+
+    Args:
+        income: Total income for the period.
+        expenses: Total expenses for the period (excluding investments).
+
+    Returns:
+        The saving rate percentage, or None if income is zero.
+    """
+    if income <= 0:
+        return None
+    return float((income - expenses) / income * 100)
 
 
 def _progress_bar(pct: float, width: int = 8) -> str:
@@ -120,6 +138,7 @@ class SummaryPane(Widget):
                 yield Static("Net", classes="summary-card-title")
                 yield Digits("--", id="card-net-value", classes="summary-card-value")
                 yield Static("", id="card-net-note")
+                yield Static("", id="card-saving-rate")
 
         # Investments section
         with Vertical(id="summary-portfolio"):
@@ -329,6 +348,13 @@ class SummaryPane(Widget):
                 note.update(f"incl. {inv_text} invested")
             else:
                 note.update("")
+
+            rate_widget = self.query_one("#card-saving-rate", Static)
+            rate = compute_saving_rate(summary.income, summary.expenses)
+            if rate is not None:
+                rate_widget.update(f"Saving rate: {rate:.0f}%")
+            else:
+                rate_widget.update("")
         else:
             for widget_id in (
                 "#card-income-value",
@@ -337,6 +363,7 @@ class SummaryPane(Widget):
             ):
                 self.query_one(widget_id, Digits).update("--")
             self.query_one("#card-net-note", Static).update("")
+            self.query_one("#card-saving-rate", Static).update("")
 
         # Investments table — columns are fixed; clear rows only
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)

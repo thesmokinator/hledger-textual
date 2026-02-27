@@ -6,8 +6,8 @@ from decimal import Decimal
 
 import pytest
 
-from hledger_tui.models import Amount, AmountStyle, Posting, Transaction, TransactionStatus
-from hledger_tui.screens.delete_confirm import DeleteConfirmModal
+from hledger_textual.models import Amount, AmountStyle, Posting, Transaction, TransactionStatus
+from hledger_textual.screens.delete_confirm import DeleteConfirmModal
 
 
 @pytest.fixture

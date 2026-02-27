@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.app import HledgerTuiApp
+from hledger_textual.app import HledgerTuiApp
 from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -88,7 +88,7 @@ class TestAccountsFilter:
             await pilot.pause()
             await pilot.press("slash")
             await pilot.pause()
-            from hledger_tui.widgets.accounts_pane import AccountsPane
+            from hledger_textual.widgets.accounts_pane import AccountsPane
 
             pane = accounts_app.screen.query_one(AccountsPane)
             filter_bar = pane.query_one(".filter-bar")
@@ -139,7 +139,7 @@ class TestAccountDrillDown:
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
-            from hledger_tui.screens.account_transactions import (
+            from hledger_textual.screens.account_transactions import (
                 AccountTransactionsScreen,
             )
 
@@ -157,7 +157,7 @@ class TestAccountDrillDown:
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause()
-            from hledger_tui.screens.account_transactions import (
+            from hledger_textual.screens.account_transactions import (
                 AccountTransactionsScreen,
             )
 

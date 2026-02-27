@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.models import (
+from hledger_textual.models import (
     Amount,
     AmountStyle,
     BudgetRule,

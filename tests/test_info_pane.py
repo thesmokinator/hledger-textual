@@ -11,7 +11,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 
-from hledger_tui.widgets.info_pane import InfoPane, _fmt_size
+from hledger_textual.widgets.info_pane import InfoPane, _fmt_size
 from tests.conftest import has_hledger
 
 
@@ -132,7 +132,7 @@ class TestInfoPaneDataLoad:
         async with app.run_test() as pilot:
             await pilot.pause()
             name_label = app.query_one("#info-name", Static)
-            assert "hledger-tui" in str(name_label.renderable)
+            assert "hledger-textual" in str(name_label.renderable)
 
     async def test_txn_count_shown(self, info_journal: Path):
         """Transaction count is shown after data loads."""
@@ -152,13 +152,13 @@ class TestInfoPaneErrors:
         self, info_journal: Path, monkeypatch
     ):
         """HledgerError during stats load is silently handled."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("stats failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.info_pane.load_journal_stats", _raise
+            "hledger_textual.widgets.info_pane.load_journal_stats", _raise
         )
         app = _InfoApp(info_journal)
         async with app.run_test() as pilot:
@@ -173,20 +173,20 @@ class TestInfoPaneMetadataFallbacks:
     async def test_package_not_found_fallback(
         self, info_journal: Path, monkeypatch
     ):
-        """When PackageNotFoundError is raised, the pane still shows 'hledger-tui'."""
+        """When PackageNotFoundError is raised, the pane still shows 'hledger-textual'."""
 
         def _raise_not_found(name):
             raise importlib.metadata.PackageNotFoundError(name)
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.info_pane.importlib.metadata.metadata",
+            "hledger_textual.widgets.info_pane.importlib.metadata.metadata",
             _raise_not_found,
         )
         app = _InfoApp(info_journal)
         async with app.run_test() as pilot:
             await pilot.pause()
             name_label = app.query_one("#info-name", Static)
-            assert "hledger-tui" in str(name_label.renderable)
+            assert "hledger-textual" in str(name_label.renderable)
 
     async def test_os_error_file_size(
         self, info_journal: Path, monkeypatch

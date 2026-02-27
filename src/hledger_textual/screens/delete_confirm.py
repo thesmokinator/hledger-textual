@@ -7,7 +7,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
-from hledger_tui.models import Transaction
+from hledger_textual.models import Transaction
 
 
 class DeleteConfirmModal(ModalScreen[bool]):

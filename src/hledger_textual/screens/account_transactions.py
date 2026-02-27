@@ -11,13 +11,13 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Label, Static
 
-from hledger_tui.widgets.transactions_table import TransactionsTable
+from hledger_textual.widgets.transactions_table import TransactionsTable
 
 
 class AccountTransactionsScreen(Screen):
     """Full-screen drill-down showing every transaction that touches an account.
 
-    Reuses :class:`~hledger_tui.widgets.transactions_table.TransactionsTable`
+    Reuses :class:`~hledger_textual.widgets.transactions_table.TransactionsTable`
     with a pinned account query so the layout, columns, ordering, and filter
     bar are identical to the main Transactions view.
     """

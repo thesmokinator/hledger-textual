@@ -1,9 +1,9 @@
-"""Configuration resolution for hledger-tui.
+"""Configuration resolution for hledger-textual.
 
 Priority order (highest to lowest):
 1. --file / -f CLI argument
 2. LEDGER_FILE environment variable
-3. ~/.config/hledger-tui/config.toml -> journal_file key
+3. ~/.config/hledger-textual/config.toml -> journal_file key
 4. ~/.hledger.journal (default)
 """
 
@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-_CONFIG_PATH = Path.home() / ".config" / "hledger-tui" / "config.toml"
+_CONFIG_PATH = Path.home() / ".config" / "hledger-textual" / "config.toml"
 
 
 def _load_config_dict() -> dict:
@@ -114,7 +114,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         Parsed namespace with 'file' attribute.
     """
     parser = argparse.ArgumentParser(
-        prog="hledger-tui",
+        prog="hledger-textual",
         description="A terminal user interface for managing hledger journal transactions.",
     )
     parser.add_argument(

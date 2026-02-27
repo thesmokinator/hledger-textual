@@ -1,4 +1,4 @@
-; Budget rules for hledger-tui demo
+; Budget rules for hledger-textual demo
 
 ~ monthly
     expenses:food:groceries              €400.00

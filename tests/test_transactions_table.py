@@ -10,8 +10,8 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.widgets import Input
 
-from hledger_tui.app import HledgerTuiApp
-from hledger_tui.widgets.transactions_table import TransactionsTable
+from hledger_textual.app import HledgerTuiApp
+from hledger_textual.widgets.transactions_table import TransactionsTable
 from tests.conftest import has_hledger
 
 
@@ -247,7 +247,7 @@ class TestTransactionsTableNoSelection:
             txn_table = app.query_one(TransactionsTable)
             txn_table.do_edit()
             await pilot.pause()
-            from hledger_tui.screens.transaction_form import TransactionFormScreen
+            from hledger_textual.screens.transaction_form import TransactionFormScreen
             assert not isinstance(app.screen, TransactionFormScreen)
 
     async def test_do_delete_empty_table_no_confirm_pushed(
@@ -260,7 +260,7 @@ class TestTransactionsTableNoSelection:
             txn_table = app.query_one(TransactionsTable)
             txn_table.do_delete()
             await pilot.pause()
-            from hledger_tui.screens.delete_confirm import DeleteConfirmModal
+            from hledger_textual.screens.delete_confirm import DeleteConfirmModal
             assert not isinstance(app.screen, DeleteConfirmModal)
 
 
@@ -270,7 +270,7 @@ class TestTransactionsTableEditFlow:
 
     async def test_do_replace_updates_journal(self, table_journal: Path):
         """Editing a transaction and saving updates the journal file."""
-        from hledger_tui.hledger import load_transactions
+        from hledger_textual.hledger import load_transactions
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
@@ -279,8 +279,8 @@ class TestTransactionsTableEditFlow:
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
-            from hledger_tui.screens.transaction_form import TransactionFormScreen
-            from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+            from hledger_textual.screens.transaction_form import TransactionFormScreen
+            from hledger_textual.widgets.autocomplete_input import AutocompleteInput
             assert isinstance(app.screen, TransactionFormScreen)
             app.screen.query_one("#input-description", AutocompleteInput).value = (
                 "Updated grocery"
@@ -294,12 +294,12 @@ class TestTransactionsTableEditFlow:
         self, table_journal: Path, monkeypatch
     ):
         """JournalError during _do_replace is caught and notified."""
-        from hledger_tui.journal import JournalError
+        from hledger_textual.journal import JournalError
 
         def _raise(*args, **kwargs):
             raise JournalError("replace failed")
 
-        monkeypatch.setattr("hledger_tui.journal.replace_transaction", _raise)
+        monkeypatch.setattr("hledger_textual.journal.replace_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
@@ -307,8 +307,8 @@ class TestTransactionsTableEditFlow:
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
-            from hledger_tui.screens.transaction_form import TransactionFormScreen
-            from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+            from hledger_textual.screens.transaction_form import TransactionFormScreen
+            from hledger_textual.widgets.autocomplete_input import AutocompleteInput
             assert isinstance(app.screen, TransactionFormScreen)
             app.screen.query_one("#input-description", AutocompleteInput).value = (
                 "Updated grocery"
@@ -321,12 +321,12 @@ class TestTransactionsTableEditFlow:
         self, table_journal: Path, monkeypatch
     ):
         """JournalError during _do_delete is caught and notified."""
-        from hledger_tui.journal import JournalError
+        from hledger_textual.journal import JournalError
 
         def _raise(*args, **kwargs):
             raise JournalError("delete failed")
 
-        monkeypatch.setattr("hledger_tui.journal.delete_transaction", _raise)
+        monkeypatch.setattr("hledger_textual.journal.delete_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
@@ -334,7 +334,7 @@ class TestTransactionsTableEditFlow:
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
-            from hledger_tui.screens.delete_confirm import DeleteConfirmModal
+            from hledger_textual.screens.delete_confirm import DeleteConfirmModal
             assert isinstance(app.screen, DeleteConfirmModal)
             await pilot.click(app.screen.query_one("#btn-delete"))
             await pilot.pause(delay=1.5)
@@ -348,13 +348,13 @@ class TestTransactionsTableLoadErrors:
         self, table_journal: Path, monkeypatch
     ):
         """HledgerError during _load_transactions results in an empty table."""
-        from hledger_tui.hledger import HledgerError
+        from hledger_textual.hledger import HledgerError
 
         def _raise(*args, **kwargs):
             raise HledgerError("hledger failed")
 
         monkeypatch.setattr(
-            "hledger_tui.widgets.transactions_table.load_transactions", _raise
+            "hledger_textual.widgets.transactions_table.load_transactions", _raise
         )
         app = _TableApp(table_journal)
         async with app.run_test() as pilot:

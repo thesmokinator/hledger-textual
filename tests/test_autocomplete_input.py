@@ -6,7 +6,7 @@ from textual.app import App, ComposeResult
 from textual.suggester import SuggestFromList
 from textual.widgets import Input
 
-from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
 class AutocompleteApp(App):

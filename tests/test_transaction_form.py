@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.app import HledgerTuiApp
-from hledger_tui.models import Amount, AmountStyle, Posting, TransactionStatus
-from hledger_tui.screens.transaction_form import TransactionFormScreen
-from hledger_tui.widgets.amount_input import AmountInput
-from hledger_tui.widgets.date_input import DateInput
-from hledger_tui.widgets.posting_row import PostingRow
+from hledger_textual.app import HledgerTuiApp
+from hledger_textual.models import Amount, AmountStyle, Posting, TransactionStatus
+from hledger_textual.screens.transaction_form import TransactionFormScreen
+from hledger_textual.widgets.amount_input import AmountInput
+from hledger_textual.widgets.date_input import DateInput
+from hledger_textual.widgets.posting_row import PostingRow
 
 from tests.conftest import has_hledger
 
@@ -549,7 +549,7 @@ class TestDescriptionAutocomplete:
     """Tests for description autocomplete in the form."""
 
     async def test_description_uses_autocomplete_input(self, app: HledgerTuiApp):
-        from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+        from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()
@@ -562,7 +562,7 @@ class TestDescriptionAutocomplete:
             assert isinstance(desc_input, AutocompleteInput)
 
     async def test_description_has_suggester(self, app: HledgerTuiApp):
-        from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+        from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
         async with app.run_test(size=(100, 50)) as pilot:
             await pilot.pause()

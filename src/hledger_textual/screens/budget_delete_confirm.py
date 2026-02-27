@@ -7,7 +7,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
-from hledger_tui.models import BudgetRule
+from hledger_textual.models import BudgetRule
 
 
 class BudgetDeleteConfirmModal(ModalScreen[bool]):

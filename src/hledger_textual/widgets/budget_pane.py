@@ -12,7 +12,7 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
-from hledger_tui.budget import (
+from hledger_textual.budget import (
     BudgetError,
     add_budget_rule,
     delete_budget_rule,
@@ -20,10 +20,10 @@ from hledger_tui.budget import (
     parse_budget_rules,
     update_budget_rule,
 )
-from hledger_tui.hledger import HledgerError, load_budget_report
-from hledger_tui.models import BudgetRow, BudgetRule
-from hledger_tui.widgets import distribute_column_widths
-from hledger_tui.widgets.pane_toolbar import PaneToolbar
+from hledger_textual.hledger import HledgerError, load_budget_report
+from hledger_textual.models import BudgetRow, BudgetRule
+from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
 class BudgetPane(Widget):
@@ -201,7 +201,7 @@ class BudgetPane(Widget):
 
     def action_add(self) -> None:
         """Open the form to add a new budget rule."""
-        from hledger_tui.screens.budget_form import BudgetFormScreen
+        from hledger_textual.screens.budget_form import BudgetFormScreen
 
         def on_save(result: BudgetRule | None) -> None:
             if result is not None:
@@ -218,7 +218,7 @@ class BudgetPane(Widget):
         if not rule:
             return
 
-        from hledger_tui.screens.budget_form import BudgetFormScreen
+        from hledger_textual.screens.budget_form import BudgetFormScreen
 
         old_account = rule.account
 
@@ -237,7 +237,7 @@ class BudgetPane(Widget):
         if not rule:
             return
 
-        from hledger_tui.screens.budget_delete_confirm import BudgetDeleteConfirmModal
+        from hledger_textual.screens.budget_delete_confirm import BudgetDeleteConfirmModal
 
         def on_confirm(confirmed: bool) -> None:
             if confirmed:

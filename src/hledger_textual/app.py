@@ -1,4 +1,4 @@
-"""Main Textual application for hledger-tui."""
+"""Main Textual application for hledger-textual."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
-from hledger_tui.config import load_theme, save_theme
-from hledger_tui.widgets.accounts_pane import AccountsPane
-from hledger_tui.widgets.budget_pane import BudgetPane
-from hledger_tui.widgets.info_pane import InfoPane
-from hledger_tui.widgets.reports_pane import ReportsPane
-from hledger_tui.widgets.summary_pane import SummaryPane
-from hledger_tui.widgets.transactions_pane import TransactionsPane
-from hledger_tui.widgets.transactions_table import TransactionsTable
+from hledger_textual.config import load_theme, save_theme
+from hledger_textual.widgets.accounts_pane import AccountsPane
+from hledger_textual.widgets.budget_pane import BudgetPane
+from hledger_textual.widgets.info_pane import InfoPane
+from hledger_textual.widgets.reports_pane import ReportsPane
+from hledger_textual.widgets.summary_pane import SummaryPane
+from hledger_textual.widgets.transactions_pane import TransactionsPane
+from hledger_textual.widgets.transactions_table import TransactionsTable
 
 _FOOTER_COMMANDS: dict[str, str] = {
     "summary": "\\[r] Reload  \\[q] Quit",
@@ -48,7 +48,7 @@ class _NavTabs(Tabs):
 class HledgerTuiApp(App):
     """A TUI for managing hledger journal transactions."""
 
-    TITLE = "hledger-tui"
+    TITLE = "hledger-textual"
     CSS_PATH = "styles/app.tcss"
 
     BINDINGS = [
@@ -136,7 +136,7 @@ class HledgerTuiApp(App):
 
     def action_pick_theme(self) -> None:
         """Open the theme picker dialog."""
-        from hledger_tui.screens.theme_picker import ThemePickerModal
+        from hledger_textual.screens.theme_picker import ThemePickerModal
 
         def on_theme_selected(theme: str | None) -> None:
             if theme is not None:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.hledger import (
+from hledger_textual.hledger import (
     HledgerError,
     _parse_budget_amount,
     _parse_report_csv,
@@ -22,7 +22,7 @@ from hledger_tui.hledger import (
     load_report,
     load_transactions,
 )
-from hledger_tui.models import TransactionStatus
+from hledger_textual.models import TransactionStatus
 
 from tests.conftest import has_hledger
 
@@ -479,7 +479,7 @@ class TestLoadReport:
     def test_load_report_parses_output(self, monkeypatch, tmp_path: Path):
         """load_report delegates to run_hledger and parses the CSV."""
         monkeypatch.setattr(
-            "hledger_tui.hledger.run_hledger",
+            "hledger_textual.hledger.run_hledger",
             lambda *args, **kwargs: self._SAMPLE_CSV,
         )
         journal = tmp_path / "test.journal"
@@ -492,7 +492,7 @@ class TestLoadReport:
     def test_load_report_empty_output(self, monkeypatch, tmp_path: Path):
         """Empty hledger output produces empty ReportData."""
         monkeypatch.setattr(
-            "hledger_tui.hledger.run_hledger",
+            "hledger_textual.hledger.run_hledger",
             lambda *args, **kwargs: "",
         )
         journal = tmp_path / "test.journal"
@@ -506,7 +506,7 @@ class TestLoadReport:
         def _raise(*args, **kwargs):
             raise HledgerError("command failed")
 
-        monkeypatch.setattr("hledger_tui.hledger.run_hledger", _raise)
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _raise)
         journal = tmp_path / "test.journal"
         journal.write_text("; empty\n")
         with pytest.raises(HledgerError):

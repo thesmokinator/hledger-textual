@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.config import (
+from hledger_textual.config import (
     _load_config_dict,
     _save_config_dict,
     load_price_tickers,
@@ -64,7 +64,7 @@ class TestResolveJournalFile:
         journal = tmp_path / "toml.journal"
         journal.write_text("")
 
-        config_dir = tmp_path / ".config" / "hledger-tui"
+        config_dir = tmp_path / ".config" / "hledger-textual"
         config_dir.mkdir(parents=True)
         config_file = config_dir / "config.toml"
         config_file.write_text(f'journal_file = "{journal}"\n')
@@ -72,7 +72,7 @@ class TestResolveJournalFile:
         monkeypatch.delenv("LEDGER_FILE", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         # _CONFIG_PATH is computed at import time, so we must patch it directly
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_file)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_file)
 
         result = resolve_journal_file()
         assert result == journal.resolve()
@@ -102,7 +102,7 @@ class TestResolveJournalFile:
         config_path.write_text(f'journal_file = "{missing}"\n')
 
         monkeypatch.delenv("LEDGER_FILE", raising=False)
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
 
         with pytest.raises(SystemExit):
             resolve_journal_file()
@@ -114,7 +114,7 @@ class TestLoadConfigDict:
     def test_returns_empty_dict_when_config_missing(self, tmp_path, monkeypatch):
         """Returns an empty dict when the config file does not exist."""
         monkeypatch.setattr(
-            "hledger_tui.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
         )
         assert _load_config_dict() == {}
 
@@ -122,14 +122,14 @@ class TestLoadConfigDict:
         """Returns an empty dict when the TOML file is invalid."""
         bad_toml = tmp_path / "bad.toml"
         bad_toml.write_text("not valid toml === !!!")
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", bad_toml)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", bad_toml)
         assert _load_config_dict() == {}
 
     def test_returns_parsed_dict_from_valid_toml(self, tmp_path, monkeypatch):
         """Returns the correct dict when the TOML file is valid."""
         config = tmp_path / "config.toml"
         config.write_text('theme = "nord"\n')
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config)
         assert _load_config_dict() == {"theme": "nord"}
 
 
@@ -138,29 +138,29 @@ class TestSaveAndLoadTheme:
 
     def test_save_theme_creates_config_file(self, tmp_path, monkeypatch):
         """save_theme creates the config file with the theme entry."""
-        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
         save_theme("nord")
         assert config_path.exists()
         assert "nord" in config_path.read_text()
 
     def test_load_theme_returns_saved_value(self, tmp_path, monkeypatch):
         """load_theme returns the theme name that was previously saved."""
-        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
         save_theme("textual-dark")
         assert load_theme() == "textual-dark"
 
     def test_load_theme_returns_none_when_not_set(self, tmp_path, monkeypatch):
         """load_theme returns None when no theme has been saved."""
-        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
         assert load_theme() is None
 
     def test_save_theme_overwrites_previous_value(self, tmp_path, monkeypatch):
         """Calling save_theme twice keeps only the most recent value."""
-        config_path = tmp_path / ".config" / "hledger-tui" / "config.toml"
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        config_path = tmp_path / ".config" / "hledger-textual" / "config.toml"
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
         save_theme("nord")
         save_theme("gruvbox")
         assert load_theme() == "gruvbox"
@@ -173,7 +173,7 @@ class TestLoadPriceTickers:
         """Returns an empty dict when config.toml has no [prices] section."""
         config_path = tmp_path / "config.toml"
         config_path.write_text('theme = "nord"\n')
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
         assert load_price_tickers() == {}
 
     def test_returns_tickers_from_config(self, tmp_path, monkeypatch):
@@ -182,7 +182,7 @@ class TestLoadPriceTickers:
         config_path.write_text(
             '[prices]\nXDWD = "XDWD.DE"\nXEON = "XEON.DE"\n'
         )
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
         result = load_price_tickers()
         assert result == {"XDWD": "XDWD.DE", "XEON": "XEON.DE"}
 
@@ -196,7 +196,7 @@ class TestSavePreservesNestedSections:
         config_path.write_text(
             'theme = "nord"\n\n[prices]\nXDWD = "XDWD.DE"\nXEON = "XEON.DE"\n'
         )
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
 
         # Change theme — this must not lose [prices]
         save_theme("dracula")
@@ -208,7 +208,7 @@ class TestSavePreservesNestedSections:
     def test_save_config_dict_with_nested_dict(self, tmp_path, monkeypatch):
         """_save_config_dict correctly writes nested dict sections."""
         config_path = tmp_path / "config.toml"
-        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
 
         data = {
             "theme": "gruvbox",

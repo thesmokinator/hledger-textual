@@ -12,9 +12,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from hledger_tui.formatter import format_transaction
-from hledger_tui.hledger import HledgerError, check_journal
-from hledger_tui.models import Transaction
+from hledger_textual.formatter import format_transaction
+from hledger_textual.hledger import HledgerError, check_journal
+from hledger_textual.models import Transaction
 
 
 class JournalError(Exception):

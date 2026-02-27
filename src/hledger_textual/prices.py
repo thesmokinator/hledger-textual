@@ -57,7 +57,7 @@ def get_pricehist_version() -> str:
 
 def _cache_path() -> Path:
     """Return the path to the daily prices cache file."""
-    cache_dir = Path.home() / ".cache" / "hledger-tui"
+    cache_dir = Path.home() / ".cache" / "hledger-textual"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / "prices.journal"
 

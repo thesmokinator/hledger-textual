@@ -1,9 +1,9 @@
-# hledger-tui Documentation
+# hledger-textual Documentation
 
 A terminal user interface for [hledger](https://hledger.org) plain-text accounting.
 Browse transactions, track budgets, monitor investments, and manage your journal — all from the terminal.
 
-![hledger-tui summary](screenshots/001.png)
+![hledger-textual summary](screenshots/001.png)
 
 ## Table of Contents
 
@@ -33,29 +33,29 @@ Browse transactions, track budgets, monitor investments, and manage your journal
 ### Installation
 
 ```bash
-git clone https://github.com/thesmokinator/hledger-tui.git
-cd hledger-tui
+git clone https://github.com/thesmokinator/hledger-textual.git
+cd hledger-textual
 uv sync
 ```
 
 ### Running
 
 ```bash
-uv run hledger-tui -f path/to/your.journal
+uv run hledger-textual -f path/to/your.journal
 ```
 
 The journal file is resolved in this order:
 
 1. `-f` / `--file` CLI argument
 2. `LEDGER_FILE` environment variable
-3. `journal_file` key in `~/.config/hledger-tui/config.toml`
+3. `journal_file` key in `~/.config/hledger-textual/config.toml`
 4. `~/.hledger.journal`
 
 ---
 
 ## Configuration
 
-The configuration file lives at `~/.config/hledger-tui/config.toml`.
+The configuration file lives at `~/.config/hledger-textual/config.toml`.
 
 ```toml
 journal_file = "/path/to/your.journal"
@@ -274,7 +274,7 @@ Available themes: textual-dark, textual-light, nord, dracula, gruvbox, catppucci
 
 ## Investment Tracking
 
-hledger-tui can track investment portfolios and fetch live market prices.
+hledger-textual can track investment portfolios and fetch live market prices.
 
 ### Setup
 
@@ -302,10 +302,10 @@ hledger-tui can track investment portfolios and fetch live market prices.
 
 ### How It Works
 
-On each app launch, hledger-tui:
+On each app launch, hledger-textual:
 
 1. Loads investment positions and book values from your journal via hledger
-2. Fetches today's market prices from Yahoo Finance via pricehist (cached daily in `~/.cache/hledger-tui/prices.journal`)
+2. Fetches today's market prices from Yahoo Finance via pricehist (cached daily in `~/.cache/hledger-textual/prices.journal`)
 3. Displays the portfolio table with book value vs market value
 4. Includes investment purchases in the Net calculation on the Summary tab
 
@@ -318,7 +318,7 @@ If pricehist is not installed or a ticker is not configured, the Market Value co
 A demo journal is included for testing and exploration:
 
 ```bash
-uv run hledger-tui -f examples/demo.journal
+uv run hledger-textual -f examples/demo.journal
 ```
 
 It contains two months of realistic personal finance data (January–February 2026) covering all six tabs: income, expenses, bank transfers, investment purchases (XDWD, XEON, XGDU), and budget rules.

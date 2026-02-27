@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.budget import (
+from hledger_textual.budget import (
     BudgetError,
     _format_budget_file,
     _parse_amount_string,
     ensure_budget_file,
     parse_budget_rules,
 )
-from hledger_tui.models import Amount, AmountStyle, BudgetRule
+from hledger_textual.models import Amount, AmountStyle, BudgetRule
 from tests.conftest import has_hledger
 
 
@@ -176,7 +176,7 @@ class TestBudgetCRUD:
 
     def test_add_rule(self, tmp_journal_with_budget: Path):
         """Add a budget rule."""
-        from hledger_tui.budget import add_budget_rule
+        from hledger_textual.budget import add_budget_rule
 
         budget_path = tmp_journal_with_budget.parent / "budget.journal"
         new_rule = BudgetRule(
@@ -194,7 +194,7 @@ class TestBudgetCRUD:
 
     def test_add_duplicate_raises(self, tmp_journal_with_budget: Path):
         """Adding a duplicate account raises BudgetError."""
-        from hledger_tui.budget import add_budget_rule
+        from hledger_textual.budget import add_budget_rule
 
         budget_path = tmp_journal_with_budget.parent / "budget.journal"
         dup_rule = BudgetRule(
@@ -210,7 +210,7 @@ class TestBudgetCRUD:
 
     def test_update_rule(self, tmp_journal_with_budget: Path):
         """Update an existing budget rule."""
-        from hledger_tui.budget import update_budget_rule
+        from hledger_textual.budget import update_budget_rule
 
         budget_path = tmp_journal_with_budget.parent / "budget.journal"
         new_rule = BudgetRule(
@@ -228,7 +228,7 @@ class TestBudgetCRUD:
 
     def test_delete_rule(self, tmp_journal_with_budget: Path):
         """Delete a budget rule."""
-        from hledger_tui.budget import delete_budget_rule
+        from hledger_textual.budget import delete_budget_rule
 
         budget_path = tmp_journal_with_budget.parent / "budget.journal"
         delete_budget_rule(budget_path, "Expenses:Restaurant", tmp_journal_with_budget)
@@ -238,7 +238,7 @@ class TestBudgetCRUD:
 
     def test_delete_nonexistent_raises(self, tmp_journal_with_budget: Path):
         """Deleting a nonexistent rule raises BudgetError."""
-        from hledger_tui.budget import delete_budget_rule
+        from hledger_textual.budget import delete_budget_rule
 
         budget_path = tmp_journal_with_budget.parent / "budget.journal"
         with pytest.raises(BudgetError, match="No budget rule found"):

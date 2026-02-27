@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hledger_tui.models import Posting, Transaction, TransactionStatus
+from hledger_textual.models import Posting, Transaction, TransactionStatus
 
 # Mapping from ISO 4217 currency codes to their common symbols.
 _CURRENCY_SYMBOLS: dict[str, str] = {

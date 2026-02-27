@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from hledger_tui.journal import (
+from hledger_textual.journal import (
     JournalError,
     append_transaction,
     delete_transaction,
     replace_transaction,
 )
-from hledger_tui.hledger import HledgerError, load_transactions
-from hledger_tui.models import SourcePosition, Transaction
+from hledger_textual.hledger import HledgerError, load_transactions
+from hledger_textual.models import SourcePosition, Transaction
 
 from tests.conftest import has_hledger
 
@@ -120,7 +120,7 @@ class TestValidationFailure:
         def _fail_check(file):
             raise HledgerError("journal invalid")
 
-        monkeypatch.setattr("hledger_tui.journal.check_journal", _fail_check)
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
 
         with pytest.raises(JournalError, match="validation failed"):
             append_transaction(tmp_journal, new_transaction)
@@ -138,7 +138,7 @@ class TestValidationFailure:
         def _fail_check(file):
             raise HledgerError("journal invalid")
 
-        monkeypatch.setattr("hledger_tui.journal.check_journal", _fail_check)
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
 
         with pytest.raises(JournalError, match="validation failed"):
             replace_transaction(tmp_journal, txns[0], new_transaction)
@@ -156,7 +156,7 @@ class TestValidationFailure:
         def _fail_check(file):
             raise HledgerError("journal invalid")
 
-        monkeypatch.setattr("hledger_tui.journal.check_journal", _fail_check)
+        monkeypatch.setattr("hledger_textual.journal.check_journal", _fail_check)
 
         with pytest.raises(JournalError, match="validation failed"):
             delete_transaction(tmp_journal, txns[0])
@@ -177,7 +177,7 @@ class TestExceptExceptionPaths:
         def _fail_format(txn):
             raise RuntimeError("format failed")
 
-        monkeypatch.setattr("hledger_tui.journal.format_transaction", _fail_format)
+        monkeypatch.setattr("hledger_textual.journal.format_transaction", _fail_format)
 
         with pytest.raises(JournalError, match="Failed to append"):
             append_transaction(tmp_journal, new_transaction)
@@ -195,7 +195,7 @@ class TestExceptExceptionPaths:
         def _fail_format(txn):
             raise RuntimeError("format failed")
 
-        monkeypatch.setattr("hledger_tui.journal.format_transaction", _fail_format)
+        monkeypatch.setattr("hledger_textual.journal.format_transaction", _fail_format)
 
         with pytest.raises(JournalError, match="Failed to replace"):
             replace_transaction(tmp_journal, txns[0], new_transaction)

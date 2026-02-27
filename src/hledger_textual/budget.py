@@ -13,8 +13,8 @@ import shutil
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from hledger_tui.hledger import HledgerError, check_journal
-from hledger_tui.models import Amount, AmountStyle, BudgetRule
+from hledger_textual.hledger import HledgerError, check_journal
+from hledger_textual.models import Amount, AmountStyle, BudgetRule
 
 BUDGET_FILENAME = "budget.journal"
 

@@ -12,10 +12,10 @@ from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Static
 
-from hledger_tui.hledger import HledgerError, load_accounts
-from hledger_tui.models import Amount, AmountStyle, BudgetRule
-from hledger_tui.widgets.amount_input import AmountInput
-from hledger_tui.widgets.autocomplete_input import AutocompleteInput
+from hledger_textual.hledger import HledgerError, load_accounts
+from hledger_textual.models import Amount, AmountStyle, BudgetRule
+from hledger_textual.widgets.amount_input import AmountInput
+from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
 class BudgetFormScreen(ModalScreen[BudgetRule | None]):

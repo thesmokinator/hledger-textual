@@ -11,8 +11,8 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, Input
 
-from hledger_tui.hledger import HledgerError, load_account_balances
-from hledger_tui.widgets import distribute_column_widths
+from hledger_textual.hledger import HledgerError, load_account_balances
+from hledger_textual.widgets import distribute_column_widths
 
 
 class AccountsPane(Widget):
@@ -112,7 +112,7 @@ class AccountsPane(Widget):
             (bal for acc, bal in self._balances if acc == account), ""
         )
 
-        from hledger_tui.screens.account_transactions import AccountTransactionsScreen
+        from hledger_textual.screens.account_transactions import AccountTransactionsScreen
 
         self.app.push_screen(
             AccountTransactionsScreen(account, balance, self.journal_file)

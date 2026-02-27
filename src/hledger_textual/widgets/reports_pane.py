@@ -12,10 +12,10 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, Select
 
-from hledger_tui.hledger import HledgerError, load_report
-from hledger_tui.models import ReportData
-from hledger_tui.widgets import distribute_column_widths
-from hledger_tui.widgets.pane_toolbar import PaneToolbar
+from hledger_textual.hledger import HledgerError, load_report
+from hledger_textual.models import ReportData
+from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 _REPORT_TYPES = [
     ("Income Statement", "is"),
