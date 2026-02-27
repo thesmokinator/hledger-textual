@@ -14,6 +14,7 @@ from textual.widgets import DataTable, Input, Static
 from hledger_tui.hledger import HledgerError, load_transactions
 from hledger_tui.models import Transaction
 from hledger_tui.widgets import distribute_column_widths
+from hledger_tui.widgets.pane_toolbar import PaneToolbar
 
 
 class TransactionsTable(Widget):
@@ -91,21 +92,22 @@ class TransactionsTable(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the month nav, search bar, and table layout."""
-        if not self._fixed_query:
-            with Horizontal(id="txn-period-nav"):
-                yield Static(
-                    "\u25c4 Prev", id="txn-btn-prev-month", classes="period-btn"
+        with PaneToolbar():
+            if not self._fixed_query:
+                with Horizontal(id="txn-period-nav", classes="period-nav"):
+                    yield Static(
+                        "\u25c4 Prev", id="txn-btn-prev-month", classes="period-btn"
+                    )
+                    yield Static(self._period_label(), id="txn-period-label")
+                    yield Static(
+                        "Next \u25ba", id="txn-btn-next-month", classes="period-btn"
+                    )
+            with Vertical(classes="filter-bar"):
+                yield Input(
+                    placeholder="Search... (e.g. d:grocery, ac:food, am:>100)",
+                    id="txn-search-input",
+                    disabled=True,
                 )
-                yield Static(self._period_label(), id="txn-period-label")
-                yield Static(
-                    "Next \u25ba", id="txn-btn-next-month", classes="period-btn"
-                )
-        with Vertical(classes="filter-bar"):
-            yield Input(
-                placeholder="Search... (e.g. desc:grocery, acct:food, amt:>100)",
-                id="txn-search-input",
-                disabled=True,
-            )
         yield DataTable(id="transactions-table")
 
     # Date, Status, Accounts, Amount fixed; Description flex

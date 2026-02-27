@@ -195,3 +195,29 @@ class BudgetRow:
         if self.budget == 0:
             return 0.0
         return float(self.actual / self.budget * 100)
+
+
+@dataclass
+class ReportRow:
+    """A single row in a multi-period financial report.
+
+    Represents an account line, a section header (e.g. "Revenues"),
+    or a total/net row.
+    """
+
+    account: str
+    amounts: list[str] = field(default_factory=list)
+    is_section_header: bool = False
+    is_total: bool = False
+
+
+@dataclass
+class ReportData:
+    """Parsed output of a multi-period hledger report (IS, BS, CF).
+
+    Contains the report title, period column headers, and all data rows.
+    """
+
+    title: str
+    period_headers: list[str] = field(default_factory=list)
+    rows: list[ReportRow] = field(default_factory=list)

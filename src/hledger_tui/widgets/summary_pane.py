@@ -350,6 +350,9 @@ class SummaryPane(Widget):
         else:
             portfolio_section.display = True
             self._fill_portfolio_rows(ptable, by_commodity, cost_by_account, tickers)
+            self.call_after_refresh(
+                distribute_column_widths, ptable, self._PORTFOLIO_FIXED
+            )
 
         # Loading / hint message
         self.query_one("#summary-portfolio-loading", Static).update(loading_msg)
@@ -369,6 +372,9 @@ class SummaryPane(Widget):
         by_commodity = self._group_positions_by_commodity(positions)
         self._fill_portfolio_rows(
             ptable, by_commodity, cost_by_account, tickers, eur_by_account
+        )
+        self.call_after_refresh(
+            distribute_column_widths, ptable, self._PORTFOLIO_FIXED
         )
 
         # Show warning for unconfigured commodities, or clear loading indicator
@@ -465,3 +471,7 @@ class SummaryPane(Widget):
                 _fmt_amount(qty, commodity),
                 f"{bar} {pct:.0f}%",
             )
+
+        self.call_after_refresh(
+            distribute_column_widths, table, self._BREAKDOWN_FIXED
+        )

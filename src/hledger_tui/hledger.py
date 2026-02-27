@@ -18,6 +18,8 @@ from hledger_tui.models import (
     JournalStats,
     PeriodSummary,
     Posting,
+    ReportData,
+    ReportRow,
     SourcePosition,
     Transaction,
     TransactionStatus,
@@ -628,3 +630,100 @@ def load_investment_eur_by_account(
         result[account] = (qty, com)
 
     return result
+
+
+def _parse_report_csv(output: str) -> ReportData:
+    """Parse CSV output from hledger is/bs/cf into a ReportData.
+
+    The CSV format produced by ``hledger {is|bs|cf} -M -O csv`` is:
+
+    - Row 0: title (e.g. ``"Monthly Income Statement 2026-01..2026-02","",""``)
+    - Row 1: column headers (``"Account","Jan","Feb"``)
+    - Remaining rows: data — section headers have all-empty amount cells,
+      totals start with ``Total:`` or ``Net:``.
+
+    Args:
+        output: Raw CSV text from hledger.
+
+    Returns:
+        A :class:`ReportData` with parsed title, headers, and rows.
+    """
+    if not output.strip():
+        return ReportData(title="", period_headers=[], rows=[])
+
+    reader = csv.reader(io.StringIO(output))
+    rows_raw = list(reader)
+
+    if len(rows_raw) < 2:
+        return ReportData(title="", period_headers=[], rows=[])
+
+    # Row 0: title
+    title = rows_raw[0][0].strip() if rows_raw[0] else ""
+
+    # Row 1: headers — first column is "Account", rest are period labels
+    header_row = rows_raw[1]
+    period_headers = [h.strip() for h in header_row[1:]] if len(header_row) > 1 else []
+
+    # Remaining rows: data
+    parsed_rows: list[ReportRow] = []
+    for row in rows_raw[2:]:
+        if not row:
+            continue
+
+        account = row[0].strip()
+        if not account:
+            continue
+
+        amounts = [cell.strip() for cell in row[1:]]
+
+        is_total = account.lower().startswith("total:") or account.lower().startswith("net:")
+        is_section_header = (
+            not is_total
+            and all(a == "" or a == "0" for a in amounts)
+        )
+
+        parsed_rows.append(ReportRow(
+            account=account,
+            amounts=amounts,
+            is_section_header=is_section_header,
+            is_total=is_total,
+        ))
+
+    return ReportData(
+        title=title,
+        period_headers=period_headers,
+        rows=parsed_rows,
+    )
+
+
+def load_report(
+    file: str | Path,
+    report_type: str,
+    period_begin: str | None = None,
+    period_end: str | None = None,
+) -> ReportData:
+    """Load a multi-period financial report from hledger.
+
+    Supported report types: ``is`` (Income Statement), ``bs`` (Balance Sheet),
+    ``cf`` (Cash Flow).
+
+    Args:
+        file: Path to the journal file.
+        report_type: One of ``"is"``, ``"bs"``, or ``"cf"``.
+        period_begin: Optional begin date (``YYYY-MM-DD``) for ``-b`` flag.
+        period_end: Optional end date (``YYYY-MM-DD``) for ``-e`` flag.
+
+    Returns:
+        A :class:`ReportData` with the parsed report.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    args = [report_type, "-M", "-O", "csv", "--no-elide"]
+    if period_begin:
+        args.extend(["-b", period_begin])
+    if period_end:
+        args.extend(["-e", period_end])
+
+    output = run_hledger(*args, file=file)
+    return _parse_report_csv(output)

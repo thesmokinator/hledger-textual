@@ -4,11 +4,11 @@ Screen {
     background: $surface;
 }
 
-/* --- App-level layout --- */
+/* --- App-lpadding-top: 1;evel layout --- */
 
 #nav-tabs {
     dock: top;
-    margin: 1 0;
+    margin: 1 0 0 0;
 }
 
 #nav-tabs Tab {
@@ -32,11 +32,15 @@ ContentSwitcher {
     padding: 0 1;
 }
 
-/* --- Summary Cards --- */
+/* --- Summary Pane --- */
+
+SummaryPane {
+    padding-top: 1;
+}
 
 #summary-cards {
     height: auto;
-    padding: 1 1 0 1;
+    padding: 0 1;
 }
 
 .summary-card {
@@ -84,6 +88,7 @@ ContentSwitcher {
 #summary-breakdown-table {
     height: auto;
     max-height: 20;
+    overflow-x: hidden;
 }
 
 .summary-section-title {
@@ -112,11 +117,56 @@ ContentSwitcher {
     height: 1;
 }
 
+/* --- Unified Pane Toolbar --- */
+
+PaneToolbar {
+    dock: top;
+    height: 3;
+    margin-bottom: 1;
+    padding: 0 1;
+    layout: horizontal;
+    align: left middle;
+}
+
+/* Generic filter-bar: show/hide only */
+.filter-bar {
+    display: none;
+    width: 1fr;
+    height: 3;
+}
+
+.filter-bar.visible {
+    display: block;
+}
+
+.filter-bar Input {
+    width: 100%;
+}
+
+/* Period navigation (shared by Transactions + Budget) */
+.period-nav {
+    width: 1fr;
+    height: 3;
+    align: center middle;
+}
+
+.period-nav.hidden {
+    display: none;
+}
+
+#txn-period-label, #period-label {
+    width: 1fr;
+    text-align: center;
+    text-style: bold;
+    height: 1;
+}
+
 /* --- Transactions Pane --- */
 
 TransactionsPane {
     height: 1fr;
     layout: vertical;
+    padding-top: 1;
 }
 
 TransactionsTable {
@@ -131,60 +181,17 @@ TransactionsTable DataTable {
     height: 1fr;
 }
 
-/* Generic filter-bar: show/hide only */
-.filter-bar {
-    dock: top;
-    padding: 0 1;
-    display: none;
-}
-
-.filter-bar.visible {
-    display: block;
-}
-
-/* AccountsPane: single input row */
-AccountsPane .filter-bar {
-    height: 3;
-}
-
-AccountsPane .filter-bar Input {
-    width: 100%;
-}
-
-/* TransactionsTable: month navigation */
-#txn-period-nav {
-    dock: top;
-    height: 3;
-    align: center middle;
-    padding: 0 1;
-}
-
-#txn-period-nav.hidden {
-    display: none;
-}
-
-#txn-period-label {
-    width: 1fr;
-    text-align: center;
-    text-style: bold;
-    height: 3;
-    content-align: center middle;
-}
-
-/* TransactionsTable: single search input */
-TransactionsTable .filter-bar {
-    height: 3;
-}
-
-TransactionsTable .filter-bar Input {
-    width: 100%;
-}
-
 /* --- Accounts Pane --- */
 
 AccountsPane {
     height: 1fr;
     layout: vertical;
+    padding-top: 1;
+}
+
+AccountsPane .filter-bar {
+    dock: top;
+    height: 3;
 }
 
 #accounts-table {
@@ -401,37 +408,14 @@ PostingRow {
 BudgetPane {
     height: 1fr;
     layout: vertical;
-}
-
-#period-nav {
-    dock: top;
-    height: 3;
-    align: center middle;
-    padding: 0 1;
+    padding-top: 1;
 }
 
 .period-btn {
     width: auto;
     margin: 0 2;
-    content-align: center middle;
-    height: 3;
+    height: 1;
     color: $text-muted;
-}
-
-#period-label {
-    width: 1fr;
-    text-align: center;
-    text-style: bold;
-    height: 3;
-    content-align: center middle;
-}
-
-BudgetPane .filter-bar {
-    height: 3;
-}
-
-BudgetPane .filter-bar Input {
-    width: 100%;
 }
 
 #budget-table {
@@ -517,12 +501,30 @@ BudgetDeleteConfirmModal {
     background: $error;
 }
 
+/* --- Reports Pane --- */
+
+ReportsPane {
+    height: 1fr;
+    layout: vertical;
+    padding-top: 1;
+}
+
+PaneToolbar Select {
+    width: 24;
+    margin-right: 2;
+}
+
+#reports-table {
+    height: 1fr;
+}
+
 /* --- Info Pane --- */
 
 InfoPane {
     height: 1fr;
     layout: vertical;
     overflow-y: auto;
+    padding-top: 1;
 }
 
 .info-section {

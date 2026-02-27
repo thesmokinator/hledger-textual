@@ -76,7 +76,7 @@ class TestBudgetTabSwitch:
         """Pressing 3 switches to the budget pane."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause()
             from textual.widgets import ContentSwitcher
             switcher = budget_app.screen.query_one("#content-switcher", ContentSwitcher)
@@ -86,7 +86,7 @@ class TestBudgetTabSwitch:
         """Budget table shows budget rules when data exists."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             table = budget_app.screen.query_one("#budget-table")
             # Should have 2 budget rules (Groceries and Restaurant)
@@ -100,7 +100,7 @@ class TestBudgetEmptyState:
         """Shows empty state message when no budget rules exist."""
         async with empty_budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             table = empty_budget_app.screen.query_one("#budget-table")
             # Should have 1 row with the empty state message
@@ -114,7 +114,7 @@ class TestBudgetAdd:
         """Pressing 'a' on budget pane opens the form."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
             await pilot.pause()
@@ -125,7 +125,7 @@ class TestBudgetAdd:
         """Cancelling the add form does not add a rule."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
             await pilot.pause()
@@ -142,7 +142,7 @@ class TestBudgetDelete:
         """Pressing 'd' shows delete confirmation."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
@@ -153,7 +153,7 @@ class TestBudgetDelete:
         """Cancelling delete does not remove the rule."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
@@ -168,7 +168,7 @@ class TestBudgetDelete:
         """Confirming delete removes the rule."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
@@ -187,7 +187,7 @@ class TestBudgetFilter:
         """Pressing '/' shows the filter input."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("slash")
             await pilot.pause()
@@ -200,7 +200,7 @@ class TestBudgetFilter:
         """Pressing Escape hides the filter."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("slash")
             await pilot.pause()
@@ -215,7 +215,7 @@ class TestBudgetFilter:
         """Typing in the filter shows only matching rules."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("slash")
             await pilot.pause()
@@ -233,7 +233,7 @@ class TestBudgetEdit:
         """Pressing 'e' with a rule selected opens BudgetFormScreen in edit mode."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
@@ -245,7 +245,7 @@ class TestBudgetEdit:
         """The edit form is pre-filled with the currently selected rule."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
@@ -261,7 +261,7 @@ class TestBudgetEdit:
         """Cancelling the edit form does not modify any budget rule."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
@@ -280,7 +280,7 @@ class TestBudgetMonthNavigation:
         from hledger_tui.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
             initial = pane._current_month
@@ -293,7 +293,7 @@ class TestBudgetMonthNavigation:
         from hledger_tui.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
             initial = pane._current_month
@@ -309,7 +309,7 @@ class TestBudgetMonthNavigation:
         from hledger_tui.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
             pane._current_month = date(2026, 1, 1)
@@ -326,7 +326,7 @@ class TestBudgetMonthNavigation:
         from hledger_tui.widgets.budget_pane import BudgetPane
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
             pane._current_month = date(2025, 12, 1)
@@ -343,7 +343,7 @@ class TestBudgetRefresh:
         """Pressing 'r' reloads the data without changing the row count."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             count_before = budget_app.screen.query_one("#budget-table").row_count
             await pilot.press("r")
@@ -358,7 +358,7 @@ class TestBudgetFooter:
         """Footer shows budget-specific text when switching to budget tab."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause()
             from textual.widgets import Static
             footer = budget_app.screen.query_one("#footer-bar", Static)
@@ -374,7 +374,7 @@ class TestBudgetCursor:
         """Pressing 'j' moves the cursor down without crashing."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("j")
             await pilot.pause()
@@ -385,7 +385,7 @@ class TestBudgetCursor:
         """Pressing 'k' moves the cursor up without crashing."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("j")
             await pilot.pause()
@@ -406,7 +406,7 @@ class TestBudgetColorCoding:
 
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
             # Inject an over-budget row (actual > budget → red path)
@@ -431,7 +431,7 @@ class TestBudgetColorCoding:
 
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
             # Inject a near-budget row (80% usage → yellow path)
@@ -458,7 +458,7 @@ class TestBudgetNoSelection:
         """Pressing 'e' with no rule selected does not push a form screen."""
         async with empty_budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
@@ -471,7 +471,7 @@ class TestBudgetNoSelection:
         """Pressing 'd' with no rule selected does not push a confirm screen."""
         async with empty_budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
@@ -488,7 +488,7 @@ class TestBudgetAddSave:
         """Saving the add form appends a new rule to the budget file."""
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
             await pilot.pause()
@@ -514,7 +514,7 @@ class TestBudgetAddSave:
         monkeypatch.setattr("hledger_tui.widgets.budget_pane.add_budget_rule", _raise)
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
             await pilot.pause()
@@ -539,7 +539,7 @@ class TestBudgetEditSave:
 
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
@@ -563,7 +563,7 @@ class TestBudgetEditSave:
         monkeypatch.setattr("hledger_tui.widgets.budget_pane.update_budget_rule", _raise)
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
             await pilot.pause()
@@ -590,7 +590,7 @@ class TestBudgetDeleteError:
         monkeypatch.setattr("hledger_tui.widgets.budget_pane.delete_budget_rule", _raise)
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             await pilot.press("d")
             await pilot.pause()
@@ -617,7 +617,7 @@ class TestBudgetLoadErrors:
         )
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             # App must not crash
             assert budget_app.screen.query_one("#budget-table") is not None
@@ -636,6 +636,6 @@ class TestBudgetLoadErrors:
         )
         async with budget_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("4")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
             assert budget_app.screen.query_one("#budget-table") is not None

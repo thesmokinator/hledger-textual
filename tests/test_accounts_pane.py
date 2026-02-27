@@ -46,7 +46,7 @@ class TestAccountsPane:
         """Pressing 2 switches to the accounts pane."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             from textual.widgets import ContentSwitcher
 
@@ -59,7 +59,7 @@ class TestAccountsPane:
         """Accounts table shows accounts when data exists."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             table = accounts_app.screen.query_one("#accounts-table")
             assert table.row_count > 0
@@ -68,7 +68,7 @@ class TestAccountsPane:
         """Pressing r refreshes the accounts list."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             table = accounts_app.screen.query_one("#accounts-table")
             count_before = table.row_count
@@ -84,7 +84,7 @@ class TestAccountsFilter:
         """Pressing / shows the filter input."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             await pilot.press("slash")
             await pilot.pause()
@@ -98,7 +98,7 @@ class TestAccountsFilter:
         """Typing in the filter narrows the account list."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             table = accounts_app.screen.query_one("#accounts-table")
             count_all = table.row_count
@@ -114,7 +114,7 @@ class TestAccountsFilter:
         """Pressing Escape hides the filter and restores all rows."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             table = accounts_app.screen.query_one("#accounts-table")
             count_all = table.row_count
@@ -135,7 +135,7 @@ class TestAccountDrillDown:
         """Pressing Enter on an account opens the drill-down screen."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
@@ -151,7 +151,7 @@ class TestAccountDrillDown:
         """Pressing Escape on the drill-down screen goes back."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
@@ -169,7 +169,7 @@ class TestAccountDrillDown:
         """Drill-down screen shows transactions for the selected account."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause(delay=1.0)

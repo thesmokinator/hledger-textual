@@ -204,7 +204,7 @@ class TestTabNavigation:
     """Tests for keyboard number shortcuts that switch sections."""
 
     async def test_number_keys_switch_sections(self, app: HledgerTuiApp):
-        """Pressing 1-5 switches to the corresponding section."""
+        """Pressing 1-6 switches to the corresponding section."""
         from textual.widgets import ContentSwitcher
 
         async with app.run_test() as pilot:
@@ -212,9 +212,10 @@ class TestTabNavigation:
             sections = [
                 ("1", "summary"),
                 ("2", "transactions"),
-                ("3", "accounts"),
-                ("4", "budget"),
-                ("5", "info"),
+                ("3", "budget"),
+                ("4", "reports"),
+                ("5", "accounts"),
+                ("6", "info"),
             ]
             for key, expected in sections:
                 await pilot.press(key)

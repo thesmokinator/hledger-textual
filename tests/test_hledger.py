@@ -9,6 +9,7 @@ import pytest
 from hledger_tui.hledger import (
     HledgerError,
     _parse_budget_amount,
+    _parse_report_csv,
     load_accounts,
     load_descriptions,
     load_expense_breakdown,
@@ -17,6 +18,7 @@ from hledger_tui.hledger import (
     load_investment_positions,
     load_journal_stats,
     load_period_summary,
+    load_report,
     load_transactions,
 )
 from hledger_tui.models import TransactionStatus
@@ -363,3 +365,148 @@ class TestLoadInvestmentFunctions:
         prices_file.write_text("; no price directives\n")
         result = load_investment_eur_by_account(empty_journal, prices_file)
         assert result == {}
+
+
+# ------------------------------------------------------------------
+# Pure-function tests for _parse_report_csv (no hledger needed)
+# ------------------------------------------------------------------
+
+
+class TestParseReportCsv:
+    """Tests for the _parse_report_csv pure function."""
+
+    _IS_CSV = (
+        '"Monthly Income Statement 2025-09-01..2026-03-01","","","","","",""\n'
+        '"Account","Sep","Oct","Nov","Dec","Jan","Feb"\n'
+        '"Revenues","","","","","",""\n'
+        '"income:salary","€3000.00","€3000.00","€3000.00","€3000.00","€3000.00","€3000.00"\n'
+        '"Expenses","","","","","",""\n'
+        '"expenses:food","€120.00","€130.00","€110.00","€150.00","€140.00","€125.00"\n'
+        '"expenses:rent","€800.00","€800.00","€800.00","€800.00","€800.00","€800.00"\n'
+        '"Net:","€2080.00","€2070.00","€2090.00","€2050.00","€2060.00","€2075.00"\n'
+    )
+
+    _BS_CSV = (
+        '"Monthly Balance Sheet 2026-01-01..2026-03-01","",""\n'
+        '"Account","Jan","Feb"\n'
+        '"Assets","",""\n'
+        '"assets:bank:checking","€5000.00","€7000.00"\n'
+        '"Liabilities","",""\n'
+        '"Total:","€5000.00","€7000.00"\n'
+    )
+
+    def test_is_title(self):
+        """The title row is parsed correctly for IS."""
+        data = _parse_report_csv(self._IS_CSV)
+        assert "Income Statement" in data.title
+
+    def test_is_period_headers(self):
+        """Period headers are extracted from the header row."""
+        data = _parse_report_csv(self._IS_CSV)
+        assert data.period_headers == ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb"]
+
+    def test_is_row_count(self):
+        """All data rows are parsed."""
+        data = _parse_report_csv(self._IS_CSV)
+        assert len(data.rows) == 6
+
+    def test_is_section_headers(self):
+        """Section header rows (Revenues, Expenses) are detected."""
+        data = _parse_report_csv(self._IS_CSV)
+        headers = [r for r in data.rows if r.is_section_header]
+        header_names = [h.account for h in headers]
+        assert "Revenues" in header_names
+        assert "Expenses" in header_names
+
+    def test_is_total_row(self):
+        """Net: row is detected as a total."""
+        data = _parse_report_csv(self._IS_CSV)
+        totals = [r for r in data.rows if r.is_total]
+        assert len(totals) == 1
+        assert totals[0].account == "Net:"
+
+    def test_is_data_row_amounts(self):
+        """Account rows carry the correct period amounts."""
+        data = _parse_report_csv(self._IS_CSV)
+        salary_rows = [r for r in data.rows if "salary" in r.account]
+        assert len(salary_rows) == 1
+        assert salary_rows[0].amounts[0] == "€3000.00"
+
+    def test_bs_title(self):
+        """Balance sheet title is parsed."""
+        data = _parse_report_csv(self._BS_CSV)
+        assert "Balance Sheet" in data.title
+
+    def test_bs_total(self):
+        """Total: row detected in BS output."""
+        data = _parse_report_csv(self._BS_CSV)
+        totals = [r for r in data.rows if r.is_total]
+        assert len(totals) == 1
+        assert totals[0].account == "Total:"
+
+    def test_bs_section_headers(self):
+        """Assets and Liabilities detected as section headers."""
+        data = _parse_report_csv(self._BS_CSV)
+        headers = [r.account for r in data.rows if r.is_section_header]
+        assert "Assets" in headers
+        assert "Liabilities" in headers
+
+    def test_empty_output(self):
+        """Empty string produces empty ReportData."""
+        data = _parse_report_csv("")
+        assert data.title == ""
+        assert data.period_headers == []
+        assert data.rows == []
+
+    def test_single_row_output(self):
+        """A single CSV line (no header row) produces empty data."""
+        data = _parse_report_csv('"title","",""\n')
+        assert data.title == ""
+        assert data.rows == []
+
+
+class TestLoadReport:
+    """Tests for load_report using monkeypatched run_hledger."""
+
+    _SAMPLE_CSV = (
+        '"Monthly Cash Flow 2026-01-01..2026-03-01","",""\n'
+        '"Account","Jan","Feb"\n'
+        '"assets:bank:checking","€2000.00","€3000.00"\n'
+        '"Total:","€2000.00","€3000.00"\n'
+    )
+
+    def test_load_report_parses_output(self, monkeypatch, tmp_path: Path):
+        """load_report delegates to run_hledger and parses the CSV."""
+        monkeypatch.setattr(
+            "hledger_tui.hledger.run_hledger",
+            lambda *args, **kwargs: self._SAMPLE_CSV,
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        data = load_report(journal, "cf", period_begin="2026-01-01", period_end="2026-03-01")
+        assert "Cash Flow" in data.title
+        assert data.period_headers == ["Jan", "Feb"]
+        assert len(data.rows) == 2
+
+    def test_load_report_empty_output(self, monkeypatch, tmp_path: Path):
+        """Empty hledger output produces empty ReportData."""
+        monkeypatch.setattr(
+            "hledger_tui.hledger.run_hledger",
+            lambda *args, **kwargs: "",
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        data = load_report(journal, "is")
+        assert data.title == ""
+        assert data.rows == []
+
+    def test_load_report_hledger_error(self, monkeypatch, tmp_path: Path):
+        """HledgerError is raised when hledger fails."""
+        def _raise(*args, **kwargs):
+            raise HledgerError("command failed")
+
+        monkeypatch.setattr("hledger_tui.hledger.run_hledger", _raise)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        with pytest.raises(HledgerError):
+            load_report(journal, "bs")

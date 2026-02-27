@@ -23,6 +23,7 @@ from hledger_tui.budget import (
 from hledger_tui.hledger import HledgerError, load_budget_report
 from hledger_tui.models import BudgetRow, BudgetRule
 from hledger_tui.widgets import distribute_column_widths
+from hledger_tui.widgets.pane_toolbar import PaneToolbar
 
 
 class BudgetPane(Widget):
@@ -58,17 +59,18 @@ class BudgetPane(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
-        with Horizontal(id="period-nav"):
-            yield Static("\u25c4 Prev", id="btn-prev-month", classes="period-btn")
-            yield Static(self._period_label(), id="period-label")
-            yield Static("Next \u25ba", id="btn-next-month", classes="period-btn")
+        with PaneToolbar():
+            with Horizontal(id="period-nav", classes="period-nav"):
+                yield Static("\u25c4 Prev", id="btn-prev-month", classes="period-btn")
+                yield Static(self._period_label(), id="period-label")
+                yield Static("Next \u25ba", id="btn-next-month", classes="period-btn")
 
-        with Horizontal(classes="filter-bar"):
-            yield Input(
-                placeholder="Filter by account name...",
-                id="budget-filter-input",
-                disabled=True,
-            )
+            with Horizontal(classes="filter-bar"):
+                yield Input(
+                    placeholder="Filter by account name...",
+                    id="budget-filter-input",
+                    disabled=True,
+                )
 
         yield DataTable(id="budget-table")
 
@@ -252,7 +254,8 @@ class BudgetPane(Widget):
         self.notify("Refreshed", timeout=2)
 
     def action_filter(self) -> None:
-        """Show/focus the filter input."""
+        """Show/focus the filter input and hide period nav."""
+        self.query_one("#period-nav").add_class("hidden")
         filter_bar = self.query_one(".filter-bar")
         filter_bar.add_class("visible")
         filter_input = self.query_one("#budget-filter-input", Input)
@@ -260,7 +263,7 @@ class BudgetPane(Widget):
         filter_input.focus()
 
     def action_dismiss_filter(self) -> None:
-        """Hide the filter input and clear the filter."""
+        """Hide the filter input, restore period nav, and clear the filter."""
         filter_bar = self.query_one(".filter-bar")
         if filter_bar.has_class("visible"):
             filter_bar.remove_class("visible")
@@ -268,6 +271,7 @@ class BudgetPane(Widget):
             filter_input.value = ""
             filter_input.disabled = True
             self.filter_text = ""
+            self.query_one("#period-nav").remove_class("hidden")
             self._update_table()
             self.query_one("#budget-table", DataTable).focus()
 
