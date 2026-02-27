@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
@@ -18,12 +19,12 @@ from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 _FOOTER_COMMANDS: dict[str, str] = {
-    "summary": "\\[r] Reload  \\[q] Quit",
-    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[r] Reload  \\[q] Quit",
-    "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[q] Quit",
-    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[q] Quit",
-    "reports": "\\[r] Reload  \\[q] Quit",
-    "info": "\\[t] Theme  \\[q] Quit",
+    "summary": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "accounts": "\\[↵] Drill  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[q] Quit",
+    "reports": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "info": "\\[s] Sync  \\[t] Theme  \\[q] Quit",
 }
 
 
@@ -58,6 +59,7 @@ class HledgerTuiApp(App):
         Binding("4", "switch_section('reports')", "Reports", show=False),
         Binding("5", "switch_section('accounts')", "Accounts", show=False),
         Binding("6", "switch_section('info')", "Info", show=False),
+        Binding("s", "git_sync", "Sync", show=False),
         Binding("q", "quit", "Quit"),
         Binding("t", "pick_theme", "Theme", show=False),
     ]
@@ -133,6 +135,43 @@ class HledgerTuiApp(App):
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""
         self._activate_section(section)
+
+    def action_git_sync(self) -> None:
+        """Show confirmation dialog, then commit + pull + push via git."""
+        from hledger_textual.git import is_git_repo
+        from hledger_textual.screens.sync_confirm import SyncConfirmModal
+
+        if not is_git_repo(self.journal_file):
+            self.notify("Not a git repository", severity="warning")
+            return
+
+        def on_confirm(confirmed: bool | None) -> None:
+            if confirmed:
+                self._run_git_sync()
+
+        self.push_screen(SyncConfirmModal(), callback=on_confirm)
+
+    @work(thread=True, exclusive=True, group="git-sync")
+    def _run_git_sync(self) -> None:
+        """Execute the git sync in a background thread."""
+        from hledger_textual.git import GitError, git_sync
+
+        self.app.call_from_thread(
+            self.notify, "Syncing...", severity="information"
+        )
+        try:
+            result = git_sync(self.journal_file)
+            self.app.call_from_thread(
+                self.notify, result, severity="information"
+            )
+        except GitError as exc:
+            self.app.call_from_thread(
+                self.notify, str(exc), severity="error"
+            )
+
+        self.app.call_from_thread(
+            self.query_one(InfoPane).refresh_git_status
+        )
 
     def action_pick_theme(self) -> None:
         """Open the theme picker dialog."""
