@@ -11,7 +11,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import DataTable, Input, Static
 
-from hledger_tui.hledger import HledgerError, load_transactions
+from hledger_tui.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_tui.models import Transaction
 from hledger_tui.widgets import distribute_column_widths
 from hledger_tui.widgets.pane_toolbar import PaneToolbar
@@ -321,7 +321,7 @@ class TransactionsTable(Widget):
     @on(Input.Submitted, "#txn-search-input")
     def on_search_submitted(self, event: Input.Submitted) -> None:
         """Execute the search query when the user presses Enter."""
-        self._search_query = event.value
+        self._search_query = expand_search_query(event.value)
         if self._search_query:
             self._date_query = ""  # search entire journal
         self._load_transactions()

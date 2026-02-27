@@ -167,20 +167,6 @@ class TestInfoPaneErrors:
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
-class TestInfoPaneRefresh:
-    """Tests for the refresh action."""
-
-    async def test_r_key_triggers_refresh(self, info_journal: Path):
-        """Pressing r reloads data without crashing."""
-        app = _InfoApp(info_journal)
-        async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
-            await pilot.press("r")
-            await pilot.pause(delay=0.5)
-            assert app.query_one(InfoPane) is not None
-
-
-@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 class TestInfoPaneMetadataFallbacks:
     """Tests for metadata fallback paths in InfoPane."""
 
@@ -219,3 +205,82 @@ class TestInfoPaneMetadataFallbacks:
             await pilot.pause(delay=1.0)
             size_label = app.query_one("#info-size", Static)
             assert str(size_label.renderable) == "?"
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestInfoPaneHledgerSection:
+    """Tests for the hledger section in InfoPane."""
+
+    async def test_hledger_section_title_exists(self, info_journal: Path):
+        """The hledger section title is present."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            titles = [
+                str(s.renderable)
+                for s in app.query(".info-section-title")
+            ]
+            assert "hledger" in titles
+
+    async def test_hledger_version_shown(self, info_journal: Path):
+        """After loading, #info-hledger-version has content."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            version_label = app.query_one("#info-hledger-version", Static)
+            text = str(version_label.renderable)
+            assert text and text != ""
+
+    async def test_pricehist_section_title_exists(self, info_journal: Path):
+        """The pricehist section title is present."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            titles = [
+                str(s.renderable)
+                for s in app.query(".info-section-title")
+            ]
+            assert "pricehist" in titles
+
+    async def test_pricehist_version_shown(self, info_journal: Path):
+        """#info-pricehist-version shows version or 'Not installed'."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            label = app.query_one("#info-pricehist-version", Static)
+            text = str(label.renderable)
+            assert text and text != ""
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestInfoPaneConfigSection:
+    """Tests for the Configuration section in InfoPane."""
+
+    async def test_config_section_title_exists(self, info_journal: Path):
+        """The Configuration section title is present."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            titles = [
+                str(s.renderable)
+                for s in app.query(".info-section-title")
+            ]
+            assert "Configuration" in titles
+
+    async def test_config_path_shown(self, info_journal: Path):
+        """#info-config-path shows the config path."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            config_label = app.query_one("#info-config-path", Static)
+            text = str(config_label.renderable)
+            assert "config.toml" in text
+
+    async def test_theme_label_shown(self, info_journal: Path):
+        """#info-theme shows the current theme name."""
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            theme_label = app.query_one("#info-theme", Static)
+            text = str(theme_label.renderable)
+            assert text  # not empty

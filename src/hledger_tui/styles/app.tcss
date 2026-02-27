@@ -192,6 +192,8 @@ AccountsPane {
 AccountsPane .filter-bar {
     dock: top;
     height: 3;
+    margin-bottom: 1;
+    padding: 0 1;
 }
 
 #accounts-table {
@@ -524,7 +526,14 @@ InfoPane {
     height: 1fr;
     layout: vertical;
     overflow-y: auto;
-    padding-top: 1;
+}
+
+#info-columns {
+    height: auto;
+}
+
+.info-column {
+    width: 1fr;
 }
 
 .info-section {
@@ -540,11 +549,42 @@ InfoPane {
 }
 
 .info-row {
-    height: 1;
+    height: auto;
+    min-height: 1;
     padding: 0 1;
+    align: left middle;
 }
 
 .info-label {
     width: 16;
     color: $text-muted;
+}
+
+/* --- Theme Picker Modal --- */
+
+ThemePickerModal {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#theme-dialog {
+    width: 40;
+    height: auto;
+    max-height: 20;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#theme-title {
+    text-style: bold;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+    color: $accent;
+}
+
+#theme-list {
+    height: auto;
+    max-height: 14;
 }

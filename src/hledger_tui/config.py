@@ -34,15 +34,26 @@ def _load_config_dict() -> dict:
 
 
 def _save_config_dict(data: dict) -> None:
-    """Write a flat string-valued dict to config.toml.
+    """Write a config dict to config.toml, preserving nested sections.
 
-    Only string values are supported (sufficient for the current config schema).
+    Top-level string values are written first, followed by any nested dict
+    sections (e.g. ``[prices]``).  This avoids corrupting section-based keys
+    when only a scalar value like ``theme`` is updated.
     """
     _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    lines = []
+    lines: list[str] = []
+    sections: dict[str, dict] = {}
     for key, value in data.items():
-        escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'{key} = "{escaped}"')
+        if isinstance(value, dict):
+            sections[key] = value
+        else:
+            escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+            lines.append(f'{key} = "{escaped}"')
+    for section_name, section_dict in sections.items():
+        lines.append(f"\n[{section_name}]")
+        for k, v in section_dict.items():
+            escaped = str(v).replace("\\", "\\\\").replace('"', '\\"')
+            lines.append(f'{k} = "{escaped}"')
     _CONFIG_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

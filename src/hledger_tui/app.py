@@ -8,7 +8,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
-from hledger_tui.config import load_theme
+from hledger_tui.config import load_theme, save_theme
 from hledger_tui.widgets.accounts_pane import AccountsPane
 from hledger_tui.widgets.budget_pane import BudgetPane
 from hledger_tui.widgets.info_pane import InfoPane
@@ -23,7 +23,7 @@ _FOOTER_COMMANDS: dict[str, str] = {
     "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[q] Quit",
     "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[q] Quit",
     "reports": "\\[r] Reload  \\[q] Quit",
-    "info": "\\[r] Reload  \\[q] Quit",
+    "info": "\\[t] Theme  \\[q] Quit",
 }
 
 
@@ -59,6 +59,7 @@ class HledgerTuiApp(App):
         Binding("5", "switch_section('accounts')", "Accounts", show=False),
         Binding("6", "switch_section('info')", "Info", show=False),
         Binding("q", "quit", "Quit"),
+        Binding("t", "pick_theme", "Theme", show=False),
     ]
 
     def __init__(self, journal_file: Path) -> None:
@@ -132,3 +133,15 @@ class HledgerTuiApp(App):
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""
         self._activate_section(section)
+
+    def action_pick_theme(self) -> None:
+        """Open the theme picker dialog."""
+        from hledger_tui.screens.theme_picker import ThemePickerModal
+
+        def on_theme_selected(theme: str | None) -> None:
+            if theme is not None:
+                self.theme = theme
+                save_theme(theme)
+                self.query_one(InfoPane).apply_theme(theme)
+
+        self.push_screen(ThemePickerModal(), callback=on_theme_selected)

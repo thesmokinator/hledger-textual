@@ -66,6 +66,48 @@ def run_hledger(*args: str, file: str | Path | None = None) -> str:
     return result.stdout
 
 
+def get_hledger_version() -> str:
+    """Return the hledger version string, or '?' if unavailable."""
+    try:
+        raw = run_hledger("--version").strip()
+        # Strip program name prefix: "hledger 1.51.2, ..." → "1.51.2, ..."
+        if raw.lower().startswith("hledger "):
+            return raw[len("hledger "):].strip()
+        return raw
+    except HledgerError:
+        return "?"
+
+
+# Short aliases → full hledger query prefixes
+_QUERY_ALIASES: dict[str, str] = {
+    "d:": "desc:",
+    "ac:": "acct:",
+    "am:": "amt:",
+}
+
+def expand_search_query(query: str) -> str:
+    """Expand short search aliases to full hledger query prefixes.
+
+    Supported aliases:
+        ``d:`` → ``desc:``, ``ac:`` → ``acct:``, ``am:`` → ``amt:``
+
+    Args:
+        query: Raw user input from the search bar.
+
+    Returns:
+        The query string with short aliases replaced by their full forms.
+    """
+    if not query:
+        return query
+    for alias, full in _QUERY_ALIASES.items():
+        query = re.sub(
+            r"(?:^|(?<=\s))" + re.escape(alias),
+            full,
+            query,
+        )
+    return query
+
+
 def check_journal(file: str | Path) -> None:
     """Validate a journal file using hledger check.
 

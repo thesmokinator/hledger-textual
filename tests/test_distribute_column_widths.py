@@ -33,8 +33,8 @@ class TestDistributeColumnWidths:
             cols = table.ordered_columns
             assert cols[1].width == 14
             assert cols[2].width == 20
-            # Flex col 0 gets the rest: 100 - (14 + 20) - 3*2 padding
-            assert cols[0].width == 100 - 14 - 20 - 6
+            # Flex col 0 gets the rest: 100 - 2 (scrollbar) - (14 + 20) - 3*2 padding
+            assert cols[0].width == 100 - 2 - 14 - 20 - 6
 
     async def test_flex_minimum_width(self):
         """The flex column never goes below the minimum (5 per col)."""
@@ -67,7 +67,7 @@ class TestDistributeColumnWidths:
 
             cols = table.ordered_columns
             assert cols[0].width == 12
-            remaining = 100 - 12 - 3 * 2  # 82
+            remaining = 100 - 2 - 12 - 3 * 2  # 80
             assert cols[1].width + cols[2].width == remaining
 
     async def test_multiple_flex_with_custom_weights(self):
@@ -90,8 +90,8 @@ class TestDistributeColumnWidths:
             cols = table.ordered_columns
             assert cols[0].width == 12
             assert cols[1].width == 8
-            remaining = 100 - 12 - 8 - 5 * 2  # 70
-            # Weight 3/8 of 70 ≈ 26, weight 2/8 ≈ 17
+            remaining = 100 - 2 - 12 - 8 - 5 * 2  # 68
+            # Weight 3/8 of 68 ≈ 25, weight 2/8 ≈ 17
             assert cols[2].width > cols[4].width
             assert cols[2].width + cols[3].width + cols[4].width == remaining
 

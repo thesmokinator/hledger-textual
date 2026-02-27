@@ -185,3 +185,37 @@ class TestLoadPriceTickers:
         monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
         result = load_price_tickers()
         assert result == {"XDWD": "XDWD.DE", "XEON": "XEON.DE"}
+
+
+class TestSavePreservesNestedSections:
+    """Tests that _save_config_dict preserves nested TOML sections."""
+
+    def test_save_preserves_prices_section(self, tmp_path, monkeypatch):
+        """Saving a theme does not corrupt the [prices] section."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            'theme = "nord"\n\n[prices]\nXDWD = "XDWD.DE"\nXEON = "XEON.DE"\n'
+        )
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+
+        # Change theme — this must not lose [prices]
+        save_theme("dracula")
+
+        assert load_theme() == "dracula"
+        tickers = load_price_tickers()
+        assert tickers == {"XDWD": "XDWD.DE", "XEON": "XEON.DE"}
+
+    def test_save_config_dict_with_nested_dict(self, tmp_path, monkeypatch):
+        """_save_config_dict correctly writes nested dict sections."""
+        config_path = tmp_path / "config.toml"
+        monkeypatch.setattr("hledger_tui.config._CONFIG_PATH", config_path)
+
+        data = {
+            "theme": "gruvbox",
+            "prices": {"A": "A.DE", "B": "B.DE"},
+        }
+        _save_config_dict(data)
+
+        loaded = _load_config_dict()
+        assert loaded["theme"] == "gruvbox"
+        assert loaded["prices"] == {"A": "A.DE", "B": "B.DE"}

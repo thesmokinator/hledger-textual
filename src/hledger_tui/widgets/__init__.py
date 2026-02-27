@@ -28,7 +28,7 @@ def distribute_column_widths(
     cols = table.ordered_columns
     if not cols:
         return
-    available = table.size.width
+    available = table.size.width - 2  # reserve space for possible scrollbar
     if available <= 0:
         return
 

@@ -10,6 +10,7 @@ from hledger_tui.hledger import (
     HledgerError,
     _parse_budget_amount,
     _parse_report_csv,
+    expand_search_query,
     load_accounts,
     load_descriptions,
     load_expense_breakdown,
@@ -510,3 +511,42 @@ class TestLoadReport:
         journal.write_text("; empty\n")
         with pytest.raises(HledgerError):
             load_report(journal, "bs")
+
+
+@pytest.mark.skipif(False, reason="pure function, no hledger needed")
+class TestExpandSearchQuery:
+    """Tests for expand_search_query alias expansion."""
+
+    def test_empty_string(self):
+        """Empty input is returned unchanged."""
+        assert expand_search_query("") == ""
+
+    def test_no_aliases(self):
+        """Queries without aliases pass through unchanged."""
+        assert expand_search_query("desc:grocery") == "desc:grocery"
+
+    def test_d_alias(self):
+        """d: expands to desc:."""
+        assert expand_search_query("d:grocery") == "desc:grocery"
+
+    def test_ac_alias(self):
+        """ac: expands to acct:."""
+        assert expand_search_query("ac:food") == "acct:food"
+
+    def test_am_alias(self):
+        """am: expands to amt:."""
+        assert expand_search_query("am:>100") == "amt:>100"
+
+    def test_multiple_aliases(self):
+        """Multiple aliases in one query are all expanded."""
+        result = expand_search_query("d:grocery ac:food")
+        assert result == "desc:grocery acct:food"
+
+    def test_alias_mid_word_not_expanded(self):
+        """Aliases that appear as part of a longer prefix are not expanded."""
+        # "bad:" should not have "d:" expanded
+        assert expand_search_query("bad:thing") == "bad:thing"
+
+    def test_plain_text_unchanged(self):
+        """Plain text without colons is returned unchanged."""
+        assert expand_search_query("grocery shopping") == "grocery shopping"

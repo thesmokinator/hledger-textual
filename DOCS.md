@@ -12,9 +12,10 @@ Browse transactions, track budgets, monitor investments, and manage your journal
 - [Navigation](#navigation)
 - [Tab 1 — Summary](#tab-1--summary)
 - [Tab 2 — Transactions](#tab-2--transactions)
-- [Tab 3 — Accounts](#tab-3--accounts)
-- [Tab 4 — Budget](#tab-4--budget)
-- [Tab 5 — Info](#tab-5--info)
+- [Tab 3 — Budget](#tab-3--budget)
+- [Tab 4 — Reports](#tab-4--reports)
+- [Tab 5 — Accounts](#tab-5--accounts)
+- [Tab 6 — Info](#tab-6--info)
 - [Investment Tracking](#investment-tracking)
 - [Demo Journal](#demo-journal)
 
@@ -69,7 +70,7 @@ XGDU = "XGDU.MI"
 | Key | Description |
 |-----|-------------|
 | `journal_file` | Path to the hledger journal file |
-| `theme` | Textual theme name |
+| `theme` | Textual theme name (can also be changed via the theme picker, see [Tab 6 — Info](#tab-6--info)) |
 | `[prices]` | Mapping of journal commodity names to Yahoo Finance tickers |
 
 The `[prices]` section enables live market price fetching for investment tracking (see [Investment Tracking](#investment-tracking)).
@@ -84,9 +85,11 @@ Switch between tabs using number keys. Arrow keys never change tabs.
 |-----|--------|
 | `1` | Summary |
 | `2` | Transactions |
-| `3` | Accounts |
-| `4` | Budget |
-| `5` | Info |
+| `3` | Budget |
+| `4` | Reports |
+| `5` | Accounts |
+| `6` | Info |
+| `t` | Open theme picker |
 | `q` | Quit |
 
 Each tab shows context-specific key hints in the footer bar.
@@ -139,12 +142,15 @@ Use left/right arrow keys to browse one month at a time. The current month label
 
 ### Search
 
-Press `/` to open the search bar. It accepts **hledger query syntax**:
+Press `/` to open the search bar. It accepts **hledger query syntax** with short aliases:
 
-- `desc:grocery` — match description
-- `acct:food` — match account name
-- `amt:>100` — match by amount
-- `tag:project` — match by tag
+| Alias | Expands to | Example |
+|-------|-----------|---------|
+| `d:` | `desc:` | `d:grocery` — match description |
+| `ac:` | `acct:` | `ac:food` — match account name |
+| `am:` | `amt:` | `am:>100` — match by amount |
+
+Full hledger prefixes also work directly: `desc:grocery`, `acct:food`, `amt:>100`, `tag:project`.
 
 Press `Escape` to clear the search and return to month navigation.
 
@@ -169,25 +175,7 @@ The transaction form supports:
 
 ---
 
-## Tab 3 — Accounts
-
-A list of all accounts with their current balances. Select an account and press `Enter` to drill down into its transactions.
-
-### Account Detail Screen
-
-Opens a full-screen view filtered to a single account, showing its transaction history. Supports the same edit, delete, and search operations as the main Transactions tab. Press `Escape` to go back.
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Drill into account transactions |
-| `/` | Filter by account name |
-| `r` | Refresh |
-| `Escape` | Dismiss filter |
-| `j` / `k` | Navigate rows |
-
----
-
-## Tab 4 — Budget
+## Tab 3 — Budget
 
 Define monthly budget rules and compare actual spending against targets.
 
@@ -226,25 +214,61 @@ Color coding: green (< 75%), yellow (75–100%), red (> 100% — over budget).
 
 ---
 
-## Tab 5 — Info
+## Tab 4 — Reports
 
-Displays journal statistics and application metadata.
-
-### Journal Section
-
-- **Path** — Full path to the journal file
-- **Size** — File size
-- **Transactions** — Total count
-- **Accounts** — Total count
-- **Commodities** — List of all commodities used
-
-### About Section
-
-- Application name, version, author, license, and repository URL.
+Multi-period financial reports powered by hledger.
 
 | Key | Action |
 |-----|--------|
-| `r` | Refresh stats |
+| `r` | Reload |
+| `q` | Quit |
+
+---
+
+## Tab 5 — Accounts
+
+A list of all accounts with their current balances. Select an account and press `Enter` to drill down into its transactions.
+
+### Account Detail Screen
+
+Opens a full-screen view filtered to a single account, showing its transaction history. Supports the same edit, delete, and search operations as the main Transactions tab. Press `Escape` to go back.
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Drill into account transactions |
+| `/` | Filter by account name |
+| `r` | Refresh |
+| `Escape` | Dismiss filter |
+| `j` / `k` | Navigate rows |
+
+---
+
+## Tab 6 — Info
+
+Displays journal statistics, configuration, and application metadata in a two-column layout.
+
+### Left Column
+
+**Journal** — Path, file size, transaction count, account count, and commodities list.
+
+**Configuration** — Config file path and current theme name.
+
+### Right Column
+
+**About** — Application name, version, author, license, and repository URL.
+
+**hledger** — hledger version and pricehist installation status.
+
+### Theme Picker
+
+Press `t` to open the theme picker dialog. Select a theme from the list and press `Enter` to apply it. The theme is persisted to `config.toml` automatically. Press `Escape` to cancel.
+
+Available themes: textual-dark, textual-light, nord, dracula, gruvbox, catppuccin-mocha, catppuccin-latte, tokyo-night, monokai, flexoki, solarized-light, textual-ansi.
+
+| Key | Action |
+|-----|--------|
+| `t` | Open theme picker |
+| `q` | Quit |
 
 ---
 
@@ -297,4 +321,4 @@ A demo journal is included for testing and exploration:
 uv run hledger-tui -f examples/demo.journal
 ```
 
-It contains two months of realistic personal finance data (January–February 2026) covering all five tabs: income, expenses, bank transfers, investment purchases (XDWD, XEON, XGDU), and budget rules.
+It contains two months of realistic personal finance data (January–February 2026) covering all six tabs: income, expenses, bank transfers, investment purchases (XDWD, XEON, XGDU), and budget rules.

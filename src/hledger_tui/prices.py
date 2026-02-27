@@ -34,6 +34,27 @@ def has_pricehist() -> bool:
     return _pricehist_path() is not None
 
 
+def get_pricehist_version() -> str:
+    """Return the pricehist version string, or '?' if unavailable."""
+    path = _pricehist_path()
+    if not path:
+        return "?"
+    try:
+        result = subprocess.run(
+            [path, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        raw = result.stdout.strip()
+        # Strip program name prefix: "pricehist 1.4.14" → "1.4.14"
+        if raw.lower().startswith("pricehist "):
+            return raw[len("pricehist "):].strip()
+        return raw
+    except Exception:
+        return "?"
+
+
 def _cache_path() -> Path:
     """Return the path to the daily prices cache file."""
     cache_dir = Path.home() / ".cache" / "hledger-tui"
