@@ -91,6 +91,16 @@ class TestRunGit:
         with pytest.raises(GitError, match="git not found"):
             run_git("status", cwd=tmp_path)
 
+    def test_timeout_raises(self, tmp_path: Path, monkeypatch):
+        """run_git raises GitError when the command times out."""
+
+        def _timeout(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd="git", timeout=30)
+
+        monkeypatch.setattr("hledger_textual.git.subprocess.run", _timeout)
+        with pytest.raises(GitError, match="timed out"):
+            run_git("status", cwd=tmp_path)
+
 
 # ------------------------------------------------------------------
 # is_git_repo
@@ -143,6 +153,17 @@ class TestGitBranch:
         journal = repo / "test.journal"
         journal.write_text("")
         assert git_branch(journal) == "detached"
+
+    def test_error_returns_question_mark(self, tmp_path: Path, monkeypatch):
+        """Returns '?' when run_git raises GitError."""
+
+        def _raise(*args, **kwargs):
+            raise GitError("broken")
+
+        monkeypatch.setattr("hledger_textual.git.run_git", _raise)
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        assert git_branch(journal) == "?"
 
 
 # ------------------------------------------------------------------
@@ -201,6 +222,17 @@ class TestGitStatusSummary:
         journal.write_text("")
         summary = git_status_summary(journal)
         assert "changed files" in summary
+
+    def test_error_returns_question_mark(self, tmp_path: Path, monkeypatch):
+        """Returns '?' when run_git raises GitError."""
+
+        def _raise(*args, **kwargs):
+            raise GitError("broken")
+
+        monkeypatch.setattr("hledger_textual.git.run_git", _raise)
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        assert git_status_summary(journal) == "?"
 
 
 # ------------------------------------------------------------------
@@ -301,6 +333,33 @@ class TestGitSync:
         readme.write_text("local change that conflicts\n")
         journal = local / "README.md"  # Use README.md as the "journal" for conflict
 
+        with pytest.raises(GitError, match="Rebase conflict"):
+            git_sync(journal)
+
+    def test_sync_rebase_abort_failure_still_raises(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """GitError is raised even when rebase --abort itself fails."""
+        from hledger_textual import git as git_module
+
+        original_run_git = git_module.run_git
+        call_count = 0
+
+        def _failing_pull(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Let add, diff, commit work normally; fail on pull, then also on abort
+            if args and args[0] == "pull":
+                raise GitError("conflict during pull")
+            if args and args[0] == "rebase":
+                raise GitError("abort also failed")
+            return original_run_git(*args, **kwargs)
+
+        local, bare = _init_repo_with_remote(tmp_path)
+        journal = local / "test.journal"
+        journal.write_text("content")
+
+        monkeypatch.setattr("hledger_textual.git.run_git", _failing_pull)
         with pytest.raises(GitError, match="Rebase conflict"):
             git_sync(journal)
 
