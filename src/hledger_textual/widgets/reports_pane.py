@@ -12,10 +12,12 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, Select
 
-from hledger_textual.hledger import HledgerError, load_report
-from hledger_textual.models import ReportData
+from hledger_textual.config import load_default_commodity
+from hledger_textual.hledger import HledgerError, load_investment_report, load_report
+from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
+from hledger_textual.widgets.report_chart import ReportChart, extract_chart_data
 
 _REPORT_TYPES = [
     ("Income Statement", "is"),
@@ -31,11 +33,45 @@ _PERIOD_RANGES = [
 ]
 
 
+def _merge_investments(is_data: ReportData, inv_data: ReportData) -> ReportData:
+    """Append investment rows as a new section to an Income Statement report.
+
+    Args:
+        is_data: The original Income Statement report data.
+        inv_data: Investment balance report data.
+
+    Returns:
+        A new :class:`ReportData` with the investment rows appended.
+    """
+    merged_rows = list(is_data.rows)
+
+    # Add "Investments" section header
+    n_periods = len(is_data.period_headers)
+    merged_rows.append(ReportRow(
+        account="Investments",
+        amounts=[""] * n_periods,
+        is_section_header=True,
+    ))
+
+    # Add non-section-header rows (data + Total)
+    for row in inv_data.rows:
+        if not row.is_section_header:
+            merged_rows.append(row)
+
+    return ReportData(
+        title=is_data.title,
+        period_headers=is_data.period_headers,
+        rows=merged_rows,
+    )
+
+
 class ReportsPane(Widget):
     """Widget showing multi-period hledger financial reports."""
 
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
+        Binding("c", "toggle_chart", "Chart", show=False, priority=True),
+        Binding("i", "toggle_investments", "Investments", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
@@ -52,6 +88,7 @@ class ReportsPane(Widget):
         self._period_months: int = 6
         self._report_data: ReportData | None = None
         self._fixed_widths: dict[int, int] = {}
+        self._show_investments: bool = False
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
@@ -70,6 +107,7 @@ class ReportsPane(Widget):
             )
 
         yield DataTable(id="reports-table")
+        yield ReportChart(id="report-chart")
 
     def on_mount(self) -> None:
         """Set up the DataTable and load report data."""
@@ -118,6 +156,7 @@ class ReportsPane(Widget):
     def _load_report_data(self) -> None:
         """Load report data in a background thread."""
         begin, end = self._period_range()
+        commodity = load_default_commodity()
 
         try:
             data = load_report(
@@ -125,12 +164,26 @@ class ReportsPane(Widget):
                 self._report_type,
                 period_begin=begin,
                 period_end=end,
+                commodity=commodity,
             )
         except HledgerError as exc:
             self.app.call_from_thread(
                 self.notify, str(exc), severity="error", timeout=8
             )
             data = ReportData(title="", period_headers=[], rows=[])
+
+        if self._show_investments and self._report_type == "is":
+            try:
+                inv_data = load_investment_report(
+                    self.journal_file,
+                    period_begin=begin,
+                    period_end=end,
+                    commodity=commodity,
+                )
+                if inv_data.rows:
+                    data = _merge_investments(data, inv_data)
+            except HledgerError:
+                pass
 
         self._report_data = data
         self.app.call_from_thread(self._apply_report)
@@ -153,13 +206,21 @@ class ReportsPane(Widget):
             table.add_column(header, key=f"period-{i}")
             self._fixed_widths[col_idx] = 14
 
-        # Populate rows
-        for row in data.rows:
+        # Populate rows with blank separator lines between groups
+        n_cols = len(data.period_headers) + 1
+        empty_row = [""] * n_cols
+
+        for idx, row in enumerate(data.rows):
+            if row.is_section_header and idx > 0:
+                table.add_row(*empty_row)
+            elif row.is_total:
+                table.add_row(*empty_row)
+
             account_text = row.account
             if row.is_section_header:
-                account_text = f"[bold]{row.account}[/bold]"
+                account_text = f"[bold cyan]{row.account}[/bold cyan]"
             elif row.is_total:
-                account_text = f"[bold]{row.account}[/bold]"
+                account_text = f"[bold yellow]{row.account}[/bold yellow]"
 
             cells = [account_text]
             for amt in row.amounts:
@@ -178,7 +239,27 @@ class ReportsPane(Widget):
         if self._fixed_widths:
             distribute_column_widths(table, self._fixed_widths)
 
+        self._update_chart()
+
+    def _update_chart(self) -> None:
+        """Extract chart data from the current report and replot."""
+        chart = self.query_one("#report-chart", ReportChart)
+        chart_data = extract_chart_data(self._report_data, self._report_type)
+        chart.replot(chart_data, self._report_type)
+
     # --- Actions ---
+
+    def action_toggle_chart(self) -> None:
+        """Toggle chart visibility."""
+        chart = self.query_one("#report-chart", ReportChart)
+        chart.toggle_class("visible")
+
+    def action_toggle_investments(self) -> None:
+        """Toggle the Investments section on the Income Statement."""
+        self._show_investments = not self._show_investments
+        label = "Investments shown" if self._show_investments else "Investments hidden"
+        self.notify(label, timeout=2)
+        self._load_report_data()
 
     def action_refresh(self) -> None:
         """Reload report data."""

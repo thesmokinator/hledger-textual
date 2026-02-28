@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Select
 
 from hledger_textual.models import ReportData, ReportRow
+from hledger_textual.widgets.report_chart import ReportChart
 from hledger_textual.widgets.reports_pane import ReportsPane
 from tests.conftest import has_hledger
 
@@ -141,7 +142,7 @@ class TestReportsPaneMount:
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.5)
             table = app.query_one("#reports-table", DataTable)
-            assert table.row_count == 5
+            assert table.row_count == 7
 
 
 class TestReportsPaneReload:
@@ -191,3 +192,208 @@ class TestReportsPaneErrors:
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.5)
             assert app.query_one(ReportsPane) is not None
+
+
+class TestReportsPaneChart:
+    """Tests for chart toggle and update in ReportsPane."""
+
+    async def test_c_key_toggles_chart_visibility(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Pressing c toggles the chart's visible CSS class."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            chart = app.query_one("#report-chart", ReportChart)
+            assert not chart.has_class("visible")
+
+            pane = app.query_one(ReportsPane)
+            pane.focus()
+            await pilot.press("c")
+            await pilot.pause()
+            assert chart.has_class("visible")
+
+            await pilot.press("c")
+            await pilot.pause()
+            assert not chart.has_class("visible")
+
+    async def test_chart_updates_on_report_load(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Chart is updated when report data loads."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            chart = app.query_one("#report-chart", ReportChart)
+            # Chart should exist and have been replotted (no crash)
+            assert chart is not None
+
+
+_SAMPLE_INV_CSV = (
+    '"Monthly Balance Changes 2026-01-01..2026-03-01","",""\n'
+    '"Account","Jan","Feb"\n'
+    '"assets:investments:XDWD","€100.00","€200.00"\n'
+    '"assets:investments:XEON","€8450.00","€0"\n'
+    '"Total:","€8550.00","€200.00"\n'
+)
+
+
+class TestReportsPaneInvestments:
+    """Tests for the investments toggle on the Reports pane."""
+
+    async def test_i_key_toggles_investments(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Pressing i toggles the _show_investments flag and triggers reload."""
+        call_count = 0
+
+        def _mock_load(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return ReportData(title="IS", period_headers=["Jan"], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report", _mock_load
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_investment_report",
+            lambda *args, **kwargs: ReportData(
+                title="", period_headers=[], rows=[]
+            ),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            assert not pane._show_investments
+
+            pane.focus()
+            await pilot.press("i")
+            await pilot.pause(delay=0.5)
+            assert pane._show_investments
+
+            await pilot.press("i")
+            await pilot.pause(delay=0.5)
+            assert not pane._show_investments
+
+    async def test_investments_rows_appended_to_is(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """With investments on + IS report, investment rows are appended."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        is_data = _parse_report_csv(_SAMPLE_IS_CSV)
+        inv_data = _parse_report_csv(_SAMPLE_INV_CSV)
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: is_data,
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_investment_report",
+            lambda *args, **kwargs: inv_data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane.focus()
+            await pilot.press("i")
+            await pilot.pause(delay=0.5)
+
+            # Check that "Investments" section header was added
+            assert pane._report_data is not None
+            section_names = [
+                r.account for r in pane._report_data.rows if r.is_section_header
+            ]
+            assert "Investments" in section_names
+
+            # Check that investment data rows are present
+            accounts = [r.account for r in pane._report_data.rows]
+            assert "assets:investments:XDWD" in accounts
+            assert "assets:investments:XEON" in accounts
+
+    async def test_investments_no_effect_on_bs(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """The investments toggle has no effect for BS report type."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        bs_data = _parse_report_csv(_SAMPLE_BS_CSV)
+        inv_call_count = 0
+
+        def _mock_inv(*args, **kwargs):
+            nonlocal inv_call_count
+            inv_call_count += 1
+            return ReportData(title="", period_headers=[], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: bs_data,
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_investment_report",
+            _mock_inv,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_type = "bs"
+            pane._show_investments = True
+            pane.focus()
+            await pilot.press("r")
+            await pilot.pause(delay=0.5)
+
+            # Investment data should not be merged for BS
+            assert pane._report_data is not None
+            section_names = [
+                r.account for r in pane._report_data.rows if r.is_section_header
+            ]
+            assert "Investments" not in section_names
+            assert inv_call_count == 0
+
+    async def test_empty_investment_data_no_extra_rows(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Empty investment data doesn't add spurious rows."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        is_data = _parse_report_csv(_SAMPLE_IS_CSV)
+        original_row_count = len(is_data.rows)
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: _parse_report_csv(_SAMPLE_IS_CSV),
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_investment_report",
+            lambda *args, **kwargs: ReportData(
+                title="", period_headers=[], rows=[]
+            ),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane.focus()
+            await pilot.press("i")
+            await pilot.pause(delay=0.5)
+
+            # No extra rows should be added for empty investment data
+            assert pane._report_data is not None
+            assert len(pane._report_data.rows) == original_row_count

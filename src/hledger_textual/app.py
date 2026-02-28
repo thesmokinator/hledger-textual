@@ -19,12 +19,12 @@ from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 _FOOTER_COMMANDS: dict[str, str] = {
-    "summary": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "accounts": "\\[↵] Drill  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "summary": "\\[r] Reload  \\[s] Sync  \\[q] Quit",
+    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
+    "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
     "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[q] Quit",
-    "reports": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "info": "\\[s] Sync  \\[t] Theme  \\[q] Quit",
+    "reports": "\\[c] Chart  \\[i] Inv  \\[r] Reload  \\[s] Sync  \\[q] Quit",
+    "info": "\\[t] Theme  \\[s] Sync  \\[q] Quit",
 }
 
 

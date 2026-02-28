@@ -12,6 +12,7 @@ license-files = ["LICENSE.md"]
 dependencies = [
     "pricehist>=1.4.14",
     "textual>=3.0.0,<4",
+    "textual-plotext>=1.0.0",
     "tomli>=2.0.0; python_version < '3.11'",
 ]
 
