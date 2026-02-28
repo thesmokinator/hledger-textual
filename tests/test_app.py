@@ -200,6 +200,110 @@ class TestDelete:
             assert len(txns) == 2
 
 
+class TestGitSync:
+    """Tests for the git sync action."""
+
+    async def test_git_sync_not_a_repo(self, app: HledgerTuiApp, monkeypatch):
+        """Pressing s when not in a git repo shows a warning notification."""
+        monkeypatch.setattr(
+            "hledger_textual.git.is_git_repo", lambda _: False
+        )
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("s")
+            await pilot.pause(delay=0.5)
+            assert any(
+                "Not a git repository" in str(n.message)
+                for n in app._notifications
+            )
+
+    async def test_git_sync_shows_confirm_dialog(
+        self, app: HledgerTuiApp, monkeypatch
+    ):
+        """Pressing s in a git repo opens the confirmation dialog."""
+        from hledger_textual.screens.sync_confirm import SyncConfirmModal
+
+        monkeypatch.setattr(
+            "hledger_textual.git.is_git_repo", lambda _: True
+        )
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("s")
+            await pilot.pause()
+            assert isinstance(app.screen, SyncConfirmModal)
+
+    async def test_git_sync_cancel(self, app: HledgerTuiApp, monkeypatch):
+        """Cancelling the dialog does not run git_sync."""
+        monkeypatch.setattr(
+            "hledger_textual.git.is_git_repo", lambda _: True
+        )
+        sync_called = False
+        original_git_sync = None
+
+        def _track(_):
+            nonlocal sync_called
+            sync_called = True
+            return "ok"
+
+        monkeypatch.setattr("hledger_textual.git.git_sync", _track)
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("s")
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause(delay=0.5)
+            assert not sync_called
+
+    async def test_git_sync_confirm_success(
+        self, app: HledgerTuiApp, monkeypatch
+    ):
+        """Confirming sync runs git_sync and shows success notification."""
+        monkeypatch.setattr(
+            "hledger_textual.git.is_git_repo", lambda _: True
+        )
+        monkeypatch.setattr(
+            "hledger_textual.git.git_sync",
+            lambda _: "Committed and pushed successfully",
+        )
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("s")
+            await pilot.pause()
+            sync_btn = app.screen.query_one("#btn-sync")
+            await pilot.click(sync_btn)
+            await pilot.pause(delay=0.5)
+            assert any(
+                "Committed and pushed" in str(n.message)
+                for n in app._notifications
+            )
+
+    async def test_git_sync_confirm_error(
+        self, app: HledgerTuiApp, monkeypatch
+    ):
+        """GitError during sync shows an error notification."""
+        from hledger_textual.git import GitError
+
+        monkeypatch.setattr(
+            "hledger_textual.git.is_git_repo", lambda _: True
+        )
+
+        def _raise(_):
+            raise GitError("push failed")
+
+        monkeypatch.setattr("hledger_textual.git.git_sync", _raise)
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("s")
+            await pilot.pause()
+            sync_btn = app.screen.query_one("#btn-sync")
+            await pilot.click(sync_btn)
+            await pilot.pause(delay=0.5)
+            assert any(
+                "push failed" in str(n.message)
+                for n in app._notifications
+            )
+
+
 class TestTabNavigation:
     """Tests for keyboard number shortcuts that switch sections."""
 
@@ -237,3 +341,15 @@ class TestTabNavigation:
             rendered = str(footer.renderable)
             assert "Add" in rendered
             assert "Search" in rendered
+
+    async def test_sync_in_all_footers(self, app: HledgerTuiApp):
+        """[s] Sync appears in the footer of every tab."""
+        from textual.widgets import Static
+
+        async with app.run_test() as pilot:
+            for key in ("1", "2", "3", "4", "5", "6"):
+                await pilot.press(key)
+                await pilot.pause()
+                footer = app.screen.query_one("#footer-bar", Static)
+                rendered = str(footer.renderable)
+                assert "Sync" in rendered, f"Sync missing in tab {key}"

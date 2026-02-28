@@ -12,6 +12,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from hledger_textual.config import _CONFIG_PATH
+from hledger_textual.git import git_branch, git_status_summary, is_git_repo
 from hledger_textual.hledger import HledgerError, get_hledger_version, load_journal_stats
 from hledger_textual.prices import get_pricehist_version, has_pricehist
 
@@ -112,12 +113,23 @@ class InfoPane(Widget):
                         yield Static("Version", classes="info-label")
                         yield Static("", id="info-pricehist-version")
 
+                with Vertical(classes="info-section", id="info-git-section"):
+                    yield Static("Git", classes="info-section-title")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Branch", classes="info-label")
+                        yield Static("", id="info-git-branch")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Status", classes="info-label")
+                        yield Static("", id="info-git-status")
+
     def on_mount(self) -> None:
         """Load project metadata and start fetching journal stats."""
+        self.query_one("#info-git-section").styles.display = "none"
         self._apply_project_metadata()
         self._apply_config_info()
         self._load_journal_data()
         self._load_hledger_info()
+        self._load_git_info()
 
     def _apply_project_metadata(self) -> None:
         """Read project metadata from package info and display it."""
@@ -216,3 +228,23 @@ class InfoPane(Widget):
         """Apply hledger and pricehist info to the UI."""
         self.query_one("#info-hledger-version", Static).update(hledger_version)
         self.query_one("#info-pricehist-version", Static).update(pricehist_version)
+
+    @work(thread=True, exclusive=True, group="info-git")
+    def _load_git_info(self) -> None:
+        """Load git repo info in a background thread."""
+        if not is_git_repo(self.journal_file):
+            return
+
+        branch = git_branch(self.journal_file)
+        status = git_status_summary(self.journal_file)
+        self.app.call_from_thread(self._apply_git_info, branch, status)
+
+    def _apply_git_info(self, branch: str, status: str) -> None:
+        """Show the git section and populate branch/status labels."""
+        self.query_one("#info-git-section").styles.display = "block"
+        self.query_one("#info-git-branch", Static).update(branch)
+        self.query_one("#info-git-status", Static).update(status)
+
+    def refresh_git_status(self) -> None:
+        """Reload git info (called after a sync operation)."""
+        self._load_git_info()

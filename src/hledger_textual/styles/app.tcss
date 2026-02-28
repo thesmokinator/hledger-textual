@@ -567,6 +567,47 @@ InfoPane {
     color: $text-muted;
 }
 
+/* --- Sync Confirmation Modal --- */
+
+SyncConfirmModal {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#sync-dialog {
+    width: 60;
+    height: auto;
+    max-height: 12;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#sync-title {
+    text-style: bold;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+    color: $accent;
+}
+
+#sync-summary {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+    height: auto;
+}
+
+#sync-buttons {
+    height: 3;
+    align: center middle;
+}
+
+#sync-buttons Button {
+    min-width: 16;
+    margin: 0 1;
+}
+
 /* --- Theme Picker Modal --- */
 
 ThemePickerModal {

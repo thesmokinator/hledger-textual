@@ -54,13 +54,14 @@ The journal file is resolved in this order:
 | `d`           | Delete (with confirmation)       |
 | `/`           | Filter by description or account |
 | `Escape`      | Clear filter                     |
+| `s`           | Git sync (commit + pull + push)  |
 | `r`           | Refresh from journal file        |
 | `j` / `k`     | Navigate up/down                |
 | `q`           | Quit                             |
 
 ## Documentation
 
-See [DOCS.md](DOCS.md) for the full documentation: feature overview, configuration, investment tracking, and per-tab reference.
+See the [Wiki](https://github.com/thesmokinator/hledger-textual/wiki) for the full documentation: feature overview, configuration, investment tracking, and per-tab reference.
 
 ## Development
 

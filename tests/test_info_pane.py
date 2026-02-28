@@ -284,3 +284,68 @@ class TestInfoPaneConfigSection:
             theme_label = app.query_one("#info-theme", Static)
             text = str(theme_label.renderable)
             assert text  # not empty
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestInfoPaneGitSection:
+    """Tests for the Git section in InfoPane."""
+
+    async def test_git_section_hidden_when_not_git_repo(
+        self, info_journal: Path, monkeypatch
+    ):
+        """Git section stays hidden when journal is not in a git repo."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.is_git_repo", lambda _: False
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            git_section = app.query_one("#info-git-section")
+            assert git_section.styles.display == "none"
+
+    async def test_git_section_visible_when_git_repo(
+        self, info_journal: Path, monkeypatch
+    ):
+        """Git section is shown with branch/status when journal is in a git repo."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.is_git_repo", lambda _: True
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.git_branch", lambda _: "main"
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.git_status_summary",
+            lambda _: "Clean",
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            git_section = app.query_one("#info-git-section")
+            assert git_section.styles.display == "block"
+            branch = app.query_one("#info-git-branch", Static)
+            assert str(branch.renderable) == "main"
+            status = app.query_one("#info-git-status", Static)
+            assert str(status.renderable) == "Clean"
+
+    async def test_git_section_title_exists(
+        self, info_journal: Path, monkeypatch
+    ):
+        """The Git section title is present."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.is_git_repo", lambda _: True
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.git_branch", lambda _: "main"
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.info_pane.git_status_summary",
+            lambda _: "Clean",
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            titles = [
+                str(s.renderable)
+                for s in app.query(".info-section-title")
+            ]
+            assert "Git" in titles
