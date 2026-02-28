@@ -119,8 +119,12 @@ class TestBudgetFormSave:
             await pilot.pause()
             assert isinstance(app.screen, BudgetFormScreen)
 
-    async def test_empty_commodity_defaults_to_euro(self, tmp_path: Path):
-        """Empty commodity is replaced with the default € symbol."""
+    async def test_empty_commodity_defaults_to_configured(self, tmp_path: Path, monkeypatch):
+        """Empty commodity is replaced with the configured default symbol."""
+        monkeypatch.setattr(
+            "hledger_textual.screens.budget_form.load_default_commodity",
+            lambda: "£",
+        )
         app = _FormApp(tmp_path / "test.journal")
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -131,7 +135,7 @@ class TestBudgetFormSave:
             await pilot.click(form.query_one("#btn-budget-save"))
             await pilot.pause()
             assert len(app.results) == 1
-            assert app.results[0].amount.commodity == "€"
+            assert app.results[0].amount.commodity == "£"
 
     async def test_cancel_button_dismisses_with_none(self, tmp_path: Path):
         """Clicking Cancel dismisses the modal with None."""

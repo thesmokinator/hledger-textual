@@ -12,6 +12,7 @@ from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Static
 
+from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
 from hledger_textual.widgets.amount_input import AmountInput
@@ -69,9 +70,10 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
 
             with Horizontal(classes="form-field"):
                 yield Label("Commodity:")
+                default_commodity = load_default_commodity()
                 yield Input(
-                    value=self.rule.amount.commodity if self.is_edit else "\u20ac",
-                    placeholder="\u20ac",
+                    value=self.rule.amount.commodity if self.is_edit else default_commodity,
+                    placeholder=default_commodity,
                     id="budget-input-commodity",
                 )
 
@@ -127,7 +129,7 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
             return
 
         if not commodity:
-            commodity = "\u20ac"
+            commodity = load_default_commodity()
 
         style = AmountStyle(
             commodity_side="L",
