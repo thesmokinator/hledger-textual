@@ -39,6 +39,20 @@ class _FakeContextBuilder:
         return ("system prompt", f"context data\n\nMy question: {user_query}")
 
 
+def _render_text(widget: Static) -> str:
+    """Extract plain text from a Static widget, handling Rich renderables."""
+    from rich.console import Console
+    from rich.text import Text
+
+    renderable = widget.renderable
+    if isinstance(renderable, str):
+        return renderable
+    console = Console(width=200)
+    with console.capture() as capture:
+        console.print(renderable, end="")
+    return capture.get()
+
+
 class TestAiChatModal:
     """Tests for the AiChatModal screen."""
 
@@ -124,8 +138,8 @@ class TestAiChatModal:
             await pilot.pause()
             assert inp.value == ""
 
-    async def test_streaming_response_updates_static(self):
-        """Streamed tokens appear in the answer widget."""
+    async def test_streaming_response_renders_markdown(self):
+        """Streamed tokens appear rendered in the answer widget."""
         client = _FakeOllamaClient(tokens=["You", " look", " good!"])
         context = _FakeContextBuilder()
 
@@ -145,7 +159,7 @@ class TestAiChatModal:
             await pilot.pause(delay=0.5)
             answers = app.screen.query(".ai-answer")
             assert len(answers) == 1
-            assert "You look good!" in str(answers[0].renderable)
+            assert "You look good!" in _render_text(answers[0])
 
     async def test_error_handling_when_ollama_fails(self):
         """OllamaError during streaming shows error in the answer widget."""
@@ -168,7 +182,7 @@ class TestAiChatModal:
             await pilot.pause(delay=0.5)
             answers = app.screen.query(".ai-answer")
             assert len(answers) == 1
-            assert "Error" in str(answers[0].renderable)
+            assert "Error" in _render_text(answers[0])
 
     async def test_question_appears_in_conversation(self):
         """Submitting a question mounts a question widget with the text."""
@@ -227,5 +241,5 @@ class TestAiChatModal:
             assert len(answers) == 2
             assert "Question one" in str(questions[0].renderable)
             assert "Question two" in str(questions[1].renderable)
-            assert "first answer" in str(answers[0].renderable)
-            assert "second answer" in str(answers[1].renderable)
+            assert "first answer" in _render_text(answers[0])
+            assert "second answer" in _render_text(answers[1])

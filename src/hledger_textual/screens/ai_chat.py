@@ -78,11 +78,15 @@ class AiChatModal(ModalScreen[None]):
 
         try:
             system, user = self._ctx_builder.build_chat_context(query)
+            from rich.markdown import Markdown as RichMarkdown
+
             response_text = ""
             for token in self._ollama.stream_chat(user, system, self._history):
                 response_text += token
-                text = response_text
-                self.app.call_from_thread(self._current_response.update, text)
+                rendered = RichMarkdown(response_text)
+                self.app.call_from_thread(
+                    self._current_response.update, rendered
+                )
                 self.app.call_from_thread(
                     self.query_one("#ai-scroll", VerticalScroll).scroll_end,
                     animate=False,
