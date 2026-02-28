@@ -639,3 +639,27 @@ class TestBudgetLoadErrors:
             await pilot.press("3")
             await pilot.pause(delay=1.0)
             assert budget_app.screen.query_one("#budget-table") is not None
+
+
+class TestBudgetDefaultCommodity:
+    """Tests for default commodity pre-fill in new budget form."""
+
+    async def test_new_form_prefills_commodity_from_config(
+        self, budget_app: HledgerTuiApp, monkeypatch
+    ):
+        """New budget form pre-fills the commodity field with the configured default."""
+        from textual.widgets import Input
+
+        monkeypatch.setattr(
+            "hledger_textual.screens.budget_form.load_default_commodity",
+            lambda: "CHF",
+        )
+        async with budget_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await pilot.pause(delay=1.0)
+            await pilot.press("a")
+            await pilot.pause()
+            form = budget_app.screen
+            commodity_val = form.query_one("#budget-input-commodity", Input).value
+            assert commodity_val == "CHF"

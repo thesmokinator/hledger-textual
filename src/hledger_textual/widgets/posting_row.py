@@ -66,7 +66,7 @@ class PostingRow(Widget):
             )
             yield Input(
                 value=self.initial_commodity,
-                placeholder="€",
+                placeholder=self.initial_commodity or "$",
                 classes="commodity-input",
                 id=f"commodity-{self.row_index}",
             )

@@ -77,6 +77,15 @@ def save_theme(theme: str) -> None:
     _save_config_dict(data)
 
 
+def load_default_commodity() -> str:
+    """Return the configured default commodity symbol, or ``"$"`` if not set.
+
+    Returns:
+        Commodity string (e.g. ``"€"``, ``"$"``).
+    """
+    return _load_config_dict().get("default_commodity", "$")
+
+
 def load_price_tickers() -> dict[str, str]:
     """Load commodity-to-ticker mappings from the ``[prices]`` section of config.toml.
 

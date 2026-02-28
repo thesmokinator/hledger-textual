@@ -7,6 +7,7 @@ import pytest
 from hledger_textual.config import (
     _load_config_dict,
     _save_config_dict,
+    load_default_commodity,
     load_price_tickers,
     load_theme,
     parse_args,
@@ -164,6 +165,31 @@ class TestSaveAndLoadTheme:
         save_theme("nord")
         save_theme("gruvbox")
         assert load_theme() == "gruvbox"
+
+
+class TestLoadDefaultCommodity:
+    """Tests for load_default_commodity configuration helper."""
+
+    def test_returns_dollar_when_not_set(self, tmp_path, monkeypatch):
+        """Returns '$' when config has no default_commodity key."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('theme = "nord"\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        assert load_default_commodity() == "$"
+
+    def test_returns_configured_value(self, tmp_path, monkeypatch):
+        """Returns the configured commodity when set in config."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('default_commodity = "\u20ac"\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        assert load_default_commodity() == "\u20ac"
+
+    def test_returns_dollar_when_config_missing(self, tmp_path, monkeypatch):
+        """Returns '$' when the config file does not exist."""
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        assert load_default_commodity() == "$"
 
 
 class TestLoadPriceTickers:
