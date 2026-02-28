@@ -12,6 +12,7 @@ from textual.containers import Horizontal
 from textual.widget import Widget
 from textual.widgets import DataTable, Select
 
+from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_report
 from hledger_textual.models import ReportData
 from hledger_textual.widgets import distribute_column_widths
@@ -128,6 +129,7 @@ class ReportsPane(Widget):
                 self._report_type,
                 period_begin=begin,
                 period_end=end,
+                commodity=load_default_commodity(),
             )
         except HledgerError as exc:
             self.app.call_from_thread(
@@ -156,13 +158,21 @@ class ReportsPane(Widget):
             table.add_column(header, key=f"period-{i}")
             self._fixed_widths[col_idx] = 14
 
-        # Populate rows
-        for row in data.rows:
+        # Populate rows with blank separator lines between groups
+        n_cols = len(data.period_headers) + 1
+        empty_row = [""] * n_cols
+
+        for idx, row in enumerate(data.rows):
+            if row.is_section_header and idx > 0:
+                table.add_row(*empty_row)
+            elif row.is_total:
+                table.add_row(*empty_row)
+
             account_text = row.account
             if row.is_section_header:
-                account_text = f"[bold]{row.account}[/bold]"
+                account_text = f"[bold cyan]{row.account}[/bold cyan]"
             elif row.is_total:
-                account_text = f"[bold]{row.account}[/bold]"
+                account_text = f"[bold yellow]{row.account}[/bold yellow]"
 
             cells = [account_text]
             for amt in row.amounts:

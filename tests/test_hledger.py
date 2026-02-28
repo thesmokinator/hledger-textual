@@ -501,6 +501,36 @@ class TestLoadReport:
         assert data.title == ""
         assert data.rows == []
 
+    def test_load_report_passes_commodity_flag(self, monkeypatch, tmp_path: Path):
+        """load_report passes -X <commodity> to hledger when commodity is set."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_report(journal, "cf", commodity="EUR")
+        assert "-X" in captured_args
+        idx = captured_args.index("-X")
+        assert captured_args[idx + 1] == "EUR"
+
+    def test_load_report_no_commodity_flag(self, monkeypatch, tmp_path: Path):
+        """load_report does not pass -X when commodity is None."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_report(journal, "cf")
+        assert "-X" not in captured_args
+
     def test_load_report_hledger_error(self, monkeypatch, tmp_path: Path):
         """HledgerError is raised when hledger fails."""
         def _raise(*args, **kwargs):

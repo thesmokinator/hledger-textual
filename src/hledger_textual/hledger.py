@@ -743,6 +743,7 @@ def load_report(
     report_type: str,
     period_begin: str | None = None,
     period_end: str | None = None,
+    commodity: str | None = None,
 ) -> ReportData:
     """Load a multi-period financial report from hledger.
 
@@ -754,6 +755,8 @@ def load_report(
         report_type: One of ``"is"``, ``"bs"``, or ``"cf"``.
         period_begin: Optional begin date (``YYYY-MM-DD``) for ``-b`` flag.
         period_end: Optional end date (``YYYY-MM-DD``) for ``-e`` flag.
+        commodity: Optional commodity code for ``-X`` flag to convert
+            multi-commodity amounts into a single commodity.
 
     Returns:
         A :class:`ReportData` with the parsed report.
@@ -762,6 +765,8 @@ def load_report(
         HledgerError: If hledger fails or is not found.
     """
     args = [report_type, "-M", "-O", "csv", "--no-elide"]
+    if commodity:
+        args.extend(["-X", commodity])
     if period_begin:
         args.extend(["-b", period_begin])
     if period_end:

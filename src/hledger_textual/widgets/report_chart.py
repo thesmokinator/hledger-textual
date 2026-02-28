@@ -100,7 +100,10 @@ def extract_chart_data(data: ReportData, report_type: str) -> dict:
     if report_type == "cf":
         net = [0.0] * n_periods
         for row in data.rows:
-            if row.is_total and row.account.lower().startswith("net:"):
+            label = row.account.lower()
+            if row.is_total and (
+                label.startswith("net:") or label.startswith("total:")
+            ):
                 for i, amt in enumerate(row.amounts[:n_periods]):
                     net[i] = parse_report_amount(amt)
                 break

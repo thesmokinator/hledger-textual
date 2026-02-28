@@ -45,6 +45,14 @@ _SAMPLE_CF_CSV = (
     '"Net:","€2959.20","-€100.00"\n'
 )
 
+_SAMPLE_CF_TOTAL_ONLY_CSV = (
+    '"Monthly Cash Flow 2026-01-01..2026-03-01","",""\n'
+    '"Account","Jan","Feb"\n'
+    '"Cash flows","",""\n'
+    '"assets:bank:checking","€-947.21","€-1733.15"\n'
+    '"Total:","€-947.21","€-1733.15"\n'
+)
+
 
 # ------------------------------------------------------------------
 # TestParseReportAmount — pure function tests
@@ -130,6 +138,14 @@ class TestExtractChartData:
         """ReportData with headers but no rows returns empty dict."""
         data = ReportData(title="T", period_headers=["Jan"], rows=[])
         assert extract_chart_data(data, "is") == {}
+
+    def test_cf_with_total_only(self):
+        """CF report with only Total: (no Net:) still extracts values."""
+        data = _parse_report_csv(_SAMPLE_CF_TOTAL_ONLY_CSV)
+        result = extract_chart_data(data, "cf")
+
+        assert result["labels"] == ["Jan", "Feb"]
+        assert result["net"] == [-947.21, -1733.15]
 
     def test_unknown_report_type(self):
         """Unknown report type returns empty dict."""

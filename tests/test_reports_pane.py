@@ -142,7 +142,7 @@ class TestReportsPaneMount:
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.5)
             table = app.query_one("#reports-table", DataTable)
-            assert table.row_count == 5
+            assert table.row_count == 7
 
 
 class TestReportsPaneReload:
