@@ -17,6 +17,7 @@ from hledger_textual.hledger import (
     load_investment_cost,
     load_investment_eur_by_account,
     load_investment_positions,
+    load_investment_report,
     load_journal_stats,
     load_period_summary,
     load_report,
@@ -580,3 +581,90 @@ class TestExpandSearchQuery:
     def test_plain_text_unchanged(self):
         """Plain text without colons is returned unchanged."""
         assert expand_search_query("grocery shopping") == "grocery shopping"
+
+
+class TestLoadInvestmentReport:
+    """Tests for load_investment_report using monkeypatched run_hledger."""
+
+    _SAMPLE_INV_CSV = (
+        '"Monthly Balance Changes 2026-01-01..2026-03-01","",""\n'
+        '"Account","Jan","Feb"\n'
+        '"assets:investments:XDWD","€100.00","€200.00"\n'
+        '"assets:investments:XEON","€8450.00","€0"\n'
+        '"Total:","€8550.00","€200.00"\n'
+    )
+
+    def test_parses_investment_csv(self, monkeypatch, tmp_path: Path):
+        """load_investment_report parses CSV output correctly."""
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: self._SAMPLE_INV_CSV,
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        data = load_investment_report(journal)
+        assert len(data.rows) == 3
+        assert data.period_headers == ["Jan", "Feb"]
+        assert data.rows[0].account == "assets:investments:XDWD"
+        assert data.rows[2].is_total
+
+    def test_empty_output_returns_empty(self, monkeypatch, tmp_path: Path):
+        """Empty hledger output produces empty ReportData."""
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: "",
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        data = load_investment_report(journal)
+        assert data.title == ""
+        assert data.rows == []
+
+    def test_passes_commodity_flag(self, monkeypatch, tmp_path: Path):
+        """load_investment_report passes -X <commodity> when set."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_INV_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_investment_report(journal, commodity="EUR")
+        assert "-X" in captured_args
+        assert captured_args[captured_args.index("-X") + 1] == "EUR"
+
+    def test_passes_period_flags(self, monkeypatch, tmp_path: Path):
+        """load_investment_report passes -b and -e flags when set."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_INV_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_investment_report(
+            journal, period_begin="2026-01-01", period_end="2026-03-01"
+        )
+        assert "-b" in captured_args
+        assert captured_args[captured_args.index("-b") + 1] == "2026-01-01"
+        assert "-e" in captured_args
+        assert captured_args[captured_args.index("-e") + 1] == "2026-03-01"
+
+    def test_uses_bal_command(self, monkeypatch, tmp_path: Path):
+        """load_investment_report uses 'bal' with 'assets:investments'."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_INV_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_investment_report(journal)
+        assert "bal" in captured_args
+        assert "assets:investments" in captured_args

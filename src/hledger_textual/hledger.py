@@ -674,6 +674,41 @@ def load_investment_eur_by_account(
     return result
 
 
+def load_investment_report(
+    file: str | Path,
+    period_begin: str | None = None,
+    period_end: str | None = None,
+    commodity: str | None = None,
+) -> ReportData:
+    """Load a multi-period investment balance report from hledger.
+
+    Queries ``assets:investments`` with ``hledger bal -M -O csv --no-elide``
+    and parses the result using the same CSV format as IS/BS/CF reports.
+
+    Args:
+        file: Path to the journal file.
+        period_begin: Optional begin date (``YYYY-MM-DD``) for ``-b`` flag.
+        period_end: Optional end date (``YYYY-MM-DD``) for ``-e`` flag.
+        commodity: Optional commodity code for ``-X`` flag.
+
+    Returns:
+        A :class:`ReportData` with the parsed investment data.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    args = ["bal", "assets:investments", "-M", "-O", "csv", "--no-elide"]
+    if commodity:
+        args.extend(["-X", commodity])
+    if period_begin:
+        args.extend(["-b", period_begin])
+    if period_end:
+        args.extend(["-e", period_end])
+
+    output = run_hledger(*args, file=file)
+    return _parse_report_csv(output)
+
+
 def _parse_report_csv(output: str) -> ReportData:
     """Parse CSV output from hledger is/bs/cf into a ReportData.
 
