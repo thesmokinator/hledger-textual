@@ -23,7 +23,7 @@ _FOOTER_COMMANDS: dict[str, str] = {
     "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
     "accounts": "\\[↵] Drill  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
     "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[q] Quit",
-    "reports": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "reports": "\\[c] Chart  \\[s] Sync  \\[r] Reload  \\[q] Quit",
     "info": "\\[s] Sync  \\[t] Theme  \\[q] Quit",
 }
 

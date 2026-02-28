@@ -16,6 +16,7 @@ from hledger_textual.hledger import HledgerError, load_report
 from hledger_textual.models import ReportData
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
+from hledger_textual.widgets.report_chart import ReportChart, extract_chart_data
 
 _REPORT_TYPES = [
     ("Income Statement", "is"),
@@ -36,6 +37,7 @@ class ReportsPane(Widget):
 
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
+        Binding("c", "toggle_chart", "Chart", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
@@ -70,6 +72,7 @@ class ReportsPane(Widget):
             )
 
         yield DataTable(id="reports-table")
+        yield ReportChart(id="report-chart")
 
     def on_mount(self) -> None:
         """Set up the DataTable and load report data."""
@@ -178,7 +181,20 @@ class ReportsPane(Widget):
         if self._fixed_widths:
             distribute_column_widths(table, self._fixed_widths)
 
+        self._update_chart()
+
+    def _update_chart(self) -> None:
+        """Extract chart data from the current report and replot."""
+        chart = self.query_one("#report-chart", ReportChart)
+        chart_data = extract_chart_data(self._report_data, self._report_type)
+        chart.replot(chart_data, self._report_type)
+
     # --- Actions ---
+
+    def action_toggle_chart(self) -> None:
+        """Toggle chart visibility."""
+        chart = self.query_one("#report-chart", ReportChart)
+        chart.toggle_class("visible")
 
     def action_refresh(self) -> None:
         """Reload report data."""

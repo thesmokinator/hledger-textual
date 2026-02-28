@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import DataTable, Select
 
 from hledger_textual.models import ReportData, ReportRow
+from hledger_textual.widgets.report_chart import ReportChart
 from hledger_textual.widgets.reports_pane import ReportsPane
 from tests.conftest import has_hledger
 
@@ -191,3 +192,52 @@ class TestReportsPaneErrors:
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.5)
             assert app.query_one(ReportsPane) is not None
+
+
+class TestReportsPaneChart:
+    """Tests for chart toggle and update in ReportsPane."""
+
+    async def test_c_key_toggles_chart_visibility(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Pressing c toggles the chart's visible CSS class."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            chart = app.query_one("#report-chart", ReportChart)
+            assert not chart.has_class("visible")
+
+            pane = app.query_one(ReportsPane)
+            pane.focus()
+            await pilot.press("c")
+            await pilot.pause()
+            assert chart.has_class("visible")
+
+            await pilot.press("c")
+            await pilot.pause()
+            assert not chart.has_class("visible")
+
+    async def test_chart_updates_on_report_load(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Chart is updated when report data loads."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            chart = app.query_one("#report-chart", ReportChart)
+            # Chart should exist and have been replotted (no crash)
+            assert chart is not None

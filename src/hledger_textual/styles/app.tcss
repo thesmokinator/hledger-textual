@@ -527,6 +527,16 @@ PaneToolbar Select {
     height: 1fr;
 }
 
+#report-chart {
+    display: none;
+    height: 16;
+    margin: 0 1;
+}
+
+#report-chart.visible {
+    display: block;
+}
+
 /* --- Info Pane --- */
 
 InfoPane {
