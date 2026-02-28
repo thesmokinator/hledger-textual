@@ -77,11 +77,18 @@ class AccountsPane(Widget):
             self._balances = []
         self._update_table()
 
+    _SEP_KEY_PREFIX = "__sep_"
+
     def _update_table(self) -> None:
         """Refresh the DataTable with current (possibly filtered) balances."""
         table = self.query_one("#accounts-table", DataTable)
         table.clear()
-        for account, balance in self._filtered_balances():
+        prev_group = ""
+        for sep_idx, (account, balance) in enumerate(self._filtered_balances()):
+            group = account.split(":")[0]
+            if prev_group and group != prev_group:
+                table.add_row("", "", key=f"{self._SEP_KEY_PREFIX}{sep_idx}")
+            prev_group = group
             table.add_row(account, balance, key=account)
 
     def _filtered_balances(self) -> list[tuple[str, str]]:
@@ -105,7 +112,7 @@ class AccountsPane(Widget):
 
         row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
         account = row_key.value if row_key else None
-        if not account:
+        if not account or account.startswith(self._SEP_KEY_PREFIX):
             return
 
         balance = next(
