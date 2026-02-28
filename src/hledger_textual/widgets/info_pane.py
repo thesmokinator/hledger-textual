@@ -122,14 +122,31 @@ class InfoPane(Widget):
                         yield Static("Status", classes="info-label")
                         yield Static("", id="info-git-status")
 
+                with Vertical(classes="info-section", id="info-ai-section"):
+                    yield Static("AI", classes="info-section-title")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Enabled", classes="info-label")
+                        yield Static("", id="info-ai-enabled")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Model", classes="info-label")
+                        yield Static("", id="info-ai-model")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Endpoint", classes="info-label")
+                        yield Static("", id="info-ai-endpoint")
+                    with Horizontal(classes="info-row"):
+                        yield Static("Status", classes="info-label")
+                        yield Static("", id="info-ai-status")
+
     def on_mount(self) -> None:
         """Load project metadata and start fetching journal stats."""
         self.query_one("#info-git-section").styles.display = "none"
+        self.query_one("#info-ai-section").styles.display = "none"
         self._apply_project_metadata()
         self._apply_config_info()
         self._load_journal_data()
         self._load_hledger_info()
         self._load_git_info()
+        self._load_ai_info()
 
     def _apply_project_metadata(self) -> None:
         """Read project metadata from package info and display it."""
@@ -248,3 +265,41 @@ class InfoPane(Widget):
     def refresh_git_status(self) -> None:
         """Reload git info (called after a sync operation)."""
         self._load_git_info()
+
+    @work(thread=True, exclusive=True, group="info-ai")
+    def _load_ai_info(self) -> None:
+        """Load AI configuration and Ollama status in a background thread."""
+        from hledger_textual.config import load_ai_config
+
+        ai_cfg = load_ai_config()
+        if not ai_cfg["enable"]:
+            return
+
+        from hledger_textual.ai.ollama_client import OllamaClient
+
+        client = OllamaClient(ai_cfg["endpoint"], ai_cfg["model"])
+        reachable = client.health_check()
+        if reachable:
+            models = client.list_models()
+            model_installed = ai_cfg["model"] in models
+        else:
+            model_installed = False
+
+        if not reachable:
+            status = "Ollama not reachable"
+        elif not model_installed:
+            status = "Model not installed"
+        else:
+            status = "Ready"
+
+        self.app.call_from_thread(
+            self._apply_ai_info, ai_cfg, status
+        )
+
+    def _apply_ai_info(self, ai_cfg: dict, status: str) -> None:
+        """Show the AI section and populate its labels."""
+        self.query_one("#info-ai-section").styles.display = "block"
+        self.query_one("#info-ai-enabled", Static).update("Yes")
+        self.query_one("#info-ai-model", Static).update(ai_cfg["model"])
+        self.query_one("#info-ai-endpoint", Static).update(ai_cfg["endpoint"])
+        self.query_one("#info-ai-status", Static).update(status)

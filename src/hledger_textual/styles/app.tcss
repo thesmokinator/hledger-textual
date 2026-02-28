@@ -608,6 +608,44 @@ SyncConfirmModal {
     margin: 0 1;
 }
 
+/* --- AI Chat Modal --- */
+
+AiChatModal {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#ai-dialog {
+    width: 80;
+    max-width: 90%;
+    height: 80%;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#ai-title {
+    text-style: bold;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+    color: $accent;
+}
+
+#ai-scroll {
+    height: 1fr;
+    margin-bottom: 1;
+}
+
+#ai-response {
+    width: 100%;
+    height: auto;
+}
+
+#ai-input {
+    dock: bottom;
+}
+
 /* --- Theme Picker Modal --- */
 
 ThemePickerModal {

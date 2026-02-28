@@ -104,6 +104,23 @@ def load_price_tickers() -> dict[str, str]:
     return {str(k): str(v) for k, v in prices.items()}
 
 
+def load_ai_config() -> dict:
+    """Load the ``[ai]`` section from config.toml.
+
+    Returns:
+        A dict with keys ``enable`` (bool), ``model`` (str), and
+        ``endpoint`` (str).  Missing keys fall back to safe defaults
+        (AI disabled, phi4-mini model, localhost endpoint).
+    """
+    config = _load_config_dict()
+    ai = config.get("ai", {})
+    return {
+        "enable": ai.get("enable", False),
+        "model": ai.get("model", "phi4-mini"),
+        "endpoint": ai.get("endpoint", "http://localhost:11434"),
+    }
+
+
 def _load_config_toml() -> str | None:
     """Load journal_file from config.toml if it exists.
 

@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE.md"]
 dependencies = [
+    "ollama>=0.4",
     "pricehist>=1.4.14",
     "textual>=3.0.0,<4",
     "tomli>=2.0.0; python_version < '3.11'",

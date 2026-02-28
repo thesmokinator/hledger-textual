@@ -349,3 +349,114 @@ class TestInfoPaneGitSection:
                 for s in app.query(".info-section-title")
             ]
             assert "Git" in titles
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestInfoPaneAiSection:
+    """Tests for the AI section in InfoPane."""
+
+    async def test_ai_section_hidden_when_disabled(
+        self, info_journal: Path, monkeypatch
+    ):
+        """AI section stays hidden when enable = false."""
+        monkeypatch.setattr(
+            "hledger_textual.config.load_ai_config",
+            lambda: {"enable": False, "model": "phi4-mini", "endpoint": "http://localhost:11434"},
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            ai_section = app.query_one("#info-ai-section")
+            assert ai_section.styles.display == "none"
+
+    async def test_ai_section_visible_ready(
+        self, info_journal: Path, monkeypatch
+    ):
+        """AI section shows 'Ready' when enabled, Ollama up, and model installed."""
+        monkeypatch.setattr(
+            "hledger_textual.config.load_ai_config",
+            lambda: {"enable": True, "model": "phi4-mini", "endpoint": "http://localhost:11434"},
+        )
+
+        class _FakeClient:
+            def __init__(self, endpoint, model):
+                pass
+
+            def health_check(self):
+                return True
+
+            def list_models(self):
+                return ["phi4-mini", "llama3"]
+
+        monkeypatch.setattr(
+            "hledger_textual.ai.ollama_client.OllamaClient", _FakeClient
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            ai_section = app.query_one("#info-ai-section")
+            assert ai_section.styles.display == "block"
+            status = app.query_one("#info-ai-status", Static)
+            assert str(status.renderable) == "Ready"
+            model = app.query_one("#info-ai-model", Static)
+            assert str(model.renderable) == "phi4-mini"
+
+    async def test_ai_section_ollama_not_reachable(
+        self, info_journal: Path, monkeypatch
+    ):
+        """AI section shows 'Ollama not reachable' when Ollama is down."""
+        monkeypatch.setattr(
+            "hledger_textual.config.load_ai_config",
+            lambda: {"enable": True, "model": "phi4-mini", "endpoint": "http://localhost:11434"},
+        )
+
+        class _FakeClient:
+            def __init__(self, endpoint, model):
+                pass
+
+            def health_check(self):
+                return False
+
+            def list_models(self):
+                return []
+
+        monkeypatch.setattr(
+            "hledger_textual.ai.ollama_client.OllamaClient", _FakeClient
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            ai_section = app.query_one("#info-ai-section")
+            assert ai_section.styles.display == "block"
+            status = app.query_one("#info-ai-status", Static)
+            assert str(status.renderable) == "Ollama not reachable"
+
+    async def test_ai_section_model_not_installed(
+        self, info_journal: Path, monkeypatch
+    ):
+        """AI section shows 'Model not installed' when Ollama is up but model is missing."""
+        monkeypatch.setattr(
+            "hledger_textual.config.load_ai_config",
+            lambda: {"enable": True, "model": "phi4-mini", "endpoint": "http://localhost:11434"},
+        )
+
+        class _FakeClient:
+            def __init__(self, endpoint, model):
+                pass
+
+            def health_check(self):
+                return True
+
+            def list_models(self):
+                return ["llama3"]
+
+        monkeypatch.setattr(
+            "hledger_textual.ai.ollama_client.OllamaClient", _FakeClient
+        )
+        app = _InfoApp(info_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            ai_section = app.query_one("#info-ai-section")
+            assert ai_section.styles.display == "block"
+            status = app.query_one("#info-ai-status", Static)
+            assert str(status.renderable) == "Model not installed"

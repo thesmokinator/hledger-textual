@@ -353,3 +353,41 @@ class TestTabNavigation:
                 footer = app.screen.query_one("#footer-bar", Static)
                 rendered = str(footer.renderable)
                 assert "Sync" in rendered, f"Sync missing in tab {key}"
+
+
+class TestConditionalFooter:
+    """Tests for conditional AI footer visibility."""
+
+    async def test_footer_hides_ai_when_disabled(
+        self, app_journal: Path, monkeypatch
+    ):
+        """Footer does not contain 'AI' when AI is disabled in config."""
+        from textual.widgets import Static
+
+        monkeypatch.setattr(
+            "hledger_textual.app.load_ai_config",
+            lambda: {"enable": False, "model": "phi4-mini", "endpoint": "http://localhost:11434"},
+        )
+        app = HledgerTuiApp(journal_file=app_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            footer = app.screen.query_one("#footer-bar", Static)
+            rendered = str(footer.renderable)
+            assert "AI" not in rendered
+
+    async def test_footer_shows_ai_when_enabled(
+        self, app_journal: Path, monkeypatch
+    ):
+        """Footer contains 'AI' when AI is enabled in config."""
+        from textual.widgets import Static
+
+        monkeypatch.setattr(
+            "hledger_textual.app.load_ai_config",
+            lambda: {"enable": True, "model": "phi4-mini", "endpoint": "http://localhost:11434"},
+        )
+        app = HledgerTuiApp(journal_file=app_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            footer = app.screen.query_one("#footer-bar", Static)
+            rendered = str(footer.renderable)
+            assert "AI" in rendered

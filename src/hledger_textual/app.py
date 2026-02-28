@@ -9,7 +9,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
-from hledger_textual.config import load_theme, save_theme
+from hledger_textual.config import load_ai_config, load_theme, save_theme
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
 from hledger_textual.widgets.info_pane import InfoPane
@@ -19,12 +19,12 @@ from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 _FOOTER_COMMANDS: dict[str, str] = {
-    "summary": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "accounts": "\\[↵] Drill  \\[/] Search  \\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[s] Sync  \\[q] Quit",
-    "reports": "\\[s] Sync  \\[r] Reload  \\[q] Quit",
-    "info": "\\[s] Sync  \\[t] Theme  \\[q] Quit",
+    "summary": "\\[?] AI  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[?] AI  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "accounts": "\\[↵] Drill  \\[/] Search  \\[?] AI  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[/] Search  \\[?] AI  \\[s] Sync  \\[q] Quit",
+    "reports": "\\[?] AI  \\[s] Sync  \\[r] Reload  \\[q] Quit",
+    "info": "\\[?] AI  \\[s] Sync  \\[t] Theme  \\[q] Quit",
 }
 
 
@@ -60,6 +60,7 @@ class HledgerTuiApp(App):
         Binding("5", "switch_section('accounts')", "Accounts", show=False),
         Binding("6", "switch_section('info')", "Info", show=False),
         Binding("s", "git_sync", "Sync", show=False),
+        Binding("question_mark", "ai_chat", "AI", show=False),
         Binding("q", "quit", "Quit"),
         Binding("t", "pick_theme", "Theme", show=False),
     ]
@@ -72,6 +73,7 @@ class HledgerTuiApp(App):
         """
         super().__init__()
         self.journal_file = journal_file
+        self._ai_enabled = load_ai_config()["enable"]
         saved_theme = load_theme()
         if saved_theme:
             self.theme = saved_theme
@@ -96,7 +98,7 @@ class HledgerTuiApp(App):
             yield AccountsPane(self.journal_file, id="accounts")
             yield InfoPane(self.journal_file, id="info")
 
-        yield Static(_FOOTER_COMMANDS["summary"], id="footer-bar")
+        yield Static(self._footer_text("summary"), id="footer-bar")
 
     def on_mount(self) -> None:
         """Focus the default section after mount."""
@@ -109,7 +111,7 @@ class HledgerTuiApp(App):
         section = event.tab.id.removeprefix("tab-")
         self.query_one("#content-switcher", ContentSwitcher).current = section
         self.query_one("#footer-bar", Static).update(
-            _FOOTER_COMMANDS.get(section, "")
+            self._footer_text(section)
         )
         self._focus_section(section)
 
@@ -131,6 +133,13 @@ class HledgerTuiApp(App):
             self.query_one("#reports-table", DataTable).focus()
         elif section == "info":
             self.query_one(InfoPane).focus()
+
+    def _footer_text(self, section: str) -> str:
+        """Return footer help text, hiding AI shortcut when AI is disabled."""
+        text = _FOOTER_COMMANDS.get(section, "")
+        if not self._ai_enabled:
+            text = text.replace("\\[?] AI  ", "")
+        return text
 
     def action_switch_section(self, section: str) -> None:
         """Switch to the given section via keyboard shortcut (1-6)."""
@@ -172,6 +181,27 @@ class HledgerTuiApp(App):
         self.app.call_from_thread(
             self.query_one(InfoPane).refresh_git_status
         )
+
+    def action_ai_chat(self) -> None:
+        """Open the AI chat modal if AI is enabled and Ollama is reachable."""
+        from hledger_textual.config import load_ai_config
+
+        ai_cfg = load_ai_config()
+        if not ai_cfg["enable"]:
+            self.notify("AI disabled — set [ai] enable = true in config.toml", severity="warning")
+            return
+
+        from hledger_textual.ai.context_builder import ContextBuilder
+        from hledger_textual.ai.ollama_client import OllamaClient
+        from hledger_textual.screens.ai_chat import AiChatModal
+
+        client = OllamaClient(ai_cfg["endpoint"], ai_cfg["model"])
+        if not client.health_check():
+            self.notify("Ollama not reachable", severity="error")
+            return
+
+        context = ContextBuilder(self.journal_file)
+        self.push_screen(AiChatModal(client, context))
 
     def action_pick_theme(self) -> None:
         """Open the theme picker dialog."""

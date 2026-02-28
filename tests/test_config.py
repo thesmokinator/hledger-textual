@@ -7,6 +7,7 @@ import pytest
 from hledger_textual.config import (
     _load_config_dict,
     _save_config_dict,
+    load_ai_config,
     load_default_commodity,
     load_price_tickers,
     load_theme,
@@ -245,3 +246,69 @@ class TestSavePreservesNestedSections:
         loaded = _load_config_dict()
         assert loaded["theme"] == "gruvbox"
         assert loaded["prices"] == {"A": "A.DE", "B": "B.DE"}
+
+
+class TestLoadAiConfig:
+    """Tests for load_ai_config configuration helper."""
+
+    def test_returns_defaults_when_ai_section_missing(self, tmp_path, monkeypatch):
+        """Returns default values when config has no [ai] section."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('theme = "nord"\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+
+        result = load_ai_config()
+        assert result["enable"] is False
+        assert result["model"] == "phi4-mini"
+        assert result["endpoint"] == "http://localhost:11434"
+
+    def test_reads_all_three_keys(self, tmp_path, monkeypatch):
+        """Returns configured values from the [ai] section."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            '[ai]\nenable = true\nmodel = "llama3"\n'
+            'endpoint = "http://myhost:8080"\n'
+        )
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+
+        result = load_ai_config()
+        assert result["enable"] is True
+        assert result["model"] == "llama3"
+        assert result["endpoint"] == "http://myhost:8080"
+
+    def test_coexists_with_other_config_keys(self, tmp_path, monkeypatch):
+        """The [ai] section coexists with theme and [prices]."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            'theme = "dracula"\n\n'
+            '[prices]\nXDWD = "XDWD.DE"\n\n'
+            '[ai]\nenable = true\nmodel = "phi4-mini"\n'
+        )
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+
+        assert load_theme() == "dracula"
+        assert load_price_tickers() == {"XDWD": "XDWD.DE"}
+
+        ai = load_ai_config()
+        assert ai["enable"] is True
+        assert ai["model"] == "phi4-mini"
+
+    def test_returns_defaults_when_config_missing(self, tmp_path, monkeypatch):
+        """Returns defaults when the config file does not exist."""
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        result = load_ai_config()
+        assert result["enable"] is False
+        assert result["model"] == "phi4-mini"
+
+    def test_partial_ai_section(self, tmp_path, monkeypatch):
+        """Missing keys in [ai] section fall back to defaults."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('[ai]\nenable = true\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+
+        result = load_ai_config()
+        assert result["enable"] is True
+        assert result["model"] == "phi4-mini"
+        assert result["endpoint"] == "http://localhost:11434"
