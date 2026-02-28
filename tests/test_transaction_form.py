@@ -637,3 +637,28 @@ class TestAmountInputWidget:
             rows = list(form.query(PostingRow))
             amount_widget = rows[0].query_one("#amount-0")
             assert isinstance(amount_widget, AmountInput)
+
+
+class TestDefaultCommodity:
+    """Tests for default commodity pre-fill in new transaction form."""
+
+    async def test_new_form_prefills_commodity_from_config(
+        self, app: HledgerTuiApp, monkeypatch
+    ):
+        """New transaction form pre-fills the commodity field with the configured default."""
+        from textual.widgets import Input
+
+        monkeypatch.setattr(
+            "hledger_textual.screens.transaction_form.load_default_commodity",
+            lambda: "\u20ac",
+        )
+        async with app.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
+            await pilot.press("a")
+            await pilot.pause()
+            form = app.screen
+            rows = list(form.query(PostingRow))
+            commodity_val = rows[0].query_one("#commodity-0", Input).value
+            assert commodity_val == "\u20ac"

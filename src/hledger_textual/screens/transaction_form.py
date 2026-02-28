@@ -14,6 +14,7 @@ from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Select, Static
 
+from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import HledgerError, load_accounts, load_descriptions
 from hledger_textual.models import (
     Amount,
@@ -163,8 +164,9 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                     commodity=commodity,
                 )
         else:
-            self._add_posting_row(label="Debit:")
-            self._add_posting_row(label="Credit:")
+            default_commodity = load_default_commodity()
+            self._add_posting_row(label="Debit:", commodity=default_commodity)
+            self._add_posting_row(label="Credit:", commodity=default_commodity)
 
     def _add_posting_row(
         self,
@@ -304,7 +306,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                     )
                     return
 
-                commodity = row.commodity or "€"
+                commodity = row.commodity or load_default_commodity()
                 style = AmountStyle(
                     commodity_side="L" if not commodity[0].isdigit() else "R",
                     commodity_spaced=len(commodity) > 1,
