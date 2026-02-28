@@ -195,7 +195,7 @@ class HledgerTuiApp(App):
         from hledger_textual.ai.ollama_client import OllamaClient
         from hledger_textual.screens.ai_chat import AiChatModal
 
-        client = OllamaClient(ai_cfg["endpoint"], ai_cfg["model"])
+        client = OllamaClient(ai_cfg["endpoint"], ai_cfg["model"], think=ai_cfg["think"])
         if not client.health_check():
             self.notify("Ollama not reachable", severity="error")
             return

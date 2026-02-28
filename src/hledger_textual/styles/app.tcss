@@ -637,9 +637,18 @@ AiChatModal {
     margin-bottom: 1;
 }
 
-#ai-response {
+.ai-question {
     width: 100%;
     height: auto;
+    margin-top: 1;
+    color: $text-muted;
+    text-style: italic;
+}
+
+.ai-answer {
+    width: 100%;
+    height: auto;
+    margin-bottom: 1;
 }
 
 #ai-input {

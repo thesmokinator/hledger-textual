@@ -108,9 +108,10 @@ def load_ai_config() -> dict:
     """Load the ``[ai]`` section from config.toml.
 
     Returns:
-        A dict with keys ``enable`` (bool), ``model`` (str), and
-        ``endpoint`` (str).  Missing keys fall back to safe defaults
-        (AI disabled, phi4-mini model, localhost endpoint).
+        A dict with keys ``enable`` (bool), ``model`` (str),
+        ``endpoint`` (str), and ``think`` (bool).  Missing keys fall back
+        to safe defaults (AI disabled, phi4-mini model, localhost endpoint,
+        thinking disabled).
     """
     config = _load_config_dict()
     ai = config.get("ai", {})
@@ -118,6 +119,7 @@ def load_ai_config() -> dict:
         "enable": ai.get("enable", False),
         "model": ai.get("model", "phi4-mini"),
         "endpoint": ai.get("endpoint", "http://localhost:11434"),
+        "think": ai.get("think", False),
     }
 
 

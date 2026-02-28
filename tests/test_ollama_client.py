@@ -32,7 +32,7 @@ class TestListModels:
     """Tests for OllamaClient.list_models."""
 
     def test_returns_model_names(self, monkeypatch):
-        """list_models returns installed model names."""
+        """list_models returns both tagged and base model names."""
         client = OllamaClient("http://localhost:11434", "phi4-mini")
 
         class _Model:
@@ -40,10 +40,14 @@ class TestListModels:
                 self.model = name
 
         class _Response:
-            models = [_Model("phi4-mini"), _Model("llama3")]
+            models = [_Model("phi4-mini:latest"), _Model("llama3:latest")]
 
         monkeypatch.setattr(client._client, "list", lambda: _Response())
-        assert client.list_models() == ["phi4-mini", "llama3"]
+        result = client.list_models()
+        assert "phi4-mini" in result
+        assert "phi4-mini:latest" in result
+        assert "llama3" in result
+        assert "llama3:latest" in result
 
     def test_returns_empty_list_on_error(self, monkeypatch):
         """list_models returns empty list on connection error."""
@@ -69,7 +73,7 @@ class TestStreamChat:
             {"message": {"content": "!"}},
         ]
 
-        def _fake_chat(model, messages, stream):
+        def _fake_chat(model, messages, stream, **kwargs):
             assert model == "phi4-mini"
             assert stream is True
             return iter(chunks)
@@ -90,7 +94,7 @@ class TestStreamChat:
             {"message": {"content": "B"}},
         ]
 
-        def _fake_chat(model, messages, stream):
+        def _fake_chat(model, messages, stream, **kwargs):
             return iter(chunks)
 
         monkeypatch.setattr(client._client, "chat", _fake_chat)
@@ -104,7 +108,7 @@ class TestStreamChat:
 
         client = OllamaClient("http://localhost:11434", "phi4-mini")
 
-        def _fail(model, messages, stream):
+        def _fail(model, messages, stream, **kwargs):
             raise ResponseError("model not found")
 
         monkeypatch.setattr(client._client, "chat", _fail)
@@ -116,7 +120,7 @@ class TestStreamChat:
         """stream_chat wraps generic exceptions in OllamaError."""
         client = OllamaClient("http://localhost:11434", "phi4-mini")
 
-        def _fail(model, messages, stream):
+        def _fail(model, messages, stream, **kwargs):
             raise ConnectionError("refused")
 
         monkeypatch.setattr(client._client, "chat", _fail)
@@ -129,7 +133,7 @@ class TestStreamChat:
         client = OllamaClient("http://localhost:11434", "phi4-mini")
         captured_messages = []
 
-        def _fake_chat(model, messages, stream):
+        def _fake_chat(model, messages, stream, **kwargs):
             captured_messages.extend(messages)
             return iter([])
 
@@ -141,3 +145,28 @@ class TestStreamChat:
         assert captured_messages[0]["content"] == "system instructions"
         assert captured_messages[1]["role"] == "user"
         assert captured_messages[1]["content"] == "my question"
+
+    def test_messages_structure_with_history(self, monkeypatch):
+        """stream_chat includes history between system and current user message."""
+        client = OllamaClient("http://localhost:11434", "phi4-mini")
+        captured_messages = []
+
+        def _fake_chat(model, messages, stream, **kwargs):
+            captured_messages.extend(messages)
+            return iter([])
+
+        monkeypatch.setattr(client._client, "chat", _fake_chat)
+        history = [
+            {"role": "user", "content": "first question"},
+            {"role": "assistant", "content": "first answer"},
+        ]
+        list(client.stream_chat("follow-up", "system instructions", history))
+
+        assert len(captured_messages) == 4
+        assert captured_messages[0]["role"] == "system"
+        assert captured_messages[1]["role"] == "user"
+        assert captured_messages[1]["content"] == "first question"
+        assert captured_messages[2]["role"] == "assistant"
+        assert captured_messages[2]["content"] == "first answer"
+        assert captured_messages[3]["role"] == "user"
+        assert captured_messages[3]["content"] == "follow-up"

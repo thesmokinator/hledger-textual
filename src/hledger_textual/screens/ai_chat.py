@@ -1,7 +1,8 @@
 """AI chat modal screen.
 
-Provides a simple single-turn Q&A interface: the user types a question,
-the response streams in token-by-token from Ollama.
+Provides a conversation-style Q&A interface: the user types questions,
+and responses stream in token-by-token from Ollama. Both questions and
+answers remain visible in a scrollable conversation history.
 """
 
 from __future__ import annotations
@@ -37,13 +38,14 @@ class AiChatModal(ModalScreen[None]):
         super().__init__()
         self._ollama = ollama_client
         self._ctx_builder = context_builder
+        self._current_response: Static | None = None
+        self._history: list[dict[str, str]] = []
 
     def compose(self) -> ComposeResult:
         """Create the modal layout."""
         with Vertical(id="ai-dialog"):
             yield Label("AI Chat", id="ai-title")
-            with VerticalScroll(id="ai-scroll"):
-                yield Static("", id="ai-response")
+            yield VerticalScroll(id="ai-scroll")
             yield Input(placeholder="Ask a question...", id="ai-input")
 
     def on_mount(self) -> None:
@@ -51,12 +53,22 @@ class AiChatModal(ModalScreen[None]):
         self.query_one("#ai-input", Input).focus()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle Enter in the input field — start streaming response."""
+        """Handle Enter in the input field — append question and start streaming."""
         query = event.value.strip()
         if not query:
             return
         event.input.value = ""
-        self.query_one("#ai-response", Static).update("Thinking...")
+
+        scroll = self.query_one("#ai-scroll", VerticalScroll)
+
+        question = Static(f"> {query}", classes="ai-question")
+        scroll.mount(question)
+
+        response = Static("Thinking...", classes="ai-answer")
+        scroll.mount(response)
+        self._current_response = response
+
+        scroll.scroll_end(animate=False)
         self._run_query(query)
 
     @work(thread=True, exclusive=True, group="ai-chat")
@@ -67,20 +79,24 @@ class AiChatModal(ModalScreen[None]):
         try:
             system, user = self._ctx_builder.build_chat_context(query)
             response_text = ""
-            for token in self._ollama.stream_chat(user, system):
+            for token in self._ollama.stream_chat(user, system, self._history):
                 response_text += token
                 text = response_text
+                self.app.call_from_thread(self._current_response.update, text)
                 self.app.call_from_thread(
-                    self.query_one("#ai-response", Static).update, text
+                    self.query_one("#ai-scroll", VerticalScroll).scroll_end,
+                    animate=False,
                 )
+            self._history.append({"role": "user", "content": user})
+            self._history.append({"role": "assistant", "content": response_text})
         except OllamaError as exc:
             self.app.call_from_thread(
-                self.query_one("#ai-response", Static).update,
+                self._current_response.update,
                 f"Error: {exc}",
             )
         except Exception as exc:
             self.app.call_from_thread(
-                self.query_one("#ai-response", Static).update,
+                self._current_response.update,
                 f"Unexpected error: {exc}",
             )
 

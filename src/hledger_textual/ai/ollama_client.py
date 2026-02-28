@@ -21,9 +21,10 @@ class OllamaClient:
         model: Model name to use for chat completions (e.g. ``phi4-mini``).
     """
 
-    def __init__(self, endpoint: str, model: str) -> None:
+    def __init__(self, endpoint: str, model: str, *, think: bool = False) -> None:
         self._client = Client(host=endpoint)
         self._model = model
+        self._think = think
 
     def health_check(self) -> bool:
         """Return ``True`` if Ollama is reachable, ``False`` otherwise."""
@@ -34,19 +35,36 @@ class OllamaClient:
             return False
 
     def list_models(self) -> list[str]:
-        """Return installed model names, or empty list on error."""
+        """Return installed model names, or empty list on error.
+
+        Each model is included both with its full tag (e.g. ``phi4-mini:latest``)
+        and without (``phi4-mini``), so callers can match either form.
+        """
         try:
             response = self._client.list()
-            return [m.model for m in response.models]
+            names: set[str] = set()
+            for m in response.models:
+                names.add(m.model)
+                base = m.model.split(":")[0]
+                if base != m.model:
+                    names.add(base)
+            return sorted(names)
         except Exception:
             return []
 
-    def stream_chat(self, prompt: str, system: str) -> Iterator[str]:
+    def stream_chat(
+        self,
+        prompt: str,
+        system: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[str]:
         """Stream a chat completion, yielding content tokens.
 
         Args:
             prompt: The user message.
             system: The system message providing context.
+            history: Optional list of previous ``{"role": ..., "content": ...}``
+                messages to maintain conversation context.
 
         Yields:
             Content delta strings as they arrive from the model.
@@ -54,15 +72,18 @@ class OllamaClient:
         Raises:
             OllamaError: On connection or model errors.
         """
-        messages = [
+        messages: list[dict[str, str]] = [
             {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
         ]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": prompt})
         try:
             stream = self._client.chat(
                 model=self._model,
                 messages=messages,
                 stream=True,
+                think=self._think,
             )
             for chunk in stream:
                 content = chunk.get("message", {}).get("content", "")
