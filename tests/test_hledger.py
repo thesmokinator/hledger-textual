@@ -19,6 +19,7 @@ from hledger_textual.hledger import (
     load_investment_positions,
     load_journal_stats,
     load_period_summary,
+    load_register_compact,
     load_report,
     load_transactions,
 )
@@ -550,3 +551,54 @@ class TestExpandSearchQuery:
     def test_plain_text_unchanged(self):
         """Plain text without colons is returned unchanged."""
         assert expand_search_query("grocery shopping") == "grocery shopping"
+
+
+class TestLoadRegisterCompact:
+    """Tests for load_register_compact."""
+
+    def test_condensed_format(self, sample_journal_path: Path):
+        """Each transaction produces one line with date, description, and postings."""
+        result = load_register_compact(sample_journal_path)
+        lines = result.strip().splitlines()
+        assert len(lines) == 3
+
+    def test_two_posting_transaction(self, sample_journal_path: Path):
+        """A 2-posting transaction shows only the destination posting."""
+        result = load_register_compact(sample_journal_path)
+        lines = result.strip().splitlines()
+        # First transaction: Grocery shopping — should show expense, not assets:bank
+        assert "Grocery shopping" in lines[0]
+        assert "expenses:food:groceries" in lines[0]
+        assert "€40.80" in lines[0]
+        assert "assets:bank:checking" not in lines[0]
+
+    def test_multi_posting_transaction(self, sample_journal_path: Path):
+        """A multi-posting transaction shows all non-balancing postings."""
+        result = load_register_compact(sample_journal_path)
+        lines = result.strip().splitlines()
+        # Third transaction: Office supplies — 3 postings, should show 2 expense postings
+        office_line = [l for l in lines if "Office supplies" in l]
+        assert len(office_line) == 1
+        assert "expenses:office" in office_line[0]
+        assert "expenses:shipping" in office_line[0]
+        assert "assets:bank:checking" not in office_line[0]
+
+    def test_pipe_separator(self, sample_journal_path: Path):
+        """Each line uses | to separate description from postings."""
+        result = load_register_compact(sample_journal_path)
+        for line in result.strip().splitlines():
+            assert " | " in line
+
+    def test_empty_journal(self, tmp_path: Path):
+        """An empty journal returns an empty string."""
+        journal = tmp_path / "empty.journal"
+        journal.write_text("; empty journal\n")
+        result = load_register_compact(journal)
+        assert result == ""
+
+    def test_hledger_error(self, tmp_path: Path):
+        """An invalid journal raises HledgerError."""
+        bad_file = tmp_path / "bad.journal"
+        bad_file.write_text("this is not valid journal content\n")
+        with pytest.raises(HledgerError):
+            load_register_compact(bad_file)

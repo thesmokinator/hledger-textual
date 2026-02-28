@@ -674,6 +674,88 @@ def load_investment_eur_by_account(
     return result
 
 
+def load_register_compact(file: str | Path) -> str:
+    """Load all transactions as a condensed one-line-per-transaction dump.
+
+    Each line has the format::
+
+        2026-01-02 Octopus Energy | Expenses:Utilities €207.16
+
+    For multi-posting transactions, non-balancing postings are comma-separated::
+
+        2026-01-08 Findomestic | Liabilities:Loan €381.60, Expenses:BankFees €2.20
+
+    The balancing posting (the one with the largest absolute negative amount)
+    is excluded to keep lines short.
+
+    Args:
+        file: Path to the journal file.
+
+    Returns:
+        A multi-line string with one line per transaction, or empty string
+        if the journal has no transactions.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    output = run_hledger("register", "-O", "csv", file=file)
+    if not output.strip():
+        return ""
+
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+
+    # Group rows by txnidx
+    from collections import OrderedDict
+
+    groups: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
+    for row in reader:
+        if len(row) < 6:
+            continue
+        txnidx = row[0]
+        entry = {
+            "date": row[1],
+            "description": row[3],
+            "account": row[4],
+            "amount": row[5],
+        }
+        if txnidx not in groups:
+            groups[txnidx] = []
+        groups[txnidx].append(entry)
+
+    lines: list[str] = []
+    for postings in groups.values():
+        if not postings:
+            continue
+
+        date = postings[0]["date"]
+        description = postings[0]["description"]
+
+        if len(postings) == 1:
+            # Single posting — just show it
+            acct_parts = [f"{postings[0]['account']} {postings[0]['amount']}"]
+        else:
+            # Find the balancing posting: largest absolute negative amount
+            # Parse amounts to find which to exclude
+            best_idx = -1
+            best_neg = Decimal("0")
+            for i, p in enumerate(postings):
+                qty, _ = _parse_budget_amount(p["amount"])
+                if qty < best_neg:
+                    best_neg = qty
+                    best_idx = i
+
+            acct_parts = []
+            for i, p in enumerate(postings):
+                if i == best_idx:
+                    continue
+                acct_parts.append(f"{p['account']} {p['amount']}")
+
+        lines.append(f"{date} {description} | {', '.join(acct_parts)}")
+
+    return "\n".join(lines)
+
+
 def _parse_report_csv(output: str) -> ReportData:
     """Parse CSV output from hledger is/bs/cf into a ReportData.
 
