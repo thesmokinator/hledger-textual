@@ -13,6 +13,7 @@ from hledger_textual.models import (
     AmountStyle,
     BudgetRule,
     Posting,
+    RecurringRule,
     SourcePosition,
     Transaction,
     TransactionStatus,
@@ -133,4 +134,54 @@ def sample_budget_rule(euro_style: AmountStyle) -> BudgetRule:
     return BudgetRule(
         account="Expenses:Groceries",
         amount=Amount(commodity="€", quantity=Decimal("800.00"), style=euro_style),
+    )
+
+
+@pytest.fixture
+def sample_recurring_journal_path() -> Path:
+    """Path to the sample recurring journal fixture."""
+    return FIXTURES_DIR / "sample_recurring.journal"
+
+
+@pytest.fixture
+def tmp_recurring_journal(tmp_path: Path, sample_recurring_journal_path: Path) -> Path:
+    """A temporary copy of the sample recurring journal for mutation tests."""
+    dest = tmp_path / "recurring.journal"
+    shutil.copy2(sample_recurring_journal_path, dest)
+    return dest
+
+
+@pytest.fixture
+def tmp_journal_with_recurring(
+    tmp_path: Path, sample_journal_path: Path, sample_recurring_journal_path: Path
+) -> Path:
+    """A temporary journal with recurring.journal and include directive."""
+    journal_dest = tmp_path / "test.journal"
+    recurring_dest = tmp_path / "recurring.journal"
+
+    shutil.copy2(sample_journal_path, journal_dest)
+    shutil.copy2(sample_recurring_journal_path, recurring_dest)
+
+    # Add include directive to the journal
+    content = journal_dest.read_text()
+    journal_dest.write_text(f"include recurring.journal\n\n{content}")
+
+    return journal_dest
+
+
+@pytest.fixture
+def sample_recurring_rule(euro_style: AmountStyle) -> RecurringRule:
+    """A sample recurring rule for testing."""
+    return RecurringRule(
+        rule_id="rent-001",
+        period_expr="monthly",
+        description="Rent payment",
+        postings=[
+            Posting(
+                account="Expenses:Rent",
+                amounts=[Amount(commodity="€", quantity=Decimal("800.00"), style=euro_style)],
+            ),
+            Posting(account="Assets:Bank:Checking"),
+        ],
+        last_generated="2026-02-01",
     )

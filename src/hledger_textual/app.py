@@ -13,6 +13,7 @@ from hledger_textual.config import load_theme, save_theme
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
 from hledger_textual.widgets.info_pane import InfoPane
+from hledger_textual.widgets.recurring_pane import RecurringPane
 from hledger_textual.widgets.reports_pane import ReportsPane
 from hledger_textual.widgets.summary_pane import SummaryPane
 from hledger_textual.widgets.transactions_pane import TransactionsPane
@@ -21,6 +22,7 @@ from hledger_textual.widgets.transactions_table import TransactionsTable
 _FOOTER_COMMANDS: dict[str, str] = {
     "summary": "\\[r] Reload  \\[s] Sync  \\[q] Quit",
     "transactions": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
+    "recurring": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[g] Generate  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
     "accounts": "\\[↵] Drill  \\[/] Search  \\[r] Reload  \\[s] Sync  \\[q] Quit",
     "budget": "\\[a] Add  \\[e] Edit  \\[d] Delete  \\[◄/►] Month  \\[t] Today  \\[/] Search  \\[s] Sync  \\[q] Quit",
     "reports": "\\[c] Chart  \\[i] Inv  \\[r] Reload  \\[s] Sync  \\[q] Quit",
@@ -55,10 +57,11 @@ class HledgerTuiApp(App):
     BINDINGS = [
         Binding("1", "switch_section('summary')", "Summary", show=False),
         Binding("2", "switch_section('transactions')", "Transactions", show=False),
-        Binding("3", "switch_section('budget')", "Budget", show=False),
-        Binding("4", "switch_section('reports')", "Reports", show=False),
-        Binding("5", "switch_section('accounts')", "Accounts", show=False),
-        Binding("6", "switch_section('info')", "Info", show=False),
+        Binding("3", "switch_section('recurring')", "Recurring", show=False),
+        Binding("4", "switch_section('budget')", "Budget", show=False),
+        Binding("5", "switch_section('reports')", "Reports", show=False),
+        Binding("6", "switch_section('accounts')", "Accounts", show=False),
+        Binding("7", "switch_section('info')", "Info", show=False),
         Binding("s", "git_sync", "Sync", show=False),
         Binding("q", "quit", "Quit"),
         Binding("t", "pick_theme", "Theme", show=False),
@@ -81,16 +84,18 @@ class HledgerTuiApp(App):
         yield _NavTabs(
             _NavTab("1. Summary", id="tab-summary"),
             _NavTab("2. Transactions", id="tab-transactions"),
-            _NavTab("3. Budget", id="tab-budget"),
-            _NavTab("4. Reports", id="tab-reports"),
-            _NavTab("5. Accounts", id="tab-accounts"),
-            _NavTab("6. Info", id="tab-info"),
+            _NavTab("3. Recurring", id="tab-recurring"),
+            _NavTab("4. Budget", id="tab-budget"),
+            _NavTab("5. Reports", id="tab-reports"),
+            _NavTab("6. Accounts", id="tab-accounts"),
+            _NavTab("7. Info", id="tab-info"),
             id="nav-tabs",
         )
 
         with ContentSwitcher(initial="summary", id="content-switcher"):
             yield SummaryPane(self.journal_file, id="summary")
             yield TransactionsPane(self.journal_file, id="transactions")
+            yield RecurringPane(self.journal_file, id="recurring")
             yield BudgetPane(self.journal_file, id="budget")
             yield ReportsPane(self.journal_file, id="reports")
             yield AccountsPane(self.journal_file, id="accounts")
@@ -123,6 +128,8 @@ class HledgerTuiApp(App):
             self.query_one("#summary-breakdown-table", DataTable).focus()
         elif section == "transactions":
             self.query_one(TransactionsTable).query_one(DataTable).focus()
+        elif section == "recurring":
+            self.query_one("#recurring-table", DataTable).focus()
         elif section == "accounts":
             self.query_one("#accounts-table", DataTable).focus()
         elif section == "budget":

@@ -1,0 +1,7 @@
+~ monthly  Rent payment  ; recurring-id:rent-001, last-generated:2026-02-01
+    Expenses:Rent                                   €800.00
+    Assets:Bank:Checking
+
+~ every 2 weeks  Grocery run  ; recurring-id:grocery-001
+    Expenses:Groceries                              €100.00
+    Assets:Bank:Checking

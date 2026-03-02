@@ -176,6 +176,20 @@ class BudgetRule:
 
 
 @dataclass
+class RecurringRule:
+    """A recurring transaction rule with period expression and full transaction details."""
+
+    rule_id: str
+    period_expr: str
+    description: str
+    postings: list[Posting] = field(default_factory=list)
+    status: TransactionStatus = TransactionStatus.UNMARKED
+    code: str = ""
+    comment: str = ""
+    last_generated: str | None = None
+
+
+@dataclass
 class BudgetRow:
     """A row in the budget report comparing actual vs budgeted spending."""
 

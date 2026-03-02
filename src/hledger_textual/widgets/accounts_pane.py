@@ -9,10 +9,11 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widget import Widget
-from textual.widgets import DataTable, Input
+from textual.widgets import DataTable, Input, Static
 
 from hledger_textual.hledger import HledgerError, load_account_balances
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
 class AccountsPane(Widget):
@@ -40,12 +41,16 @@ class AccountsPane(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
-        with Horizontal(classes="filter-bar"):
-            yield Input(
-                placeholder="Filter by account name...",
-                id="acc-filter-input",
-                disabled=True,
-            )
+        with PaneToolbar():
+            with Horizontal(id="accounts-toolbar-content"):
+                yield Static("Accounts", id="accounts-title")
+
+            with Horizontal(classes="filter-bar"):
+                yield Input(
+                    placeholder="Filter by account name...",
+                    id="acc-filter-input",
+                    disabled=True,
+                )
         yield DataTable(id="accounts-table")
 
     _ACCOUNTS_FIXED = {1: 20}
@@ -131,7 +136,8 @@ class AccountsPane(Widget):
         self.notify("Refreshed", timeout=2)
 
     def action_filter(self) -> None:
-        """Show/focus the filter input."""
+        """Show/focus the filter input and hide title."""
+        self.query_one("#accounts-toolbar-content").add_class("hidden")
         filter_bar = self.query_one(".filter-bar")
         filter_bar.add_class("visible")
         filter_input = self.query_one("#acc-filter-input", Input)
@@ -139,7 +145,7 @@ class AccountsPane(Widget):
         filter_input.focus()
 
     def action_dismiss_filter(self) -> None:
-        """Hide the filter input and clear the filter."""
+        """Hide the filter input, restore title, and clear the filter."""
         filter_bar = self.query_one(".filter-bar")
         if filter_bar.has_class("visible"):
             filter_bar.remove_class("visible")
@@ -147,6 +153,7 @@ class AccountsPane(Widget):
             filter_input.value = ""
             filter_input.disabled = True
             self.filter_text = ""
+            self.query_one("#accounts-toolbar-content").remove_class("hidden")
             self._update_table()
             self.query_one("#accounts-table", DataTable).focus()
 
