@@ -1,7 +1,7 @@
 [project]
 name = "hledger-textual"
-version = "0.1.10"
-description = "A terminal user interface for managing hledger journal transactions"
+version = "0.1.11"
+description = "A full-featured terminal user interface for hledger plain-text accounting"
 readme = "README.md"
 authors = [
     { name = "Michele Broggi", email = "213027097+thesmokinator@users.noreply.github.com" }
