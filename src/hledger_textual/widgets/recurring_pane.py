@@ -30,7 +30,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
     """Widget for managing recurring transaction rules."""
 
     _main_table_id = "recurring-table"
-    _fixed_column_widths = {0: 12, 2: 10}
+    _fixed_column_widths = {0: 12, 2: 10, 3: 10}
 
     BINDINGS = [
         Binding("a", "add", "Add", show=True, priority=True),
@@ -68,6 +68,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
         table.add_column("Period", width=12)
         table.add_column("Description", width=20)
         table.add_column("Start", width=10)
+        table.add_column("End", width=10)
         table.add_column("Postings", width=20)
         self._load_data()
         table.focus()
@@ -94,7 +95,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
         if not self._rules:
             table.add_row(
                 "No recurring rules. Press [a] to add one.",
-                "", "", "",
+                "", "", "", "",
             )
             return
 
@@ -106,6 +107,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
                 rule.period_expr,
                 rule.description,
                 rule.start_date or "",
+                rule.end_date or "",
                 postings_summary,
                 key=rule.rule_id,
             )
