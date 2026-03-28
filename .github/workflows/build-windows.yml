@@ -1,0 +1,123 @@
+name: Build Windows Installer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v0.2.1)"
+        required: false
+        default: "dev"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # needed to upload release assets
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+            echo "version_bare=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "version_bare=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies + PyInstaller
+        run: uv sync --group dev && uv pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: uv run pyinstaller hledger-textual.spec --noconfirm
+
+      # ----------------------------------------------------------------
+      # Download the latest hledger Windows binary from the hledger repo
+      # ----------------------------------------------------------------
+      - name: Download hledger Windows binary
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/simonmichael/hledger/releases/latest" `
+            -Headers @{ "User-Agent" = "hledger-textual-ci" }
+          $asset = $release.assets | Where-Object {
+            $_.name -match "windows" -and $_.name -match "x64" -and $_.name -match "\.zip$"
+          } | Select-Object -First 1
+          if (-not $asset) {
+            $asset = $release.assets | Where-Object {
+              $_.name -match "windows" -and $_.name -match "\.zip$"
+            } | Select-Object -First 1
+          }
+          Write-Host "Downloading $($asset.name) ..."
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile hledger-windows.zip
+          Expand-Archive hledger-windows.zip -DestinationPath hledger-bin
+          # Find and copy hledger.exe to workspace root
+          $exe = Get-ChildItem -Path hledger-bin -Recurse -Filter "hledger.exe" | Select-Object -First 1
+          Copy-Item $exe.FullName hledger.exe
+          Write-Host "hledger.exe ready: $(Get-Item hledger.exe | Select-Object -ExpandProperty Length) bytes"
+
+      # ----------------------------------------------------------------
+      # NSIS — bundled installer (includes hledger.exe)
+      # ----------------------------------------------------------------
+      - name: Install NSIS + EnVar plugin
+        shell: pwsh
+        run: |
+          choco install nsis --no-progress -y
+          # Download EnVar plugin for PATH manipulation
+          $pluginDir = "C:\Program Files (x86)\NSIS\Plugins\x86-unicode"
+          Invoke-WebRequest `
+            -Uri "https://nsis.sourceforge.io/mediawiki/images/7/7f/EnVar_plugin.zip" `
+            -OutFile EnVar_plugin.zip
+          Expand-Archive EnVar_plugin.zip -DestinationPath EnVar_plugin
+          $dll = Get-ChildItem -Path EnVar_plugin -Recurse -Filter "EnVar.dll" | Select-Object -First 1
+          Copy-Item $dll.FullName $pluginDir
+
+      - name: Build bundled installer (includes hledger.exe)
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\NSIS\makensis.exe" ^
+            /DAPPVERSION=${{ steps.version.outputs.version_bare }} ^
+            /DBUNDLED_HLEDGER=1 ^
+            installer\windows.nsi
+
+      - name: Build slim installer (hledger not included)
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\NSIS\makensis.exe" ^
+            /DAPPVERSION=${{ steps.version.outputs.version_bare }} ^
+            installer\windows.nsi
+
+      # ----------------------------------------------------------------
+      # Upload both installers as release assets
+      # ----------------------------------------------------------------
+      - name: Upload installers to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version_bare }}"
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "hledger-textual-${VERSION}-windows-x64-bundled.exe" \
+            "hledger-textual-${VERSION}-windows-x64-slim.exe" \
+            --clobber
+
+      - name: Upload installers as workflow artifacts (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-installers
+          path: "*.exe"
+          retention-days: 14

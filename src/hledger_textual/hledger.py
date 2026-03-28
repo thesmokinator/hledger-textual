@@ -5,12 +5,14 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
+import re
 import shlex
+import shutil
 import subprocess
+import sys
 from decimal import Decimal
 from pathlib import Path
-
-import re
 
 from hledger_textual.models import (
     Amount,
@@ -31,6 +33,35 @@ class HledgerError(Exception):
     """Raised when an hledger command fails."""
 
 
+def _get_hledger_cmd() -> str:
+    """Return the hledger executable path.
+
+    Resolution order:
+    1. System hledger found on PATH — respects the user's installed version.
+    2. Bundled ``hledger.exe`` placed next to the app executable (PyInstaller
+       ``--onedir`` builds).
+    3. Bundled ``hledger.exe`` inside the PyInstaller extraction directory
+       (PyInstaller ``--onefile`` builds, via ``sys._MEIPASS``).
+    4. Plain ``"hledger"`` string — will raise ``FileNotFoundError`` at call
+       time if hledger is not installed, producing the usual error message.
+    """
+    if shutil.which("hledger"):
+        return "hledger"
+    if getattr(sys, "frozen", False):
+        exe_name = "hledger.exe" if sys.platform == "win32" else "hledger"
+        # --onedir: hledger sits next to the main executable
+        candidate = Path(sys.executable).parent / exe_name
+        if candidate.exists():
+            return str(candidate)
+        # --onefile: hledger was extracted to the temporary _MEIPASS directory
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidate = Path(meipass) / exe_name
+            if candidate.exists():
+                return str(candidate)
+    return "hledger"
+
+
 def run_hledger(*args: str, file: str | Path | None = None) -> str:
     """Run an hledger command and return stdout.
 
@@ -44,7 +75,7 @@ def run_hledger(*args: str, file: str | Path | None = None) -> str:
     Raises:
         HledgerError: If the command fails or hledger is not found.
     """
-    cmd = ["hledger"]
+    cmd = [_get_hledger_cmd()]
     if file is not None:
         cmd.extend(["-f", str(file)])
     cmd.extend(args)
