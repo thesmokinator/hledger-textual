@@ -22,21 +22,21 @@ def parse_amount_string(s: str) -> tuple[Decimal, str]:
     if not s:
         raise ValueError("Empty amount string")
 
-    # Try left-side commodity: €800.00 or $500
-    match = re.match(r"^([^\d\s.-]+)\s*(-?[\d.]+)$", s)
+    # Try left-side commodity: €800.00, $500, $1,320.28
+    match = re.match(r"^([^\d\s.,-]+)\s*(-?[\d,.]+)$", s)
     if match:
         commodity = match.group(1)
         try:
-            quantity = Decimal(match.group(2))
+            quantity = Decimal(match.group(2).replace(",", ""))
         except InvalidOperation:
             raise ValueError(f"Invalid amount: {s}")
         return quantity, commodity
 
-    # Try right-side commodity: 800.00 EUR
-    match = re.match(r"^(-?[\d.]+)\s*([^\d\s.-]+)$", s)
+    # Try right-side commodity: 800.00 EUR, 1,320.28 EUR
+    match = re.match(r"^(-?[\d,.]+)\s*([^\d\s.,-]+)$", s)
     if match:
         try:
-            quantity = Decimal(match.group(1))
+            quantity = Decimal(match.group(1).replace(",", ""))
         except InvalidOperation:
             raise ValueError(f"Invalid amount: {s}")
         commodity = match.group(2)

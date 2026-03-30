@@ -42,6 +42,30 @@ class TestParseAmountString:
         assert qty == Decimal("100.00")
         assert commodity == "€"
 
+    def test_left_commodity_with_thousands_separator(self):
+        """Parse amount with left-side commodity and thousands separator."""
+        qty, commodity = parse_amount_string("$1,320.28")
+        assert qty == Decimal("1320.28")
+        assert commodity == "$"
+
+    def test_left_commodity_negative_with_thousands_separator(self):
+        """Parse negative amount with left-side commodity and thousands separator."""
+        qty, commodity = parse_amount_string("$-1,536.75")
+        assert qty == Decimal("-1536.75")
+        assert commodity == "$"
+
+    def test_right_commodity_with_thousands_separator(self):
+        """Parse amount with right-side commodity and thousands separator."""
+        qty, commodity = parse_amount_string("1,320.28EUR")
+        assert qty == Decimal("1320.28")
+        assert commodity == "EUR"
+
+    def test_large_amount_with_thousands_separators(self):
+        """Parse large amount with multiple thousands separators."""
+        qty, commodity = parse_amount_string("€1,000,000.00")
+        assert qty == Decimal("1000000.00")
+        assert commodity == "€"
+
     def test_empty_raises(self):
         """Empty string raises ValueError."""
         with pytest.raises(ValueError):

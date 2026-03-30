@@ -185,6 +185,26 @@ class TestParseRecurringRules:
         assert len(rules) == 1
         assert rules[0].end_date == "2026-12-31"
 
+    def test_postings_with_thousands_separator(self, tmp_path: Path):
+        """Amounts with thousands separators (commas) are parsed correctly."""
+        content = (
+            "~ monthly from 2026-05-01  ; rule-id:mortgage-001 Mortgage\n"
+            "    expenses:mortgage:interest              $1,320.28\n"
+            "    liabilities:property:mortgage            216.47\n"
+            "    assets:operating                        $-1,536.75\n"
+        )
+        f = tmp_path / "recurring.journal"
+        f.write_text(content)
+        rules = parse_recurring_rules(f)
+        assert len(rules) == 1
+        rule = rules[0]
+        assert len(rule.postings) == 3
+        assert rule.postings[0].account == "expenses:mortgage:interest"
+        assert rule.postings[0].amounts[0].quantity == Decimal("1320.28")
+        assert rule.postings[0].amounts[0].commodity == "$"
+        assert rule.postings[2].account == "assets:operating"
+        assert rule.postings[2].amounts[0].quantity == Decimal("-1536.75")
+
     def test_roundtrip(self, sample_recurring_path: Path, tmp_path: Path):
         """Parse then format then re-parse produces identical results."""
         rules = parse_recurring_rules(sample_recurring_path)
