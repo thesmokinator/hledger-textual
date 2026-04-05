@@ -9,6 +9,7 @@ import shlex
 import subprocess
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 import re
 
@@ -1249,6 +1250,7 @@ def load_report(
     period_end: str | None = None,
     commodity: str | None = None,
     cache: "HledgerCache | None" = None,
+    mode: Literal["tree", "flat"] = "flat",
 ) -> ReportData:
     """Load a multi-period financial report from hledger.
 
@@ -1263,6 +1265,8 @@ def load_report(
         commodity: Optional commodity code for ``-X`` flag to convert
             multi-commodity amounts into a single commodity.
         cache: Optional cache instance to avoid repeated subprocess calls.
+        mode: ``"flat"`` (default) renders fully qualified leaf accounts;
+            ``"tree"`` renders a hierarchical view with parent subtotals.
 
     Returns:
         A :class:`ReportData` with the parsed report.
@@ -1270,13 +1274,13 @@ def load_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity)
+    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, mode)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
-    args = [report_type, "-M", "-O", "csv", "--no-elide"]
+    args = [report_type, "-M", "-O", "csv", "--no-elide", f"--{mode}"]
     if commodity:
         args.extend(["-X", commodity])
     if period_begin:

@@ -365,6 +365,58 @@ class TestReportsPaneInvestments:
             assert "Investments" not in section_names
             assert inv_call_count == 0
 
+    async def test_t_key_toggles_tree_mode(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Pressing t flips _tree_mode and triggers reload with the new mode."""
+        captured_modes: list[str] = []
+
+        def _mock_load(*args, **kwargs):
+            captured_modes.append(kwargs.get("mode", "flat"))
+            return ReportData(title="IS", period_headers=["Jan"], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report", _mock_load
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            assert not pane._tree_mode
+            assert captured_modes[-1] == "flat"
+
+            pane.focus()
+            await pilot.press("t")
+            await pilot.pause(delay=0.5)
+            assert pane._tree_mode
+            assert captured_modes[-1] == "tree"
+
+            await pilot.press("t")
+            await pilot.pause(delay=0.5)
+            assert not pane._tree_mode
+            assert captured_modes[-1] == "flat"
+
+    async def test_t_key_noop_when_custom_report_active(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Pressing t does nothing when a custom report is active."""
+        def _mock_load(*args, **kwargs):
+            return ReportData(title="IS", period_headers=["Jan"], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report", _mock_load
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._custom_report_name = "my-report"
+            initial = pane._tree_mode
+            pane.focus()
+            await pilot.press("t")
+            await pilot.pause(delay=0.2)
+            assert pane._tree_mode == initial
+
     async def test_empty_investment_data_no_extra_rows(
         self, reports_journal: Path, monkeypatch
     ):

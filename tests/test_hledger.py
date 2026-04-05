@@ -547,6 +547,59 @@ class TestLoadReport:
         with pytest.raises(HledgerError):
             load_report(journal, "bs")
 
+    def test_load_report_default_mode_is_flat(self, monkeypatch, tmp_path: Path):
+        """load_report passes --flat to hledger by default."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_report(journal, "cf")
+        assert "--flat" in captured_args
+        assert "--tree" not in captured_args
+
+    def test_load_report_tree_mode_passes_tree_flag(self, monkeypatch, tmp_path: Path):
+        """load_report passes --tree when mode='tree'."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_report(journal, "cf", mode="tree")
+        assert "--tree" in captured_args
+        assert "--flat" not in captured_args
+
+    def test_load_report_cache_key_distinguishes_modes(self, monkeypatch, tmp_path: Path):
+        """Tree and flat results are cached under distinct keys."""
+        from hledger_textual.cache import HledgerCache
+
+        call_count = 0
+
+        def _capture(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+
+        load_report(journal, "cf", cache=cache, mode="flat")
+        load_report(journal, "cf", cache=cache, mode="flat")
+        assert call_count == 1
+
+        load_report(journal, "cf", cache=cache, mode="tree")
+        assert call_count == 2
+
 
 @pytest.mark.skipif(False, reason="pure function, no hledger needed")
 class TestExpandSearchQuery:

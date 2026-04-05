@@ -189,6 +189,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("c", "toggle_chart", "Chart", show=False, priority=True),
         Binding("i", "toggle_investments", "Investments", show=False, priority=True),
+        Binding("t", "toggle_tree", "Tree/Flat", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
         Binding("n", "new_custom_report", "New report", show=True, priority=True),
         Binding("e", "edit_custom_report", "Edit report", show=False, priority=True),
@@ -213,6 +214,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._report_data: ReportData | None = None
         self._fixed_widths: dict[int, int] = {}
         self._show_investments: bool = False
+        self._tree_mode: bool = False
         self._custom_report_name: str | None = None
 
     def compose(self) -> ComposeResult:
@@ -369,6 +371,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 period_end=end,
                 commodity=commodity,
                 cache=self._cache,
+                mode="tree" if self._tree_mode else "flat",
             )
         except HledgerError as exc:
             self.app.call_from_thread(
@@ -513,6 +516,14 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._show_investments = not self._show_investments
         label = "Investments shown" if self._show_investments else "Investments hidden"
         self.notify(label, timeout=2)
+        self._load_report_data()
+
+    def action_toggle_tree(self) -> None:
+        """Switch between flat and tree view for built-in reports."""
+        if self._custom_report_name is not None:
+            return
+        self._tree_mode = not self._tree_mode
+        self.notify("Tree view" if self._tree_mode else "Flat view", timeout=2)
         self._load_report_data()
 
     def action_refresh(self) -> None:
