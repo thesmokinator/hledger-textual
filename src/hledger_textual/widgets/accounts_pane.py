@@ -21,10 +21,10 @@ from hledger_textual.hledger import (
     load_account_tree_balances,
 )
 from hledger_textual.models import AccountNode
+from hledger_textual.widgets.constants import TREE_INDENT
 from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 
-_INDENT = "  "
 _EXPANDED = "\u25bc "
 _COLLAPSED = "\u25b6 "
 _LEAF = "  "
@@ -137,7 +137,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
             node: The AccountNode to render.
             depth: Current indentation depth.
         """
-        indent = _INDENT * depth
+        indent = TREE_INDENT * depth
         if node.children:
             icon = _EXPANDED if node.expanded else _COLLAPSED
         else:
@@ -161,7 +161,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
             rows.extend(self._collect_filtered_rows(root, 0, term))
 
         for full_path, balance, depth, has_children in rows:
-            indent = _INDENT * depth
+            indent = TREE_INDENT * depth
             icon = _EXPANDED if has_children else _LEAF
             label = Text(f"{indent}{icon}{full_path.rsplit(':', 1)[-1]}")
             if has_children:

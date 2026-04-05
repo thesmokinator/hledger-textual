@@ -1,4 +1,4 @@
-"""Shared constants for input widgets."""
+"""Shared constants used across widgets."""
 
 PASSTHROUGH_KEYS: frozenset[str] = frozenset(
     {
@@ -17,3 +17,6 @@ PASSTHROUGH_KEYS: frozenset[str] = frozenset(
     }
 )
 """Keys that should pass through to the default Input handler."""
+
+TREE_INDENT = "  "
+"""Visual indentation used per hierarchy level when rendering account trees."""

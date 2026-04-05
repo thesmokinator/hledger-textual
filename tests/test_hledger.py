@@ -471,6 +471,42 @@ class TestParseReportCsv:
         assert data.rows == []
 
 
+class TestLoadReportTreeDepth:
+    """Tests for tree-mode depth detection via real hledger."""
+
+    def test_tree_depth_reflects_account_hierarchy(self, sample_journal_path: Path):
+        """In tree mode, nested accounts have increasing depth."""
+        data = load_report(sample_journal_path, "is", mode="tree")
+        by_account = {r.account: r for r in data.rows}
+
+        # sample.journal has expenses → food → groceries (depth 0 → 1 → 2)
+        assert by_account["expenses"].depth == 0
+        assert by_account["food"].depth == 1
+        assert by_account["groceries"].depth == 2
+
+    def test_tree_depth_account_name_stripped(self, sample_journal_path: Path):
+        """Tree-mode account names no longer carry leading indentation."""
+        data = load_report(sample_journal_path, "is", mode="tree")
+        accounts = [r.account for r in data.rows]
+        assert "groceries" in accounts
+        assert not any(a.startswith(" ") for a in accounts)
+
+    def test_tree_section_headers_and_totals_have_zero_depth(
+        self, sample_journal_path: Path
+    ):
+        """Section headers and totals stay at depth 0 in tree mode."""
+        data = load_report(sample_journal_path, "is", mode="tree")
+        for row in data.rows:
+            if row.is_section_header or row.is_total:
+                assert row.depth == 0
+
+    def test_flat_mode_all_rows_zero_depth(self, sample_journal_path: Path):
+        """In flat mode every row has depth 0."""
+        data = load_report(sample_journal_path, "is", mode="flat")
+        for row in data.rows:
+            assert row.depth == 0
+
+
 class TestLoadReport:
     """Tests for load_report using monkeypatched run_hledger."""
 

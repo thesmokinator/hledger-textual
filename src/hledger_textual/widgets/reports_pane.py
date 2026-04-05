@@ -25,6 +25,7 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import CustomReport, ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.constants import TREE_INDENT
 from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
@@ -467,7 +468,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
                     f"[bold yellow]{row.account}[/bold yellow]", emoji=False
                 )
             else:
-                account_text = Text(row.account)
+                account_text = Text(TREE_INDENT * row.depth + row.account)
 
             cells = [account_text]
             for amt in row.amounts:

@@ -396,6 +396,51 @@ class TestReportsPaneInvestments:
             assert not pane._tree_mode
             assert captured_modes[-1] == "flat"
 
+    async def test_tree_rows_are_rendered_with_indentation(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Rows with depth > 0 are prefixed with 2 spaces per level in the table."""
+        from textual.coordinate import Coordinate
+
+        data = ReportData(
+            title="IS",
+            period_headers=["Jan"],
+            rows=[
+                ReportRow(account="Revenues", amounts=[""], is_section_header=True),
+                ReportRow(account="income", amounts=["€100.00"], depth=0),
+                ReportRow(account="salary", amounts=["€80.00"], depth=1),
+                ReportRow(account="freelance", amounts=["€20.00"], depth=1),
+                ReportRow(account="Total:", amounts=["€100.00"], is_total=True),
+                ReportRow(account="Expenses", amounts=[""], is_section_header=True),
+                ReportRow(account="expenses", amounts=["€50.00"], depth=0),
+                ReportRow(account="food", amounts=["€30.00"], depth=1),
+                ReportRow(account="groceries", amounts=["€25.00"], depth=2),
+            ],
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            table = app.query_one("#reports-table", DataTable)
+
+            cells_by_account: dict[str, str] = {}
+            for row_idx in range(table.row_count):
+                cell = table.get_cell_at(Coordinate(row_idx, 0))
+                text = cell.plain if hasattr(cell, "plain") else str(cell)
+                stripped = text.lstrip(" ")
+                if stripped:
+                    cells_by_account[stripped] = text
+
+            assert cells_by_account["income"] == "income"
+            assert cells_by_account["salary"] == "  salary"
+            assert cells_by_account["freelance"] == "  freelance"
+            assert cells_by_account["expenses"] == "expenses"
+            assert cells_by_account["food"] == "  food"
+            assert cells_by_account["groceries"] == "    groceries"
+
     async def test_t_key_noop_when_custom_report_active(
         self, reports_journal: Path, monkeypatch
     ):

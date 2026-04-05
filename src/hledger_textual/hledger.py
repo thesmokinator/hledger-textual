@@ -322,6 +322,26 @@ def load_account_balances(
     return result
 
 
+def _parse_tree_account(raw: str) -> tuple[str, int]:
+    """Split a tree-indented hledger account cell into (name, depth).
+
+    hledger's ``--tree`` CSV output prefixes child accounts with two
+    non-breaking spaces (``\\xa0``) per hierarchy level. This helper strips
+    those and returns the cleaned name plus its zero-based depth.
+
+    Args:
+        raw: The raw account cell from an hledger CSV row.
+
+    Returns:
+        A ``(name, depth)`` tuple. For top-level or flat-mode rows ``depth``
+        is ``0``.
+    """
+    rstripped = raw.rstrip()
+    stripped = rstripped.lstrip(" \xa0")
+    depth = (len(rstripped) - len(stripped)) // 2
+    return stripped, depth
+
+
 def load_account_tree_balances(file: str | Path) -> list["AccountNode"]:
     """Load accounts as a tree with hierarchical balances.
 
@@ -349,16 +369,11 @@ def load_account_tree_balances(file: str | Path) -> list["AccountNode"]:
     for row in reader:
         if len(row) < 2 or not row[0]:
             continue
-        raw_name = row[0]
-        balance = row[1]
-        stripped = raw_name.lstrip(" \xa0")
-        depth = len(raw_name) - len(stripped)
-        # hledger uses 2-space indentation per level
-        depth = depth // 2
+        name, depth = _parse_tree_account(row[0])
         flat_nodes.append(AccountNode(
-            name=stripped,
+            name=name,
             full_path="",  # resolved below
-            balance=balance,
+            balance=row[1],
             depth=depth,
         ))
 
@@ -1217,7 +1232,7 @@ def _parse_report_csv(output: str) -> ReportData:
         if not row:
             continue
 
-        account = row[0].strip()
+        account, depth = _parse_tree_account(row[0])
         if not account:
             continue
 
@@ -1234,6 +1249,7 @@ def _parse_report_csv(output: str) -> ReportData:
             amounts=amounts,
             is_section_header=is_section_header,
             is_total=is_total,
+            depth=depth,
         ))
 
     return ReportData(

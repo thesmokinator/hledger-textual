@@ -251,6 +251,7 @@ class ReportRow:
     amounts: list[str] = field(default_factory=list)
     is_section_header: bool = False
     is_total: bool = False
+    depth: int = 0
 
 
 @dataclass
