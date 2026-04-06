@@ -90,6 +90,7 @@ def _build_help_text() -> str:
             [
                 ("c", "Toggle chart"),
                 ("i", "Investment view"),
+                ("S", "Sort by amount"),
                 ("r", "Reload"),
             ],
         ),

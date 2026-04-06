@@ -1265,6 +1265,7 @@ def load_report(
     period_begin: str | None = None,
     period_end: str | None = None,
     commodity: str | None = None,
+    sort_amount: bool = False,
     cache: "HledgerCache | None" = None,
     mode: Literal["tree", "flat"] = "flat",
 ) -> ReportData:
@@ -1290,13 +1291,15 @@ def load_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, mode)
+    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, sort_amount, mode)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
     args = [report_type, "-M", "-O", "csv", "--no-elide", f"--{mode}"]
+    if sort_amount:
+        args.append("--sort-amount")
     if commodity:
         args.extend(["-X", commodity])
     if period_begin:
