@@ -636,6 +636,48 @@ class TestLoadReport:
         load_report(journal, "cf", cache=cache, mode="tree")
         assert call_count == 2
 
+    def test_load_report_sort_amount_flag(self, monkeypatch, tmp_path: Path):
+        """load_report passes --sort-amount only when sort_amount=True."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+
+        load_report(journal, "cf")
+        assert "--sort-amount" not in captured_args
+
+        captured_args.clear()
+        load_report(journal, "cf", sort_amount=True)
+        assert "--sort-amount" in captured_args
+
+    def test_load_report_cache_key_distinguishes_sort_amount(self, monkeypatch, tmp_path: Path):
+        """Sorted and unsorted results are cached under distinct keys."""
+        from hledger_textual.cache import HledgerCache
+
+        call_count = 0
+
+        def _capture(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return self._SAMPLE_CSV
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+
+        load_report(journal, "cf", cache=cache, sort_amount=False)
+        load_report(journal, "cf", cache=cache, sort_amount=False)
+        assert call_count == 1
+
+        load_report(journal, "cf", cache=cache, sort_amount=True)
+        assert call_count == 2
+
 
 @pytest.mark.skipif(False, reason="pure function, no hledger needed")
 class TestExpandSearchQuery:
