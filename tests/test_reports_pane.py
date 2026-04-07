@@ -586,3 +586,178 @@ class TestFormatCustomOutput:
         )
         result = _format_custom_output(raw, skip_title=True)
         assert "assets:bank" in result.plain
+
+
+# ------------------------------------------------------------------
+# Drill-down tests  (#99)
+# ------------------------------------------------------------------
+
+
+class TestReportsPaneDrillDown:
+    """Tests for drilling down from reports to transactions."""
+
+    async def test_enter_on_data_cell_pushes_transactions_screen(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Selecting a data cell pushes AccountTransactionsScreen with date query."""
+        from hledger_textual.hledger import _parse_report_csv
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            table = app.query_one("#reports-table", DataTable)
+            # Row 1 = "income:salary", col 1 = first period column ("Jan")
+            table.move_cursor(row=1, column=1)
+            await pilot.pause()
+
+            pane = app.query_one(ReportsPane)
+            pane.action_view_transactions()
+            await pilot.pause()
+
+            assert isinstance(app.screen, AccountTransactionsScreen)
+            assert app.screen.account == "income:salary"
+            assert app.screen._date_query is not None
+            assert "date:" in app.screen._date_query
+
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not isinstance(app.screen, AccountTransactionsScreen)
+
+    async def test_enter_on_account_column_has_no_date_filter(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Selecting the Account column drills down without a date filter."""
+        from hledger_textual.hledger import _parse_report_csv
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            table = app.query_one("#reports-table", DataTable)
+            # Row 1 = "income:salary", Account column (col 0)
+            table.move_cursor(row=1, column=0)
+            await pilot.pause()
+
+            pane = app.query_one(ReportsPane)
+            pane.action_view_transactions()
+            await pilot.pause()
+
+            assert isinstance(app.screen, AccountTransactionsScreen)
+            assert app.screen.account == "income:salary"
+            assert app.screen._date_query is None
+
+            await pilot.press("escape")
+
+    async def test_enter_on_section_header_does_nothing(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Selecting a section header row does not push a screen."""
+        from hledger_textual.hledger import _parse_report_csv
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            table = app.query_one("#reports-table", DataTable)
+            # Row 0 = "Revenues" (section header)
+            table.move_cursor(row=0, column=0)
+            await pilot.pause()
+
+            pane = app.query_one(ReportsPane)
+            pane.action_view_transactions()
+            await pilot.pause()
+
+            assert not isinstance(app.screen, AccountTransactionsScreen)
+
+    async def test_enter_on_total_row_does_nothing(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Selecting a total row does not push a screen."""
+        from hledger_textual.hledger import _parse_report_csv
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            table = app.query_one("#reports-table", DataTable)
+            # Last row = "Net:" (total)
+            table.move_cursor(row=table.row_count - 1, column=0)
+            await pilot.pause()
+
+            pane = app.query_one(ReportsPane)
+            pane.action_view_transactions()
+            await pilot.pause()
+
+            assert not isinstance(app.screen, AccountTransactionsScreen)
+
+    async def test_drill_down_in_tree_mode_uses_full_path(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """In tree mode, drill-down uses the reconstructed full account path."""
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        data = ReportData(
+            title="IS",
+            period_headers=["Jan"],
+            rows=[
+                ReportRow(account="Revenues", amounts=[""], is_section_header=True),
+                ReportRow(account="income", amounts=["€100.00"], depth=0),
+                ReportRow(account="salary", amounts=["€80.00"], depth=1),
+            ],
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._tree_mode = True
+            pane.focus()
+            await pilot.press("r")
+            await pilot.pause(delay=0.5)
+
+            table = app.query_one("#reports-table", DataTable)
+            # Row layout: 0=Revenues, 1=income, 2=salary
+            table.move_cursor(row=2, column=1)
+            await pilot.pause()
+
+            pane.action_view_transactions()
+            await pilot.pause()
+
+            assert isinstance(app.screen, AccountTransactionsScreen)
+            assert app.screen.account == "income:salary"
+
+            await pilot.press("escape")
