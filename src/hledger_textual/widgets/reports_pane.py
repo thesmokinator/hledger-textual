@@ -219,6 +219,9 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._tree_mode: bool = False
         self._sort_amount: bool = False
         self._custom_report_name: str | None = None
+        self._period_begin: date | None = None
+        self._table_rows: list[ReportRow | None] = []
+        self._row_full_paths: list[str] = []
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
@@ -250,7 +253,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
     def on_mount(self) -> None:
         """Set up the DataTable and load report data."""
         table = self.query_one("#reports-table", DataTable)
-        table.cursor_type = "row"
+        table.cursor_type = "cell"
         self._refresh_custom_report_select()
         self._update_context_bar_builtin()
         self._load_report_data()
@@ -364,6 +367,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
     def _load_report_data(self) -> None:
         """Load built-in report data in a background thread."""
         begin, end = self._period_range()
+        self._period_begin = date.fromisoformat(begin)
         commodity = load_default_commodity()
 
         try:
@@ -456,11 +460,39 @@ class ReportsPane(DataTablePaneMixin, Widget):
         n_cols = len(data.period_headers) + 1
         empty_row = [""] * n_cols
 
+        self._table_rows = []
+        self._row_full_paths = []
+        path_stack: list[str] = []
+
         for idx, row in enumerate(data.rows):
             if row.is_section_header and idx > 0:
                 table.add_row(*empty_row)
+                self._table_rows.append(None)
+                self._row_full_paths.append("")
             elif row.is_total:
                 table.add_row(*empty_row)
+                self._table_rows.append(None)
+                self._row_full_paths.append("")
+
+            # Compute full account path for tree mode
+            if row.is_section_header or row.is_total:
+                full_path = ""
+                if row.is_section_header:
+                    path_stack.clear()
+            else:
+                if self._tree_mode:
+                    while len(path_stack) > row.depth:
+                        path_stack.pop()
+                    if path_stack:
+                        full_path = f"{path_stack[-1]}:{row.account}"
+                    else:
+                        full_path = row.account
+                    if len(path_stack) == row.depth:
+                        path_stack.append(full_path)
+                    else:
+                        path_stack[row.depth] = full_path
+                else:
+                    full_path = row.account
 
             if row.is_section_header:
                 account_text = Text.from_markup(
@@ -485,13 +517,81 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 cells.append("")
 
             table.add_row(*cells)
+            self._table_rows.append(row)
+            self._row_full_paths.append(full_path)
 
         if self._fixed_widths:
             distribute_column_widths(table, self._fixed_widths)
 
         self._update_context_bar_builtin()
 
+    # --- Drill-down helpers ---
+
+    def _column_to_date_query(self, col_index: int) -> str:
+        """Convert a zero-based period column index to an hledger date query.
+
+        Args:
+            col_index: Zero-based index into ``period_headers``.
+
+        Returns:
+            A string like ``'date:2026-01'``.
+        """
+        if self._period_begin is None:
+            return ""
+        month = self._period_begin.month + col_index
+        year = self._period_begin.year
+        while month > 12:
+            month -= 12
+            year += 1
+        return f"date:{year}-{month:02d}"
+
     # --- Actions ---
+
+    def action_view_transactions(self) -> None:
+        """Push a drill-down screen showing transactions for the selected cell."""
+        if self._custom_report_name is not None:
+            return
+        if not self._report_data or not self._table_rows:
+            return
+
+        table = self.query_one("#reports-table", DataTable)
+        if table.row_count == 0:
+            return
+
+        row_idx = table.cursor_coordinate.row
+        col_idx = table.cursor_coordinate.column
+
+        if row_idx >= len(self._table_rows):
+            return
+
+        report_row = self._table_rows[row_idx]
+        if report_row is None or report_row.is_section_header or report_row.is_total:
+            return
+
+        account = self._row_full_paths[row_idx]
+        if not account:
+            return
+
+        date_query: str | None = None
+        subtitle = ""
+        if col_idx > 0 and self._report_data.period_headers:
+            period_idx = col_idx - 1
+            if period_idx < len(self._report_data.period_headers):
+                date_query = self._column_to_date_query(period_idx)
+                subtitle = self._report_data.period_headers[period_idx]
+
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        self.app.push_screen(
+            AccountTransactionsScreen(
+                account,
+                subtitle,
+                self.journal_file,
+                date_query=date_query,
+            )
+        )
 
     def action_toggle_chart(self) -> None:
         """Open the chart dialog for the current report."""
@@ -623,6 +723,11 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._load_report_data()
 
     # --- Event handlers ---
+
+    @on(DataTable.CellSelected, "#reports-table")
+    def on_report_cell_selected(self, event: DataTable.CellSelected) -> None:
+        """Handle Enter / click on a report table cell to drill down."""
+        self.action_view_transactions()
 
     @on(Select.Changed, "#report-type-select")
     def on_report_type_changed(self, event: Select.Changed) -> None:

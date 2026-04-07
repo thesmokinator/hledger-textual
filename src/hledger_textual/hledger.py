@@ -96,6 +96,29 @@ _QUERY_ALIASES: dict[str, str] = {
     "st:": "status:",
 }
 
+# Regex metacharacters to escape for hledger queries.  Spaces are
+# intentionally excluded because hledger uses spaces as query separators
+# (``query.split()``).  Python's ``re.escape`` escapes spaces as ``\ ``
+# which, after splitting, leaves a trailing backslash that hledger rejects.
+_HLEDGER_RE_META = re.compile(r'([\\.^$*+?{}()|[\]])')
+
+
+def escape_for_hledger(text: str) -> str:
+    """Escape regex metacharacters for use in an hledger query.
+
+    Unlike :func:`re.escape`, this does **not** escape spaces so that the
+    resulting string survives ``query.split()`` inside
+    :func:`load_transactions`.
+
+    Args:
+        text: Raw text (typically an account name).
+
+    Returns:
+        The text with regex metacharacters backslash-escaped.
+    """
+    return _HLEDGER_RE_META.sub(r'\\\1', text)
+
+
 def expand_search_query(query: str) -> str:
     """Expand short search aliases to full hledger query prefixes.
 

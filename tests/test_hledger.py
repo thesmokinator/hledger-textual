@@ -10,6 +10,7 @@ from hledger_textual.hledger import (
     HledgerError,
     _parse_budget_amount,
     _parse_report_csv,
+    escape_for_hledger,
     expand_search_query,
     get_hledger_version,
     load_account_balances,
@@ -729,6 +730,48 @@ class TestExpandSearchQuery:
         """t: and other aliases expand correctly in the same query."""
         result = expand_search_query("d:salary t:payroll")
         assert result == "desc:salary tag:payroll"
+
+
+class TestEscapeForHledger:
+    """Tests for escape_for_hledger helper."""
+
+    def test_plain_account_unchanged(self):
+        """Simple account names pass through unchanged."""
+        assert escape_for_hledger("expenses:food") == "expenses:food"
+
+    def test_spaces_not_escaped(self):
+        """Spaces must NOT be escaped (hledger splits queries on spaces)."""
+        assert escape_for_hledger("revenues:Cash Flow") == "revenues:Cash Flow"
+
+    def test_dot_escaped(self):
+        """Dots are regex metacharacters and must be escaped."""
+        assert escape_for_hledger("expenses:v2.0") == r"expenses:v2\.0"
+
+    def test_parentheses_escaped(self):
+        """Parentheses are escaped."""
+        assert escape_for_hledger("expenses:food (personal)") == r"expenses:food \(personal\)"
+
+    def test_brackets_escaped(self):
+        """Square brackets are escaped."""
+        assert escape_for_hledger("assets:bank[1]") == r"assets:bank\[1\]"
+
+    def test_backslash_escaped(self):
+        """Backslashes are escaped."""
+        assert escape_for_hledger(r"a\b") == r"a\\b"
+
+    def test_dollar_and_caret_escaped(self):
+        """Anchors in account names are escaped."""
+        assert escape_for_hledger("price$mart") == r"price\$mart"
+        assert escape_for_hledger("^special") == r"\^special"
+
+    def test_pipe_and_star_escaped(self):
+        """Other metacharacters are escaped."""
+        assert escape_for_hledger("a|b") == r"a\|b"
+        assert escape_for_hledger("a*b") == r"a\*b"
+
+    def test_empty_string(self):
+        """Empty input returns empty string."""
+        assert escape_for_hledger("") == ""
 
 
 class TestLoadInvestmentReport:

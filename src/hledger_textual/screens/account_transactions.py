@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -11,7 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Label, Static
 
-from hledger_textual.hledger import load_account_directives, save_account_directive
+from hledger_textual.hledger import escape_for_hledger, load_account_directives, save_account_directive
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 
@@ -36,8 +35,10 @@ class AccountTransactionsScreen(Screen):
     def __init__(
         self,
         account: str,
-        balance: str,
-        journal_file: Path,
+        balance: str = "",
+        journal_file: Path | None = None,
+        *,
+        date_query: str | None = None,
     ) -> None:
         """Initialise the screen.
 
@@ -45,11 +46,14 @@ class AccountTransactionsScreen(Screen):
             account: Full account name (e.g. ``'assets:bank:checking'``).
             balance: Pre-formatted current balance string for display.
             journal_file: Path to the hledger journal file.
+            date_query: Optional hledger date query (e.g. ``'date:2026-01'``)
+                to restrict the transactions to a specific period.
         """
         super().__init__()
         self.account = account
         self.balance = balance
         self.journal_file = journal_file
+        self._date_query = date_query
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
@@ -57,7 +61,9 @@ class AccountTransactionsScreen(Screen):
             yield Label(f"← {self.account}", id="acctxn-title")
             yield Label(self.balance, id="acctxn-balance")
 
-        fixed_query = f"acct:^{re.escape(self.account)}$"
+        fixed_query = f"acct:^{escape_for_hledger(self.account)}$"
+        if self._date_query:
+            fixed_query = f"{fixed_query} {self._date_query}"
         yield TransactionsTable(self.journal_file, fixed_query=fixed_query)
 
         with Vertical(id="acctxn-bottom"):
@@ -70,6 +76,8 @@ class AccountTransactionsScreen(Screen):
 
     def on_mount(self) -> None:
         """Load and display account metadata after mount."""
+        if not self.balance:
+            self.query_one("#acctxn-balance", Label).display = False
         self._refresh_metadata()
 
     def _refresh_metadata(self) -> None:
