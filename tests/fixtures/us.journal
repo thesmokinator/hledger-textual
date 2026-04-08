@@ -1,0 +1,16 @@
+; US format journal for testing.
+; Uses comma as thousands separator and dot as decimal separator ($1,000.00).
+
+commodity $1,000.00
+
+2026-01-15 * Salary
+    assets:bank:checking        $3,000.00
+    income:salary
+
+2026-01-20 * Groceries
+    expenses:food                 $150.00
+    assets:bank:checking
+
+2026-01-25 * Transport
+    expenses:transport             $50.00
+    assets:bank:checking

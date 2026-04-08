@@ -107,6 +107,18 @@ def has_hledger() -> bool:
 
 
 @pytest.fixture
+def european_journal_path() -> Path:
+    """Path to the European-format journal fixture (€1.000,00)."""
+    return FIXTURES_DIR / "european.journal"
+
+
+@pytest.fixture
+def us_journal_path() -> Path:
+    """Path to the US-format journal fixture ($1,000.00)."""
+    return FIXTURES_DIR / "us.journal"
+
+
+@pytest.fixture
 def sample_budget_journal_path() -> Path:
     """Path to the sample budget journal fixture."""
     return FIXTURES_DIR / "sample_budget.journal"

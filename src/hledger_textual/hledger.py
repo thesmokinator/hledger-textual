@@ -13,6 +13,7 @@ from typing import Literal
 
 import re
 
+from hledger_textual.amountutil import _normalize_number_string
 from hledger_textual.models import (
     Amount,
     AmountStyle,
@@ -601,29 +602,27 @@ def _parse_budget_amount(s: str) -> tuple[Decimal, str]:
     if not s or s == "0":
         return Decimal("0"), ""
 
-    # Left-side commodity: €500.00
+    # Left-side commodity: €500.00, €1.000,00
     match = re.match(r"^([^\d\s.-]+)\s*(-?[\d,.]+)$", s)
     if match:
         commodity = match.group(1)
-        num_str = match.group(2).replace(",", "")
         try:
-            return Decimal(num_str), commodity
+            return Decimal(_normalize_number_string(match.group(2))), commodity
         except Exception:
             return Decimal("0"), commodity
 
-    # Right-side commodity: 500.00 EUR
+    # Right-side commodity: 500.00 EUR, 1.000,00 EUR
     match = re.match(r"^(-?[\d,.]+)\s*([^\d\s.-]+)$", s)
     if match:
-        num_str = match.group(1).replace(",", "")
         commodity = match.group(2)
         try:
-            return Decimal(num_str), commodity
+            return Decimal(_normalize_number_string(match.group(1))), commodity
         except Exception:
             return Decimal("0"), commodity
 
     # Plain number
     try:
-        return Decimal(s.replace(",", "")), ""
+        return Decimal(_normalize_number_string(s)), ""
     except Exception:
         return Decimal("0"), ""
 

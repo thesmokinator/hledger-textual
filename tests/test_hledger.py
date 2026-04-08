@@ -191,6 +191,43 @@ class TestParseBudgetAmount:
         assert qty == Decimal("0")
         assert commodity == ""
 
+    # --- European format (comma as decimal, dot as thousands) ---
+
+    def test_european_no_thousands(self):
+        """European decimal comma without thousands separator: €100,00 → 100.00."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("€100,00")
+        assert qty == Decimal("100.00")
+        assert commodity == "€"
+
+    def test_european_with_thousands(self):
+        """European with dot thousands separator: €1.000,00 → 1000.00."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("€1.000,00")
+        assert qty == Decimal("1000.00")
+        assert commodity == "€"
+
+    def test_european_salary(self):
+        """European salary amount matching the fixture: €3.000,00 → 3000.00."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("€3.000,00")
+        assert qty == Decimal("3000.00")
+        assert commodity == "€"
+
+    def test_european_right_side(self):
+        """European format with right-side commodity code."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("1.000,00 EUR")
+        assert qty == Decimal("1000.00")
+        assert commodity == "EUR"
+
+    def test_european_plain_number_decimal_comma(self):
+        """Plain European decimal number (no commodity): 100,00 → 100.00."""
+        from decimal import Decimal
+        qty, commodity = _parse_budget_amount("100,00")
+        assert qty == Decimal("100.00")
+        assert commodity == ""
+
 
 class TestLoadJournalStats:
     """Tests for load_journal_stats."""
@@ -290,6 +327,50 @@ class TestLoadPeriodSummary:
         assert summary.expenses == Decimal("100.00")
         assert summary.investments == Decimal("600.00")
         assert summary.net == Decimal("2300.00")
+
+
+class TestLoadPeriodSummaryEuropeanFormat:
+    """Integration tests for load_period_summary with European-format journals.
+
+    These tests guard against the regression reported in issue #105 where amounts
+    like €100,00 (European decimal comma) were parsed as 10000 instead of 100.00,
+    producing 100x inflated totals in the Summary section.
+    """
+
+    def test_european_income(self, european_journal_path: Path):
+        """Income parsed from European format journal should be 3000, not 300000."""
+        summary = load_period_summary(european_journal_path, "2026-01")
+        assert summary.income == Decimal("3000.00")
+
+    def test_european_expenses(self, european_journal_path: Path):
+        """Expenses from European format journal: food €150,00 + transport €50,00 = 200."""
+        summary = load_period_summary(european_journal_path, "2026-01")
+        assert summary.expenses == Decimal("200.00")
+
+    def test_european_net(self, european_journal_path: Path):
+        """Net from European format journal: 3000 - 200 = 2800."""
+        summary = load_period_summary(european_journal_path, "2026-01")
+        assert summary.net == Decimal("2800.00")
+
+    def test_european_commodity(self, european_journal_path: Path):
+        """Commodity detected from European format journal should be €."""
+        summary = load_period_summary(european_journal_path, "2026-01")
+        assert summary.commodity == "€"
+
+    def test_us_income(self, us_journal_path: Path):
+        """Income parsed from US format journal should be 3000."""
+        summary = load_period_summary(us_journal_path, "2026-01")
+        assert summary.income == Decimal("3000.00")
+
+    def test_us_expenses(self, us_journal_path: Path):
+        """Expenses from US format journal: food $150.00 + transport $50.00 = 200."""
+        summary = load_period_summary(us_journal_path, "2026-01")
+        assert summary.expenses == Decimal("200.00")
+
+    def test_us_commodity(self, us_journal_path: Path):
+        """Commodity detected from US format journal should be $."""
+        summary = load_period_summary(us_journal_path, "2026-01")
+        assert summary.commodity == "$"
 
 
 class TestLoadExpenseBreakdown:
