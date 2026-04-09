@@ -48,6 +48,31 @@ class AmountStyle:
     precision: int = 2
 
 
+def _format_integer_with_groups(integer_part: str, separator: str, sizes: list[int]) -> str:
+    """Apply digit grouping to an integer string.
+
+    Args:
+        integer_part: The integer digits as a string (no sign, no decimal point).
+        separator: The character to insert between groups.
+        sizes: Group sizes from right to left; the last size repeats indefinitely.
+
+    Returns:
+        The integer string with group separators inserted.
+    """
+    groups: list[str] = []
+    pos = len(integer_part)
+    group_idx = 0
+
+    while pos > 0:
+        size = sizes[min(group_idx, len(sizes) - 1)]
+        start = max(pos - size, 0)
+        groups.append(integer_part[start:pos])
+        pos = start
+        group_idx += 1
+
+    return separator.join(reversed(groups))
+
+
 @dataclass
 class Amount:
     """A monetary amount with commodity and style.
@@ -66,6 +91,22 @@ class Amount:
         """Format the amount as a string for display."""
         qty_str = f"{abs(self.quantity):.{self.style.precision}f}"
         sign = "-" if self.quantity < 0 else ""
+
+        # Apply locale-aware number formatting (digit grouping and decimal mark).
+        if "." in qty_str:
+            int_part, dec_part = qty_str.split(".", 1)
+        else:
+            int_part, dec_part = qty_str, ""
+
+        if self.style.digit_group_separator and self.style.digit_group_sizes:
+            int_part = _format_integer_with_groups(
+                int_part, self.style.digit_group_separator, self.style.digit_group_sizes
+            )
+
+        if dec_part:
+            qty_str = int_part + self.style.decimal_mark + dec_part
+        else:
+            qty_str = int_part
 
         if self.style.commodity_side == "L":
             space = " " if self.style.commodity_spaced else ""

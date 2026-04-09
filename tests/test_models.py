@@ -82,6 +82,71 @@ class TestAmount:
         amt = Amount(commodity="STCK", quantity=Decimal("-10.00"), style=style, cost=cost)
         assert amt.format() == "-10.00 STCK @@ €200.00"
 
+    def test_format_european_thousands(self):
+        """European format: dot as thousands separator, comma as decimal mark."""
+        style = AmountStyle(
+            commodity_side="L",
+            commodity_spaced=True,
+            decimal_mark=",",
+            digit_group_separator=".",
+            digit_group_sizes=[3],
+            precision=2,
+        )
+        amt = Amount(commodity="€", quantity=Decimal("1000.00"), style=style)
+        assert amt.format() == "€ 1.000,00"
+
+    def test_format_european_large_number(self):
+        """European format applies grouping to numbers with multiple groups."""
+        style = AmountStyle(
+            commodity_side="L",
+            commodity_spaced=True,
+            decimal_mark=",",
+            digit_group_separator=".",
+            digit_group_sizes=[3],
+            precision=2,
+        )
+        amt = Amount(commodity="€", quantity=Decimal("1000000.00"), style=style)
+        assert amt.format() == "€ 1.000.000,00"
+
+    def test_format_european_negative(self):
+        """European format is preserved for negative amounts."""
+        style = AmountStyle(
+            commodity_side="L",
+            commodity_spaced=True,
+            decimal_mark=",",
+            digit_group_separator=".",
+            digit_group_sizes=[3],
+            precision=2,
+        )
+        amt = Amount(commodity="€", quantity=Decimal("-1000.00"), style=style)
+        assert amt.format() == "-€ 1.000,00"
+
+    def test_format_us_thousands(self):
+        """US format: comma as thousands separator, dot as decimal mark."""
+        style = AmountStyle(
+            commodity_side="L",
+            commodity_spaced=False,
+            decimal_mark=".",
+            digit_group_separator=",",
+            digit_group_sizes=[3],
+            precision=2,
+        )
+        amt = Amount(commodity="$", quantity=Decimal("1000.00"), style=style)
+        assert amt.format() == "$1,000.00"
+
+    def test_format_zero_precision_with_grouping(self):
+        """Digit grouping is applied even when precision is zero."""
+        style = AmountStyle(
+            commodity_side="L",
+            commodity_spaced=True,
+            decimal_mark=",",
+            digit_group_separator=".",
+            digit_group_sizes=[3],
+            precision=0,
+        )
+        amt = Amount(commodity="€", quantity=Decimal("1000"), style=style)
+        assert amt.format() == "€ 1.000"
+
 
 class TestTransaction:
     """Tests for Transaction properties."""
