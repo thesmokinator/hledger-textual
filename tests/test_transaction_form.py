@@ -414,6 +414,69 @@ class TestBalanceValidation:
             assert not isinstance(app.screen, TransactionFormScreen)
 
 
+class TestEuropeanStylePreservation:
+    """Regression tests for issue #111.
+
+    Editing a European-formatted transaction through the form — even when only
+    the status (or another non-amount field) is touched — must not scale the
+    amount by 100×.  The bug was that the form re-parsed the amount string
+    through ``parse_amount_str``, which produced a default US-style
+    ``AmountStyle`` and caused hledger to re-interpret the rewritten amount
+    against the journal's ``commodity € 1.000,00`` directive.
+    """
+
+    @pytest.fixture
+    def european_journal(self, tmp_path: Path) -> Path:
+        content = (
+            "commodity € 1.000,00\n"
+            "\n"
+            f"{_D3.isoformat()} ! café\n"
+            "    expenses:food          € 10,00\n"
+            "    assets:bank:checking  -€ 10,00\n"
+        )
+        dest = tmp_path / "european.journal"
+        dest.write_text(content)
+        return dest
+
+    @pytest.fixture
+    def european_app(self, european_journal: Path) -> HledgerTuiApp:
+        return HledgerTuiApp(journal_file=european_journal)
+
+    async def test_status_edit_preserves_european_amount(
+        self, european_app: HledgerTuiApp, european_journal: Path
+    ):
+        from textual.widgets import Select
+
+        from hledger_textual.hledger import load_transactions
+
+        async with european_app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause()
+            await pilot.press("e")
+            await pilot.pause()
+            form = european_app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            # Change only the status — leave the amount field untouched.
+            form.query_one("#select-status", Select).value = TransactionStatus.CLEARED
+            form._save()
+            await pilot.pause(delay=1.5)
+            assert not isinstance(european_app.screen, TransactionFormScreen)
+
+        reloaded = load_transactions(european_journal)
+        cafe = next(t for t in reloaded if t.description == "café")
+        assert cafe.status == TransactionStatus.CLEARED
+        # The bug scaled the amount from 10 to 1000 (100×).
+        assert cafe.postings[0].amounts[0].quantity == Decimal("10")
+        assert cafe.postings[1].amounts[0].quantity == Decimal("-10")
+        # The rewritten file must retain European formatting, not fall back
+        # to the US-style "€10.00" which hledger would misread as 1000.
+        file_text = european_journal.read_text()
+        assert "€ 10,00" in file_text
+        assert "€10.00" not in file_text
+
+
 class TestDateValidation:
     """Tests for the _validate_date method directly."""
 

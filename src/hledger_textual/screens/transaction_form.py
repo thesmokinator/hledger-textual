@@ -402,6 +402,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                     account=posting.account,
                     amount=amount_str,
                     commodity=commodity,
+                    initial_amounts=posting.amounts if posting.amounts else None,
                 )
         else:
             default_commodity = load_default_commodity()
@@ -414,6 +415,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         account: str = "",
         amount: str = "",
         commodity: str = "",
+        initial_amounts: list[Amount] | None = None,
     ) -> None:
         """Add a new posting row to the form."""
         container = self.query_one("#postings-container", Vertical)
@@ -428,6 +430,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
             commodity=commodity,
             row_index=self.posting_count,
             account_suggestions=self.accounts,
+            initial_amounts=initial_amounts,
         )
         container.mount(row)
         self.posting_count += 1
@@ -570,6 +573,46 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
             return False
 
     @staticmethod
+    def _reuse_initial_amounts(row: PostingRow) -> list[Amount] | None:
+        """Return the original amounts if *row*'s input is semantically unchanged.
+
+        Preserves the original :class:`AmountStyle` (decimal mark, digit
+        grouping, commodity side) when editing a transaction without modifying
+        the amount field.  This avoids round-tripping through
+        :func:`parse_amount_str`, which would otherwise reset the style to a
+        US-formatted default and — in journals declaring European formatting
+        via a ``commodity`` directive — cause hledger to re-interpret the
+        rewritten amount, scaling it by 100× (issue #111).
+
+        The comparison is tolerant of the :class:`AmountInput` blur
+        auto-format, which normalises simple decimals to 2 decimal places
+        (e.g. ``"10"`` → ``"10.00"``) without changing the semantic value.
+
+        Args:
+            row: The posting row whose current input should be compared
+                against the values it was initialised with.
+
+        Returns:
+            The original amounts list when the input is unchanged, otherwise
+            ``None`` to signal that the caller should re-parse the input.
+        """
+        if row.initial_amounts is None:
+            return None
+
+        if row.amount == row.initial_amount.strip():
+            return row.initial_amounts
+
+        # Tolerate blur auto-format for plain single-amount postings.
+        if len(row.initial_amounts) == 1 and row.initial_amounts[0].cost is None:
+            try:
+                if Decimal(row.amount) == row.initial_amounts[0].quantity:
+                    return row.initial_amounts
+            except InvalidOperation:
+                pass
+
+        return None
+
+    @staticmethod
     def _omit_balancing_amount(postings: list[Posting]) -> list[Posting]:
         """Clear the last posting's amounts when hledger can infer the balance.
 
@@ -631,17 +674,29 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
 
             amounts: list[Amount] = []
             if row.amount:
-                default_commodity = row.commodity or load_default_commodity()
-                amount = parse_amount_str(row.amount, default_commodity)
-                if amount is None:
-                    self.notify(
-                        f"Invalid amount: \"{row.amount}\". "
-                        "Use: 50.00 | €50.00 | -5 STCK @@ €200.00 | -5 STCK @ €40.00",
-                        severity="error",
-                        timeout=6,
-                    )
-                    return
-                amounts.append(amount)
+                # When the amount input is unchanged from the value the form
+                # was initialised with, reuse the original Amount objects so
+                # their AmountStyle (decimal mark, digit grouping, commodity
+                # side) is preserved.  Re-parsing the displayed string would
+                # fall back to a default US-style AmountStyle, which — on a
+                # journal that declares European formatting via a commodity
+                # directive — causes hledger to re-interpret the written
+                # amount and scale it by 100× (issue #111).
+                reused = self._reuse_initial_amounts(row)
+                if reused is not None:
+                    amounts.extend(reused)
+                else:
+                    default_commodity = row.commodity or load_default_commodity()
+                    amount = parse_amount_str(row.amount, default_commodity)
+                    if amount is None:
+                        self.notify(
+                            f"Invalid amount: \"{row.amount}\". "
+                            "Use: 50.00 | €50.00 | -5 STCK @@ €200.00 | -5 STCK @ €40.00",
+                            severity="error",
+                            timeout=6,
+                        )
+                        return
+                    amounts.append(amount)
 
             postings.append(Posting(account=account, amounts=amounts))
 

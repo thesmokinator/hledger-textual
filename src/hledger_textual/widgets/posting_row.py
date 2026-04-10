@@ -8,6 +8,7 @@ from textual.suggester import SuggestFromList
 from textual.widget import Widget
 from textual.widgets import Input, Label
 
+from hledger_textual.models import Amount
 from hledger_textual.widgets.amount_input import AmountInput
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
@@ -28,6 +29,7 @@ class PostingRow(Widget):
         commodity: str = "",
         row_index: int = 0,
         account_suggestions: list[str] | None = None,
+        initial_amounts: list[Amount] | None = None,
     ) -> None:
         """Initialize the posting row.
 
@@ -38,6 +40,12 @@ class PostingRow(Widget):
             commodity: Default commodity shown as a label (e.g. ``€``).
             row_index: Index of this row.
             account_suggestions: List of account names for autocomplete.
+            initial_amounts: The original :class:`Amount` objects from which
+                *amount* was derived, when editing an existing transaction.
+                When the user does not modify *amount*, the form reuses these
+                objects verbatim at save time so that locale-specific styles
+                (European digit grouping, decimal mark, etc.) are preserved
+                rather than lost to the default US parser.
         """
         super().__init__()
         self.initial_label = label
@@ -46,6 +54,7 @@ class PostingRow(Widget):
         self.initial_commodity = commodity
         self.row_index = row_index
         self.account_suggestions = account_suggestions or []
+        self.initial_amounts = initial_amounts
 
     def compose(self) -> ComposeResult:
         """Create the posting row layout."""
