@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
+from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule
 from hledger_textual.recurring import (
     RECURRING_FILENAME,
     RecurringError,

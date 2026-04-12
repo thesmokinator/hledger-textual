@@ -9,7 +9,11 @@ import shlex
 import subprocess
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from hledger_textual.cache import HledgerCache
+    from hledger_textual.models import AccountDirective, AccountNode
 
 import re
 
@@ -269,7 +273,7 @@ def load_transactions(
     file: str | Path,
     query: str | None = None,
     reverse: bool = False,
-    cache: "HledgerCache | None" = None,
+    cache: HledgerCache | None = None,
 ) -> list[Transaction]:
     """Load transactions from a journal file, optionally filtered by a query.
 
@@ -310,7 +314,7 @@ def load_transactions(
 
 def load_account_balances(
     file: str | Path,
-    cache: "HledgerCache | None" = None,
+    cache: HledgerCache | None = None,
 ) -> list[tuple[str, str]]:
     """Load all accounts with their current balances.
 
@@ -366,7 +370,7 @@ def _parse_tree_account(raw: str) -> tuple[str, int]:
     return stripped, depth
 
 
-def load_account_tree_balances(file: str | Path) -> list["AccountNode"]:
+def load_account_tree_balances(file: str | Path) -> list[AccountNode]:
     """Load accounts as a tree with hierarchical balances.
 
     Uses ``hledger balance --tree`` to get indented account names with
@@ -443,7 +447,7 @@ def load_accounts(file: str | Path) -> list[str]:
     return [line.strip() for line in output.strip().splitlines() if line.strip()]
 
 
-def load_account_directives(file: str | Path) -> dict[str, "AccountDirective"]:
+def load_account_directives(file: str | Path) -> dict[str, AccountDirective]:
     """Parse ``account`` directives and their comments from a journal file.
 
     Reads the file directly (the hledger CLI does not export directive
@@ -630,7 +634,7 @@ def _parse_budget_amount(s: str) -> tuple[Decimal, str]:
 def load_budget_report(
     file: str | Path,
     period: str,
-    cache: "HledgerCache | None" = None,
+    cache: HledgerCache | None = None,
 ) -> list[BudgetRow]:
     """Load budget vs actual data for a given period.
 
@@ -859,7 +863,7 @@ def load_journal_stats(file: str | Path) -> JournalStats:
 def load_period_summary(
     file: str | Path,
     period: str | None = None,
-    cache: "HledgerCache | None" = None,
+    cache: HledgerCache | None = None,
 ) -> PeriodSummary:
     """Load income, expense, and investment totals for a single period.
 
@@ -1288,7 +1292,7 @@ def load_report(
     period_end: str | None = None,
     commodity: str | None = None,
     sort_amount: bool = False,
-    cache: "HledgerCache | None" = None,
+    cache: HledgerCache | None = None,
     mode: Literal["tree", "flat"] = "flat",
 ) -> ReportData:
     """Load a multi-period financial report from hledger.

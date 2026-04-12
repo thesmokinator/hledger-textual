@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical

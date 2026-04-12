@@ -8,11 +8,10 @@ from pathlib import Path
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable, Select
+from textual.widgets import DataTable
 
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets.reports_pane import ReportsPane, _format_custom_output
-from tests.conftest import has_hledger
 
 
 class _ReportsApp(App):

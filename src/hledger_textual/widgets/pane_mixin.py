@@ -53,7 +53,7 @@ class DataTablePaneMixin:
     def action_export(self) -> None:
         """Open the export modal and export visible data to CSV or PDF."""
         from hledger_textual.config import load_export_dir
-        from hledger_textual.export import ExportData, default_filename
+        from hledger_textual.export import default_filename
 
         data = self.get_export_data()
         if data is None:

@@ -20,7 +20,6 @@ from hledger_textual.config import load_price_tickers
 from hledger_textual.formatter import normalize_commodity
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.formatting import (
-    compute_saving_rate,
     fmt_amount,
 )
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards

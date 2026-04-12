@@ -225,9 +225,9 @@ class TestFormValidation:
             form.query_one("#input-description", Input).value = "Test"
             # Fill postings with invalid amount
             rows = list(form.query(PostingRow))
-            rows[0].query_one(f"#account-0", Input).value = "expenses:food"
-            rows[0].query_one(f"#amount-0", Input).value = "abc"
-            rows[1].query_one(f"#account-1", Input).value = "assets:bank"
+            rows[0].query_one("#account-0", Input).value = "expenses:food"
+            rows[0].query_one("#amount-0", Input).value = "abc"
+            rows[1].query_one("#account-1", Input).value = "assets:bank"
             form._save()
             await pilot.pause()
             assert isinstance(app.screen, TransactionFormScreen)

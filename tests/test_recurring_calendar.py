@@ -7,11 +7,9 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from hledger_textual.models import (
     Amount,
-    AmountStyle,
     Posting,
     RecurringRule,
     TransactionStatus,

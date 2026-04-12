@@ -12,7 +12,6 @@ from hledger_textual.hledger import (
     load_account_directives,
     save_account_directive,
 )
-from hledger_textual.models import AccountDirective
 
 
 # ------------------------------------------------------------------
@@ -194,7 +193,7 @@ class TestSaveAccountDirective:
 # Integration tests (require hledger)
 # ------------------------------------------------------------------
 
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger  # noqa: E402
 
 integration_mark = pytest.mark.skipif(
     not has_hledger(), reason="hledger not installed"

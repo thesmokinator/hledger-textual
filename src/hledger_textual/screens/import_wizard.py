@@ -19,7 +19,6 @@ from hledger_textual.csv_import import (
     detect_separator,
     generate_rules_content,
     get_rules_dir,
-    parse_rules_file,
     read_csv_preview,
     save_rules_file,
     validate_rules_content,

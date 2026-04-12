@@ -480,7 +480,7 @@ class TestInsertIncludeSorted:
         assert "; Main journal\n" in result
         # Verify order of date includes
         lines = result.splitlines()
-        date_includes = [l for l in lines if "20" in l and ".journal" in l]
+        date_includes = [line for line in lines if "20" in line and ".journal" in line]
         assert date_includes == [
             "include 2026-01.journal",
             "include 2026-02.journal",
