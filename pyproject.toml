@@ -39,3 +39,10 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=src/hledger_textual --cov-report=term-missing --cov-fail-under=85"
+
+[tool.coverage.run]
+source = ["src/hledger_textual"]
+
+[tool.coverage.report]
+fail_under = 85
