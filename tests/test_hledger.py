@@ -1282,3 +1282,113 @@ class TestLoadLiabilitiesBreakdown:
         """A journal without liabilities returns an empty list."""
         breakdown = load_liabilities_breakdown(sample_journal_path)
         assert breakdown == []
+
+
+# ---------------------------------------------------------------------------
+# _parse_amount cost-annotation tests (#127)
+# ---------------------------------------------------------------------------
+
+from hledger_textual.hledger import _parse_amount  # noqa: E402
+
+
+def _amount_data(
+    commodity: str,
+    mantissa: int,
+    places: int,
+    *,
+    side: str = "L",
+    spaced: bool = False,
+    decimal_mark: str = ".",
+    precision: int = 2,
+    acost: dict | None = None,
+) -> dict:
+    """Build a minimal hledger JSON amount dict."""
+    d: dict = {
+        "acommodity": commodity,
+        "aquantity": {"decimalMantissa": mantissa, "decimalPlaces": places},
+        "astyle": {
+            "ascommodityside": side,
+            "ascommodityspaced": spaced,
+            "asdecimalmark": decimal_mark,
+            "asprecision": precision,
+        },
+    }
+    if acost is not None:
+        d["acost"] = acost
+    return d
+
+
+class TestParseAmountCostAnnotation:
+    """Unit tests for the @/@@-cost branch in _parse_amount (issue #127)."""
+
+    def test_no_cost_returns_none_cost(self):
+        """Plain amount without cost annotation — cost is None."""
+        amt = _parse_amount(_amount_data("€", 5000, 2))
+        assert amt.cost is None
+        assert amt.quantity == Decimal("50")
+
+    def test_unit_cost_buy_total_is_multiplied(self):
+        """100 STK @ $15.00 — cost stored as total (100 × 15 = 1500)."""
+        cost_data = _amount_data("$", 1500, 2)
+        data = _amount_data(
+            "STK", 10000, 2,
+            acost={"tag": "UnitCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.quantity == Decimal("100")
+        assert amt.cost is not None
+        assert amt.cost.commodity == "$"
+        # UnitCost: abs(15.00 * 100) = 1500
+        assert amt.cost.quantity == Decimal("1500.00")
+
+    def test_total_cost_buy_positive(self):
+        """100 STK @@ $1500 — TotalCost stored as-is when positive."""
+        cost_data = _amount_data("$", 150000, 2)
+        data = _amount_data(
+            "STK", 10000, 2,
+            acost={"tag": "TotalCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.quantity == Decimal("100")
+        assert amt.cost is not None
+        assert amt.cost.commodity == "$"
+        assert amt.cost.quantity == Decimal("1500")
+
+    def test_total_cost_sell_negative_is_normalised(self):
+        """Sell -10 STK @@ -$150 — TotalCost quantity normalised to positive."""
+        # hledger stores sell costs with a negative sign; we must abs() it
+        cost_data = _amount_data("$", -15000, 2)  # -$150.00
+        data = _amount_data(
+            "STK", -1000, 2,  # -10 STK
+            acost={"tag": "TotalCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.quantity == Decimal("-10")
+        assert amt.cost is not None
+        assert amt.cost.quantity == Decimal("150"), "TotalCost must always be positive"
+
+    def test_total_cost_mixed_currency(self):
+        """5 BTC @@ €200000 — different commodity for cost."""
+        cost_data = _amount_data("€", 20000000, 2)
+        data = _amount_data(
+            "BTC", 500, 2,
+            acost={"tag": "TotalCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.quantity == Decimal("5")
+        assert amt.cost is not None
+        assert amt.cost.commodity == "€"
+        assert amt.cost.quantity == Decimal("200000")
+
+    def test_unit_cost_negative_qty_absolute(self):
+        """Sell -5 BTC @ $10000 — UnitCost result is abs(qty * price)."""
+        cost_data = _amount_data("$", 1000000, 2)  # $10000
+        data = _amount_data(
+            "BTC", -500, 2,  # -5 BTC
+            acost={"tag": "UnitCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.quantity == Decimal("-5")
+        assert amt.cost is not None
+        # abs(-5 * 10000) = 50000
+        assert amt.cost.quantity == Decimal("50000")
