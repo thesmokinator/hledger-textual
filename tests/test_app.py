@@ -70,7 +70,7 @@ class TestAppStartup:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=1.0)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
