@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 
 from textual.app import App, ComposeResult
 
 from hledger_textual.hledger import _parse_report_csv
-from hledger_textual.models import ReportData, ReportRow
+from hledger_textual.models import ReportData
 from hledger_textual.widgets.report_chart import (
     ReportChart,
     extract_chart_data,

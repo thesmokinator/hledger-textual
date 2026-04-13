@@ -518,7 +518,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.25" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "ruff", specifier = ">=0.15" },
+    { name = "ruff", specifier = ">=0.15.10" },
     { name = "textual-dev", specifier = ">=1.0" },
 ]
 

@@ -243,8 +243,6 @@ class TestGitSync:
         monkeypatch.setattr(backend, "is_available", lambda: True)
         sync_called = False
 
-        original_run = backend.run
-
         def _track(action, journal_file):
             nonlocal sync_called
             sync_called = True

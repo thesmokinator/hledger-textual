@@ -233,7 +233,6 @@ class TestFormatCustomOutput:
 
     def test_title_line_is_bold(self):
         """The first non-empty line is rendered bold."""
-        from rich.text import Text
         from hledger_textual.widgets.reports_pane import _format_custom_output
         raw = "Balance changes in 2026Q1:\n  Account  ||  Jan\n"
         text = _format_custom_output(raw)
@@ -333,7 +332,7 @@ class TestReportsPaneCustomReports:
         app = _App()
         async with app.run_test() as pilot:
             await pilot.pause(delay=0.3)
-            pane = app.query_one(ReportsPane)
+            app.query_one(ReportsPane)
             select = app.query_one("#custom-report-select", Select)
             select.value = "My report"
             await pilot.pause(delay=0.3)

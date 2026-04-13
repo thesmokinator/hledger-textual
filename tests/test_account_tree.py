@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 
 from hledger_textual.hledger import load_account_tree_balances
 from hledger_textual.models import AccountNode
@@ -167,7 +166,6 @@ class TestTreeRendering:
     def test_collect_filtered_rows_match_leaf(self) -> None:
         """Filter matching a leaf should include its ancestors."""
         from hledger_textual.widgets.accounts_pane import AccountsPane
-        from pathlib import Path
 
         pane = AccountsPane.__new__(AccountsPane)
         pane._tree_roots = self._make_tree()

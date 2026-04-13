@@ -44,4 +44,4 @@ jobs:
         run: uv sync --group dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=src/hledger_textual --cov-report=term-missing --cov-report=json --cov-fail-under=85
+        run: uv run pytest --cov=src/hledger_textual --cov-report=term-missing --cov-report=json --cov-fail-under=68

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -27,7 +26,6 @@ from hledger_textual.csv_import import (
     save_rules_file,
     validate_rules_content,
 )
-from hledger_textual.models import CsvRulesFile
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SAMPLE_CSV = FIXTURES / "sample_bank.csv"

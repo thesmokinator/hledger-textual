@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
 
 from textual.app import App, ComposeResult
 from textual.widgets import Digits, Static

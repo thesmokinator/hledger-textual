@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import csv
-import io
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
