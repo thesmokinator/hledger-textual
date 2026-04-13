@@ -77,7 +77,7 @@ class TestBudgetTabSwitch:
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("4")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import ContentSwitcher
             switcher = budget_app.screen.query_one("#content-switcher", ContentSwitcher)
             assert switcher.current == "budget"
@@ -117,7 +117,7 @@ class TestBudgetAdd:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.screens.budget_form import BudgetFormScreen
             assert isinstance(budget_app.screen, BudgetFormScreen)
 
@@ -128,9 +128,9 @@ class TestBudgetAdd:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             table = budget_app.screen.query_one("#budget-table")
             assert table.row_count == 2
 
@@ -158,7 +158,7 @@ class TestBudgetDelete:
             await pilot.press("d")
             await pilot.pause()
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             table = budget_app.screen.query_one("#budget-table")
             assert table.row_count == 2
 
@@ -205,7 +205,7 @@ class TestBudgetFilter:
             await pilot.press("slash")
             await pilot.pause()
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.widgets.budget_pane import BudgetPane
             pane = budget_app.screen.query_one(BudgetPane)
             filter_bar = pane.query_one(".filter-bar")
@@ -236,7 +236,7 @@ class TestBudgetEdit:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.screens.budget_form import BudgetFormScreen
             assert isinstance(budget_app.screen, BudgetFormScreen)
             assert budget_app.screen.is_edit is True
@@ -248,7 +248,7 @@ class TestBudgetEdit:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import Input
             form = budget_app.screen
             # The account field should be filled (first rule is pre-selected)
@@ -264,9 +264,9 @@ class TestBudgetEdit:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             budget_path = budget_app_journal.parent / "budget.journal"
             rules = parse_budget_rules(budget_path)
             assert len(rules) == 2
@@ -404,7 +404,7 @@ class TestBudgetFooter:
         async with budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("4")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import Static
             footer = budget_app.screen.query_one("#footer-bar", Static)
             rendered = str(footer.renderable)
@@ -506,7 +506,7 @@ class TestBudgetNoSelection:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.screens.budget_form import BudgetFormScreen
             assert not isinstance(empty_budget_app.screen, BudgetFormScreen)
 
@@ -536,7 +536,7 @@ class TestBudgetAddSave:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import Input
             form = budget_app.screen
             form.query_one("#budget-input-account", Input).value = "Expenses:Utilities"
@@ -562,7 +562,7 @@ class TestBudgetAddSave:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import Input
             form = budget_app.screen
             form.query_one("#budget-input-account", Input).value = "Expenses:Utilities"
@@ -587,7 +587,7 @@ class TestBudgetEditSave:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import Input
             form = budget_app.screen
             form.query_one("#budget-input-amount", Input).value = "900.00"
@@ -611,7 +611,7 @@ class TestBudgetEditSave:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from textual.widgets import Input
             form = budget_app.screen
             form.query_one("#budget-input-amount", Input).value = "900.00"
@@ -704,7 +704,7 @@ class TestBudgetDefaultCommodity:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = budget_app.screen
             commodity_val = form.query_one("#budget-input-commodity", Input).value
             assert commodity_val == "CHF"

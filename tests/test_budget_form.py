@@ -152,7 +152,7 @@ class TestBudgetFormSave:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert app.results == [None]
 
 

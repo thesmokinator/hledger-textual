@@ -368,5 +368,5 @@ class TestReportsPaneCustomReports:
             pane = app.query_one(ReportsPane)
             pane.focus()
             await pilot.press("n")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert isinstance(app.screen, CustomReportFormScreen)

@@ -242,9 +242,9 @@ class TestAccountMetadataScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("enter")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
 
             meta = app.screen.query_one("#acctxn-note")
             assert meta.display is True
@@ -258,9 +258,9 @@ class TestAccountMetadataScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("enter")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
 
             meta = app.screen.query_one("#acctxn-note")
             assert meta.display is False
@@ -274,10 +274,10 @@ class TestAccountMetadataScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("enter")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("n")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
 
             assert isinstance(app.screen, AccountNoteModal)

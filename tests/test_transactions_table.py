@@ -278,7 +278,7 @@ class TestTransactionsTableEditFlow:
             await pilot.press("2")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.screens.transaction_form import TransactionFormScreen
             from hledger_textual.widgets.autocomplete_input import AutocompleteInput
             assert isinstance(app.screen, TransactionFormScreen)
@@ -306,7 +306,7 @@ class TestTransactionsTableEditFlow:
             await pilot.press("2")
             await pilot.pause(delay=1.0)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.screens.transaction_form import TransactionFormScreen
             from hledger_textual.widgets.autocomplete_input import AutocompleteInput
             assert isinstance(app.screen, TransactionFormScreen)

@@ -181,7 +181,7 @@ class TestRecurringGenerateScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert results == [False]
 
     async def test_multiple_dates_multiple_rows(

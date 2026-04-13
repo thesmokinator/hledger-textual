@@ -69,18 +69,18 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert isinstance(app.screen, TransactionFormScreen)
 
     async def test_edit_opens_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert isinstance(app.screen, TransactionFormScreen)
 
     async def test_new_form_has_today_date(self, app: HledgerTuiApp):
@@ -90,9 +90,9 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             date_input = app.screen.query_one("#input-date", Input)
             assert date_input.value == date.today().isoformat()
 
@@ -100,9 +100,9 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             rows = app.screen.query(PostingRow)
             assert len(rows) == 2
 
@@ -112,9 +112,9 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             assert form.query_one("#input-date", Input).value == _D3.isoformat()
             assert form.query_one("#input-description", Input).value == "Grocery shopping"
@@ -124,9 +124,9 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             rows = app.screen.query(PostingRow)
             # Grocery shopping has 2 postings
             assert len(rows) == 2
@@ -135,12 +135,12 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert isinstance(app.screen, TransactionFormScreen)
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert not isinstance(app.screen, TransactionFormScreen)
 
 
@@ -153,9 +153,9 @@ class TestFormValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             form.query_one("#input-date", Input).value = "not-a-date"
             form.query_one("#input-description", Input).value = "Test"
@@ -169,9 +169,9 @@ class TestFormValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             # Valid looking but impossible date
             form.query_one("#input-date", Input).value = "2026-02-30"
@@ -186,9 +186,9 @@ class TestFormValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             form.query_one("#input-date", Input).value = "2026/01/15"
             form.query_one("#input-description", Input).value = "Test"
@@ -202,9 +202,9 @@ class TestFormValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             form.query_one("#input-date", Input).value = ""
             form.query_one("#input-description", Input).value = "Test"
@@ -218,9 +218,9 @@ class TestFormValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             form.query_one("#input-description", Input).value = "Test"
             # Fill postings with invalid amount
@@ -240,9 +240,9 @@ class TestFormPostings:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             assert len(form.query(PostingRow)) == 2
 
@@ -255,9 +255,9 @@ class TestFormPostings:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
 
             # Add a third row first
@@ -276,9 +276,9 @@ class TestFormPostings:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             assert len(form.query(PostingRow)) == 2
 
@@ -297,9 +297,9 @@ class TestFormSave:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
 
             form.query_one("#input-description", Input).value = "Test transaction"
@@ -320,9 +320,9 @@ class TestFormSave:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
 
             form.query_one("#input-date", Input).value = "2026-03-01"
@@ -351,9 +351,9 @@ class TestBalanceValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
 
             form.query_one("#input-description", Input).value = "Unbalanced test"
@@ -374,9 +374,9 @@ class TestBalanceValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
 
             form.query_one("#input-description", Input).value = "Balanced test"
@@ -397,9 +397,9 @@ class TestBalanceValidation:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
 
             form.query_one("#input-description", Input).value = "Auto balance test"
@@ -452,9 +452,9 @@ class TestEuropeanStylePreservation:
         async with european_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = european_app.screen
             assert isinstance(form, TransactionFormScreen)
 
@@ -661,9 +661,9 @@ class TestDescriptionAutocomplete:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             desc_input = form.query_one("#input-description")
             assert isinstance(desc_input, AutocompleteInput)
@@ -674,9 +674,9 @@ class TestDescriptionAutocomplete:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             desc_input = form.query_one("#input-description", AutocompleteInput)
             assert desc_input.suggester is not None
@@ -685,9 +685,9 @@ class TestDescriptionAutocomplete:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             date_input = form.query_one("#input-date")
             assert isinstance(date_input, DateInput)
@@ -737,9 +737,9 @@ class TestAmountInputWidget:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             rows = list(form.query(PostingRow))
             amount_widget = rows[0].query_one("#amount-0")
@@ -762,9 +762,9 @@ class TestDefaultCommodity:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             form = app.screen
             hint = form.query_one("#default-commodity-hint", Static)
             assert "\u20ac" in hint.renderable
