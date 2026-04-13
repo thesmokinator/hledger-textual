@@ -32,7 +32,10 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Install hledger
-        run: sudo apt-get install -y hledger
+        run: |
+          curl -sLO https://github.com/simonmichael/hledger/releases/download/1.52/hledger-linux-x64.tar.gz
+          tar -xzf hledger-linux-x64.tar.gz
+          sudo mv hledger /usr/local/bin/hledger
 
       - name: Configure git
         run: git config --global init.defaultBranch main
