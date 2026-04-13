@@ -175,3 +175,37 @@ class TestAccountDrillDown:
             await pilot.pause(delay=1.0)
             table = accounts_app.screen.query_one("#transactions-table")
             assert table.row_count > 0
+
+
+class TestAccountsToggleView:
+    """Tests for the 't' (toggle flat/tree) keybinding."""
+
+    async def test_toggle_changes_tree_mode(self, accounts_app: HledgerTuiApp):
+        """Pressing 't' switches between flat and tree mode."""
+        from hledger_textual.widgets.accounts_pane import AccountsPane
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("6")
+            await pilot.pause()
+            pane = accounts_app.screen.query_one(AccountsPane)
+            initial = pane._tree_mode
+            await pilot.press("t")
+            await pilot.pause(delay=0.3)
+            assert pane._tree_mode != initial
+
+    async def test_toggle_twice_restores_mode(self, accounts_app: HledgerTuiApp):
+        """Pressing 't' twice restores the original mode."""
+        from hledger_textual.widgets.accounts_pane import AccountsPane
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("6")
+            await pilot.pause()
+            pane = accounts_app.screen.query_one(AccountsPane)
+            initial = pane._tree_mode
+            await pilot.press("t")
+            await pilot.pause(delay=0.3)
+            await pilot.press("t")
+            await pilot.pause(delay=0.3)
+            assert pane._tree_mode == initial
