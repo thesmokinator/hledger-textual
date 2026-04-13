@@ -1,8 +1,11 @@
 """Tests for file backup/restore utilities."""
 
 from pathlib import Path
+from unittest.mock import patch
 
-from hledger_textual.fileutil import backup, cleanup_backup, restore
+import pytest
+
+from hledger_textual.fileutil import backup, cleanup_backup, restore, safe_write_with_validation
 
 
 class TestBackup:
@@ -93,3 +96,90 @@ class TestRoundtrip:
         cleanup_backup(bak)
         assert not bak.exists()
         assert f.exists()
+
+
+class TestSafeWriteWithValidation:
+    """Tests for safe_write_with_validation."""
+
+    class _AppError(Exception):
+        pass
+
+    def _make_files(self, tmp_path: Path) -> tuple[Path, Path]:
+        target = tmp_path / "data.journal"
+        target.write_text("original content", encoding="utf-8")
+        journal = tmp_path / "main.journal"
+        journal.write_text("", encoding="utf-8")
+        return target, journal
+
+    def test_happy_path_writes_content(self, tmp_path: Path):
+        """New content is written and backup is removed on success."""
+        target, journal = self._make_files(tmp_path)
+
+        safe_write_with_validation(target, "new content", journal, lambda p: None, self._AppError)
+
+        assert target.read_text(encoding="utf-8") == "new content"
+        assert not target.with_suffix(".journal.bak").exists()
+
+    def test_happy_path_validate_receives_journal_file(self, tmp_path: Path):
+        """The validate callable is called with the journal_file argument."""
+        target, journal = self._make_files(tmp_path)
+        received: list[Path] = []
+
+        def capture_validate(p: Path) -> None:
+            received.append(p)
+
+        safe_write_with_validation(target, "x", journal, capture_validate, self._AppError)
+
+        assert received == [journal]
+
+    def test_validation_failure_restores_original(self, tmp_path: Path):
+        """On validation failure the original content is restored."""
+        target, journal = self._make_files(tmp_path)
+
+        def bad_validate(p: Path) -> None:
+            raise ValueError("parse error")
+
+        with pytest.raises(self._AppError, match="validation failed"):
+            safe_write_with_validation(target, "bad content", journal, bad_validate, self._AppError)
+
+        assert target.read_text(encoding="utf-8") == "original content"
+
+    def test_validation_failure_cleans_up_backup(self, tmp_path: Path):
+        """The .bak file is removed after a validation failure."""
+        target, journal = self._make_files(tmp_path)
+        bak = target.with_suffix(".journal.bak")
+
+        with pytest.raises(self._AppError):
+            safe_write_with_validation(target, "bad", journal, lambda p: (_ for _ in ()).throw(ValueError("bad")), self._AppError)
+
+        assert not bak.exists()
+
+    def test_validation_failure_error_message_includes_context(self, tmp_path: Path):
+        """The error message contains the context label."""
+        target, journal = self._make_files(tmp_path)
+
+        with pytest.raises(self._AppError, match="Budget validation failed"):
+            safe_write_with_validation(
+                target, "bad", journal, lambda p: (_ for _ in ()).throw(ValueError("x")), self._AppError, context="Budget"
+            )
+
+    def test_write_failure_restores_original(self, tmp_path: Path):
+        """If write_text raises, the original content is restored."""
+        target, journal = self._make_files(tmp_path)
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            with pytest.raises(self._AppError, match="Failed to write"):
+                safe_write_with_validation(target, "new", journal, lambda p: None, self._AppError)
+
+        assert target.read_text(encoding="utf-8") == "original content"
+
+    def test_write_failure_cleans_up_backup(self, tmp_path: Path):
+        """The .bak file is removed after a write failure."""
+        target, journal = self._make_files(tmp_path)
+        bak = target.with_suffix(".journal.bak")
+
+        with patch.object(Path, "write_text", side_effect=OSError("no space")):
+            with pytest.raises(self._AppError):
+                safe_write_with_validation(target, "new", journal, lambda p: None, self._AppError)
+
+        assert not bak.exists()
