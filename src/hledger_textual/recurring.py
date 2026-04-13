@@ -429,7 +429,6 @@ def validate_period_expr(expr: str) -> bool:
     Returns:
         ``True`` if hledger accepts the expression, ``False`` otherwise.
     """
-    import json
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmpdir:

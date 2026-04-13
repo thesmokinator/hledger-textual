@@ -9,7 +9,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
 from rich.text import Text
