@@ -6,6 +6,9 @@ import pytest
 
 from decimal import Decimal
 
+import shutil
+
+
 from hledger_textual.journal import (
     JournalError,
     RoutingStrategy,
@@ -947,3 +950,84 @@ class TestGlobSubJournalOperations:
         descriptions = [t.description for t in updated]
         assert "Electricity bill" not in descriptions
         assert main.read_text() == main_original
+
+
+class TestEuropeanFormatPreservation:
+    """Regression tests for #109: European amount format preserved after replace_transaction.
+
+    When a transaction is loaded from a journal that uses European number formatting
+    (dot as thousands separator, comma as decimal mark, e.g. €3.000,00) and is then
+    written back via replace_transaction, the file must still contain European-style
+    amounts.
+    """
+
+    @pytest.fixture
+    def european_journal(self, tmp_path: Path, european_journal_path: Path) -> Path:
+        """A temporary mutable copy of the European-format fixture journal."""
+        dest = tmp_path / "european.journal"
+        shutil.copy2(european_journal_path, dest)
+        return dest
+
+    def test_replace_preserves_european_thousands_separator(
+        self, european_journal: Path
+    ):
+        """Amounts with dot-thousands stay dot-thousands after replace_transaction."""
+        txns = load_transactions(european_journal)
+        salary = next(t for t in txns if t.description == "Salary")
+
+        toggled = Transaction(
+            index=salary.index,
+            date=salary.date,
+            description=salary.description,
+            status=TransactionStatus.CLEARED,
+            postings=salary.postings,
+            source_pos=salary.source_pos,
+        )
+
+        replace_transaction(european_journal, salary, toggled)
+
+        content = european_journal.read_text(encoding="utf-8")
+        assert "€3.000,00" in content, "European thousands separator must be preserved"
+
+    def test_replace_preserves_european_decimal_mark(
+        self, european_journal: Path
+    ):
+        """Amounts with comma-decimal stay comma-decimal after replace_transaction."""
+        txns = load_transactions(european_journal)
+        groceries = next(t for t in txns if t.description == "Groceries")
+
+        toggled = Transaction(
+            index=groceries.index,
+            date=groceries.date,
+            description=groceries.description,
+            status=TransactionStatus.CLEARED,
+            postings=groceries.postings,
+            source_pos=groceries.source_pos,
+        )
+
+        replace_transaction(european_journal, groceries, toggled)
+
+        content = european_journal.read_text(encoding="utf-8")
+        assert "€150,00" in content, "European decimal mark must be preserved"
+
+    def test_replace_does_not_introduce_dot_decimal(
+        self, european_journal: Path
+    ):
+        """Replacing a European transaction must not produce US-style dot decimals."""
+        txns = load_transactions(european_journal)
+        salary = next(t for t in txns if t.description == "Salary")
+
+        replaced = Transaction(
+            index=salary.index,
+            date=salary.date,
+            description=salary.description,
+            status=TransactionStatus.PENDING,
+            postings=salary.postings,
+            source_pos=salary.source_pos,
+        )
+
+        replace_transaction(european_journal, salary, replaced)
+
+        content = european_journal.read_text(encoding="utf-8")
+        assert "3000.00" not in content, "US-style dot decimal must not appear"
+        assert "3.000.00" not in content, "Malformed double-dot format must not appear"
