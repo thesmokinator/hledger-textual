@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from unittest.mock import MagicMock, patch
+
 from hledger_textual.csv_import import (
     CsvImportError,
     _slugify,
@@ -16,6 +18,7 @@ from hledger_textual.csv_import import (
     detect_date_format,
     detect_header_row,
     detect_separator,
+    execute_import,
     find_companion_rules,
     generate_rules_content,
     get_rules_dir,
@@ -201,6 +204,63 @@ class TestParseRulesFile:
         assert "date" in rules.field_mapping
         assert "description" in rules.field_mapping
         assert "amount" in rules.field_mapping
+
+
+class TestParseRulesFileEdgeCases:
+    """Edge-case tests for parse_rules_file."""
+
+    def _write_rules(self, tmp_path: Path, content: str, stem: str = "mybank") -> Path:
+        path = tmp_path / f"{stem}.rules"
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def test_tab_separator_tab_keyword(self, tmp_path: Path) -> None:
+        """``separator tab`` should be stored as a real tab character."""
+        rules = parse_rules_file(self._write_rules(tmp_path, "separator tab\n"))
+        assert rules.separator == "\t"
+
+    def test_tab_separator_backslash_t(self, tmp_path: Path) -> None:
+        r"""``separator \t`` literal should be stored as a real tab character."""
+        rules = parse_rules_file(self._write_rules(tmp_path, r"separator \t" + "\n"))
+        assert rules.separator == "\t"
+
+    def test_european_dot_date_format(self, tmp_path: Path) -> None:
+        """European dot-separated date format should be stored verbatim."""
+        rules = parse_rules_file(
+            self._write_rules(tmp_path, "date-format %d.%m.%Y\n")
+        )
+        assert rules.date_format == "%d.%m.%Y"
+
+    def test_skip_bare_defaults_to_one(self, tmp_path: Path) -> None:
+        """``skip`` without a number should default to 1."""
+        rules = parse_rules_file(self._write_rules(tmp_path, "skip\n"))
+        assert rules.skip == 1
+
+    def test_conditional_without_account2_skipped(self, tmp_path: Path) -> None:
+        """A conditional block with no ``account2`` should not appear in results."""
+        content = "if groceries\n  ; just a comment\n"
+        rules = parse_rules_file(self._write_rules(tmp_path, content))
+        assert rules.conditional_rules == []
+
+    def test_name_falls_back_to_stem(self, tmp_path: Path) -> None:
+        """When no ``; name:`` comment is present the stem is used as name."""
+        rules = parse_rules_file(self._write_rules(tmp_path, "skip 1\n", stem="fallback-bank"))
+        assert rules.name == "fallback-bank"
+
+    def test_multiple_conditionals_all_captured(self, tmp_path: Path) -> None:
+        """Multiple conditional blocks should all be captured in order."""
+        content = textwrap.dedent("""\
+            if groceries
+              account2 expenses:groceries
+            if netflix
+              account2 expenses:entertainment
+            if pharmacy|drugstore
+              account2 expenses:health
+        """)
+        rules = parse_rules_file(self._write_rules(tmp_path, content))
+        assert len(rules.conditional_rules) == 3
+        assert rules.conditional_rules[0] == ("groceries", "expenses:groceries")
+        assert rules.conditional_rules[2] == ("pharmacy|drugstore", "expenses:health")
 
 
 class TestGenerateRulesContent:
@@ -420,3 +480,77 @@ class TestCheckDuplicates:
         new, dupes = check_duplicates(txns, journal)
         assert len(dupes) >= 1
         assert len(new) == len(txns) - len(dupes)
+
+
+# ---------------------------------------------------------------------------
+# execute_import — batch import with error handling
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteImport:
+    """Tests for execute_import batch error handling (no hledger required)."""
+
+    def _make_txn(self, description: str = "Coffee shop") -> MagicMock:
+        txn = MagicMock()
+        txn.description = description
+        return txn
+
+    def test_returns_import_count(self, tmp_path: Path) -> None:
+        """Should return the number of successfully appended transactions."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+        txns = [self._make_txn("Tx1"), self._make_txn("Tx2")]
+
+        with (
+            patch("hledger_textual.csv_import.preview_import", return_value=txns),
+            patch("hledger_textual.csv_import.check_duplicates", return_value=(txns, [])),
+            patch("hledger_textual.journal.append_transaction"),
+        ):
+            count = execute_import(SAMPLE_CSV, SAMPLE_RULES, journal)
+
+        assert count == 2
+
+    def test_journal_error_raises_csv_import_error(self, tmp_path: Path) -> None:
+        """A JournalError during append should be wrapped as CsvImportError."""
+        from hledger_textual.journal import JournalError
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+        txn = self._make_txn("Bad Transaction")
+
+        with (
+            patch("hledger_textual.csv_import.preview_import", return_value=[txn]),
+            patch("hledger_textual.csv_import.check_duplicates", return_value=([txn], [])),
+            patch(
+                "hledger_textual.journal.append_transaction",
+                side_effect=JournalError("disk full"),
+            ),
+        ):
+            with pytest.raises(CsvImportError, match="Bad Transaction"):
+                execute_import(SAMPLE_CSV, SAMPLE_RULES, journal)
+
+    def test_preview_error_propagates(self, tmp_path: Path) -> None:
+        """A CsvImportError from preview_import should propagate unchanged."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+
+        with patch(
+            "hledger_textual.csv_import.preview_import",
+            side_effect=CsvImportError("hledger failed: bad rules"),
+        ):
+            with pytest.raises(CsvImportError, match="hledger failed"):
+                execute_import(SAMPLE_CSV, SAMPLE_RULES, journal)
+
+    def test_all_duplicates_returns_zero(self, tmp_path: Path) -> None:
+        """When all transactions are duplicates, import count should be 0."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+        txns = [self._make_txn("Old Tx")]
+
+        with (
+            patch("hledger_textual.csv_import.preview_import", return_value=txns),
+            patch("hledger_textual.csv_import.check_duplicates", return_value=([], txns)),
+        ):
+            count = execute_import(SAMPLE_CSV, SAMPLE_RULES, journal)
+
+        assert count == 0
