@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from hledger_textual.app import HledgerTuiApp
+from hledger_textual.screens.move_confirm import MoveConfirmModal
+from hledger_textual.screens.transaction_form import TransactionFormScreen
 from hledger_textual.widgets.transactions_table import TransactionsTable
 from tests.conftest import has_hledger
 
@@ -83,3 +85,189 @@ class TestTodayMonth:
             label = txn_app.screen.query_one("#txn-period-label", Static)
             expected = date.today().replace(day=1).strftime("%B %Y")
             assert str(label.renderable) == expected
+
+
+_TODAY = date.today()
+_D1 = _TODAY.replace(day=1)
+_D2 = _TODAY.replace(day=2)
+_D3 = _TODAY.replace(day=3)
+
+
+@pytest.fixture
+def txn3_journal(tmp_path: Path) -> Path:
+    """Three current-month transactions for clone/move tests."""
+    content = (
+        f"{_D1.isoformat()} Salary\n"
+        "    assets:bank:checking               €3000.00\n"
+        "    income:salary\n"
+        "\n"
+        f"{_D2.isoformat()} Grocery shopping\n"
+        "    expenses:food:groceries              €40.00\n"
+        "    assets:bank:checking\n"
+        "\n"
+        f"{_D3.isoformat()} Office supplies\n"
+        "    expenses:office                      €25.00\n"
+        "    assets:bank:checking\n"
+    )
+    path = tmp_path / "test3.journal"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def empty_journal(tmp_path: Path) -> Path:
+    path = tmp_path / "empty.journal"
+    path.write_text("", encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def app3(txn3_journal: Path) -> HledgerTuiApp:
+    return HledgerTuiApp(journal_file=txn3_journal)
+
+
+@pytest.fixture
+def empty_app(empty_journal: Path) -> HledgerTuiApp:
+    return HledgerTuiApp(journal_file=empty_journal)
+
+
+class TestTransactionsPaneRender:
+    """Pane mounts its TransactionsTable and shows correct month label."""
+
+    async def test_pane_has_table(self, app3: HledgerTuiApp) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            table = app3.query_one(TransactionsTable)
+            assert table is not None
+
+    async def test_period_label_is_current_month(self, app3: HledgerTuiApp) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            table = app3.query_one(TransactionsTable)
+            assert table._period_label() == _TODAY.strftime("%B %Y")
+
+
+class TestTransactionsPaneMonthNav:
+    """Left/right arrows navigate months."""
+
+    async def test_prev_month_decrements(self, app3: HledgerTuiApp) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            table = app3.query_one(TransactionsTable)
+            initial = table.current_month
+            await pilot.press("left")
+            await pilot.pause(delay=0.3)
+            assert table.current_month < initial
+
+    async def test_next_month_increments(self, app3: HledgerTuiApp) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            table = app3.query_one(TransactionsTable)
+            initial = table.current_month
+            await pilot.press("right")
+            await pilot.pause(delay=0.3)
+            assert table.current_month > initial
+
+
+class TestTransactionsPaneClone:
+    """'c' clones selected transaction or notifies when nothing selected."""
+
+    async def test_clone_no_selection_stays_on_main(
+        self, empty_app: HledgerTuiApp
+    ) -> None:
+        async with empty_app.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("c")
+            await pilot.pause(delay=0.5)
+            assert not isinstance(empty_app.screen, TransactionFormScreen)
+
+    async def test_clone_with_selection_opens_form(
+        self, app3: HledgerTuiApp
+    ) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("c")
+            await pilot.pause(delay=0.5)
+            assert isinstance(app3.screen, TransactionFormScreen)
+
+
+class TestTransactionsPaneMove:
+    """'m' opens MoveConfirmModal or notifies when nothing selected."""
+
+    async def test_move_no_selection_stays_on_main(
+        self, empty_app: HledgerTuiApp
+    ) -> None:
+        async with empty_app.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("m")
+            await pilot.pause(delay=0.5)
+            assert not isinstance(empty_app.screen, MoveConfirmModal)
+
+    async def test_move_with_selection_opens_modal(
+        self, app3: HledgerTuiApp
+    ) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("m")
+            await pilot.pause(delay=0.5)
+            assert isinstance(app3.screen, MoveConfirmModal)
+
+    async def test_move_cancel_dismisses_modal(self, app3: HledgerTuiApp) -> None:
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("m")
+            await pilot.pause(delay=0.5)
+            assert isinstance(app3.screen, MoveConfirmModal)
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert not isinstance(app3.screen, MoveConfirmModal)
+
+
+class TestTransactionsPaneFilter:
+    """'/' enables the search input; escape disables it."""
+
+    async def test_slash_enables_search_input(self, app3: HledgerTuiApp) -> None:
+        from textual.widgets import Input
+
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            search = app3.query_one("#txn-search-input", Input)
+            assert search.disabled
+            await pilot.press("/")
+            await pilot.pause(delay=0.3)
+            assert not search.disabled
+
+    async def test_escape_disables_search_input(self, app3: HledgerTuiApp) -> None:
+        from textual.widgets import Input
+
+        async with app3.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("/")
+            await pilot.pause(delay=0.3)
+            search = app3.query_one("#txn-search-input", Input)
+            assert not search.disabled
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert search.disabled
