@@ -616,3 +616,122 @@ class TestRecurringCRUD:
         journal, recurring = tmp_recurring_setup
         with pytest.raises(RecurringError, match="No recurring rule found"):
             delete_recurring_rule(recurring, "nonexistent-001", journal)
+
+
+# ---------------------------------------------------------------------------
+# Edge-case tests for _generate_occurrences (issue #129)
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateOccurrencesEdgeCases:
+    """Additional edge-case tests for _generate_occurrences (issue #129).
+
+    Covers bimonthly/quarterly/yearly periods and end-of-month / leap-year
+    edge cases not exercised by the baseline TestGenerateOccurrences suite.
+    """
+
+    # ------------------------------------------------------------------ #
+    # quarterly                                                            #
+    # ------------------------------------------------------------------ #
+
+    def test_quarterly_non_first_day(self):
+        """Quarterly from Jan 15 → Jan 15, Apr 15, Jul 15, Oct 15."""
+        result = _generate_occurrences(date(2024, 1, 15), "quarterly", date(2024, 12, 31))
+        assert result == [
+            date(2024, 1, 15),
+            date(2024, 4, 15),
+            date(2024, 7, 15),
+            date(2024, 10, 15),
+        ]
+
+    def test_quarterly_end_inclusive(self):
+        """End date is inclusive: Apr 15 == end → it is included."""
+        result = _generate_occurrences(date(2024, 1, 15), "quarterly", date(2024, 4, 15))
+        assert date(2024, 4, 15) in result
+
+    def test_quarterly_just_before_end(self):
+        """A date one day before end is still included."""
+        result = _generate_occurrences(date(2024, 1, 15), "quarterly", date(2024, 4, 14))
+        assert date(2024, 4, 15) not in result
+        assert date(2024, 1, 15) in result
+
+    # ------------------------------------------------------------------ #
+    # bimonthly                                                            #
+    # ------------------------------------------------------------------ #
+
+    def test_bimonthly_full_year_six_dates(self):
+        """Bimonthly full year starting Jan 1 produces exactly 6 dates."""
+        result = _generate_occurrences(date(2024, 1, 1), "bimonthly", date(2024, 12, 31))
+        assert len(result) == 6
+        assert result == [
+            date(2024, 1, 1),
+            date(2024, 3, 1),
+            date(2024, 5, 1),
+            date(2024, 7, 1),
+            date(2024, 9, 1),
+            date(2024, 11, 1),
+        ]
+
+    def test_bimonthly_year_wrap(self):
+        """Bimonthly crossing year boundary advances correctly."""
+        result = _generate_occurrences(date(2024, 11, 1), "bimonthly", date(2025, 3, 31))
+        assert result == [
+            date(2024, 11, 1),
+            date(2025, 1, 1),
+            date(2025, 3, 1),
+        ]
+
+    # ------------------------------------------------------------------ #
+    # yearly                                                               #
+    # ------------------------------------------------------------------ #
+
+    def test_yearly_from_leap_day_clamps_to_feb28(self):
+        """Feb 29 yearly → Feb 28 in non-leap years."""
+        result = _generate_occurrences(date(2024, 2, 29), "yearly", date(2027, 12, 31))
+        assert result[0] == date(2024, 2, 29)  # leap year, exact
+        assert result[1] == date(2025, 2, 28)  # non-leap → clamped
+        assert result[2] == date(2026, 2, 28)  # non-leap → clamped
+        assert result[3] == date(2027, 2, 28)  # non-leap → clamped
+
+    def test_yearly_canonical_day_preserved_across_years(self):
+        """Yearly from Mar 31 stays Mar 31 each year."""
+        result = _generate_occurrences(date(2023, 3, 31), "yearly", date(2026, 12, 31))
+        assert all(d.day == 31 and d.month == 3 for d in result)
+
+    # ------------------------------------------------------------------ #
+    # monthly — short-month clamping across full year                     #
+    # ------------------------------------------------------------------ #
+
+    def test_monthly_jan31_full_year_does_not_skip_february(self):
+        """Monthly from Jan 31 must not skip February."""
+        result = _generate_occurrences(date(2024, 1, 31), "monthly", date(2024, 6, 30))
+        months = [d.month for d in result]
+        assert 2 in months, "February must not be skipped"
+        assert months == [1, 2, 3, 4, 5, 6]
+
+    def test_monthly_jan31_clamps_then_restores(self):
+        """After clamping to Feb 28, March advances back to 31."""
+        result = _generate_occurrences(date(2024, 1, 31), "monthly", date(2024, 3, 31))
+        assert result[0] == date(2024, 1, 31)
+        assert result[1] == date(2024, 2, 29)  # 2024 is leap
+        assert result[2] == date(2024, 3, 31)  # canonical day restored
+
+    def test_monthly_jan31_non_leap_feb28(self):
+        """In a non-leap year, Jan 31 monthly → Feb 28."""
+        result = _generate_occurrences(date(2025, 1, 31), "monthly", date(2025, 3, 31))
+        assert result[1] == date(2025, 2, 28)
+        assert result[2] == date(2025, 3, 31)
+
+    # ------------------------------------------------------------------ #
+    # end-date inclusive/exclusive                                         #
+    # ------------------------------------------------------------------ #
+
+    def test_end_date_is_inclusive(self):
+        """End date itself is included when it matches an occurrence."""
+        result = _generate_occurrences(date(2026, 1, 1), "monthly", date(2026, 3, 1))
+        assert date(2026, 3, 1) in result
+
+    def test_one_day_past_end_is_excluded(self):
+        """An occurrence one day past end is excluded."""
+        result = _generate_occurrences(date(2026, 1, 1), "monthly", date(2026, 2, 28))
+        assert date(2026, 3, 1) not in result
