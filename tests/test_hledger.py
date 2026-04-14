@@ -1,8 +1,10 @@
 """Tests for hledger CLI reader."""
 
+import subprocess
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -28,6 +30,7 @@ from hledger_textual.hledger import (
     load_period_summary,
     load_report,
     load_transactions,
+    run_hledger,
 )
 from hledger_textual.models import TransactionStatus
 
@@ -1505,3 +1508,62 @@ class TestLoadMultiPeriodBudgetReport:
         periods, rows = load_multi_period_budget_report(journal, "2026-01", "2026-02")
         assert "expenses:food" in rows
         assert len(rows["expenses:food"]) == len(periods)
+
+
+class TestRunHledgerErrorHandling:
+    """Tests for HledgerError raised by run_hledger (issue #136)."""
+
+    def test_missing_binary_raises_hledger_error(self):
+        """FileNotFoundError becomes HledgerError with an install hint."""
+        with patch("subprocess.run", side_effect=FileNotFoundError()):
+            with pytest.raises(HledgerError, match="hledger not found"):
+                run_hledger("version")
+
+    def test_missing_binary_message_contains_install_url(self):
+        """The missing-binary error message links to the hledger install page."""
+        with patch("subprocess.run", side_effect=FileNotFoundError()):
+            with pytest.raises(HledgerError, match="hledger.org"):
+                run_hledger("version")
+
+    def test_nonzero_exit_raises_hledger_error(self):
+        """Non-zero exit code propagates stderr through HledgerError."""
+        exc = subprocess.CalledProcessError(1, ["hledger"], stderr="parse error at line 5")
+        with patch("subprocess.run", side_effect=exc):
+            with pytest.raises(HledgerError, match="parse error at line 5"):
+                run_hledger("print")
+
+    def test_nonzero_exit_message_prefix(self):
+        """The error message starts with 'hledger command failed'."""
+        exc = subprocess.CalledProcessError(1, ["hledger"], stderr="syntax error")
+        with patch("subprocess.run", side_effect=exc):
+            with pytest.raises(HledgerError, match="hledger command failed"):
+                run_hledger("print")
+
+    def test_success_returns_stdout(self):
+        """A successful run returns stdout unchanged."""
+        proc = MagicMock()
+        proc.stdout = "hledger 1.52\n"
+        with patch("subprocess.run", return_value=proc):
+            result = run_hledger("--version")
+        assert result == "hledger 1.52\n"
+
+    def test_missing_journal_file_raises(self, tmp_path: Path):
+        """Passing a non-existent journal file raises HledgerError."""
+        missing = tmp_path / "nonexistent.journal"
+        with pytest.raises(HledgerError):
+            load_transactions(missing)
+
+    def test_malformed_journal_raises(self, tmp_path: Path):
+        """A syntactically invalid journal raises HledgerError."""
+        bad = tmp_path / "bad.journal"
+        bad.write_text("this is not valid hledger syntax!!!\n", encoding="utf-8")
+        with pytest.raises(HledgerError):
+            load_transactions(bad)
+
+    def test_get_hledger_version_returns_question_mark_on_error(self, monkeypatch):
+        """get_hledger_version returns '?' when run_hledger raises HledgerError."""
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: (_ for _ in ()).throw(HledgerError("not found")),
+        )
+        assert get_hledger_version() == "?"
