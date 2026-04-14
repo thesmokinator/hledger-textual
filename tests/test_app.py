@@ -70,7 +70,7 @@ class TestAppStartup:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=1.0)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
@@ -87,7 +87,7 @@ class TestFilter:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("slash")
             from hledger_textual.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
@@ -99,7 +99,7 @@ class TestFilter:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("slash")
             search_input = app.screen.query_one("#txn-search-input")
             search_input.value = "desc:Grocery"
@@ -113,7 +113,7 @@ class TestFilter:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("slash")
             search_input = app.screen.query_one("#txn-search-input")
             search_input.value = "desc:Grocery"
@@ -131,7 +131,7 @@ class TestFilter:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             from hledger_textual.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
             txn_table.show_filter()
@@ -152,7 +152,7 @@ class TestRefresh:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
             await pilot.press("r")
@@ -167,7 +167,7 @@ class TestDelete:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("d")
             await pilot.pause()
             from hledger_textual.screens.delete_confirm import DeleteConfirmModal
@@ -178,11 +178,11 @@ class TestDelete:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("d")
             await pilot.pause()
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
@@ -190,7 +190,7 @@ class TestDelete:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("d")
             await pilot.pause()
             delete_btn = app.screen.query_one("#btn-delete")
@@ -242,8 +242,6 @@ class TestGitSync:
         backend = GitSyncBackend(app.journal_file)
         monkeypatch.setattr(backend, "is_available", lambda: True)
         sync_called = False
-
-        original_run = backend.run
 
         def _track(action, journal_file):
             nonlocal sync_called
@@ -344,7 +342,7 @@ class TestTabNavigation:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             footer = app.screen.query_one("#footer-bar", Static)
             rendered = str(footer.renderable)
             assert "Add" in rendered

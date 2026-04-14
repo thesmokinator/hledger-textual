@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from hledger_textual.prices import (
     PriceError,
-    _cache_path,
     fetch_prices,
     get_prices_file,
     has_pricehist,
@@ -27,7 +25,6 @@ class TestHasPricehist:
 
     def test_false_when_not_found(self):
         """Returns False when pricehist is not on PATH or in venv."""
-        import sys
         with patch("shutil.which", return_value=None):
             with patch("hledger_textual.prices.Path") as mock_path:
                 # Make venv_bin.exists() return False

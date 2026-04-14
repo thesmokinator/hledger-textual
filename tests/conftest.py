@@ -14,7 +14,6 @@ from hledger_textual.models import (
     AmountStyle,
     BudgetRule,
     Posting,
-    SourcePosition,
     Transaction,
     TransactionStatus,
 )

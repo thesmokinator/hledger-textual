@@ -33,9 +33,24 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
     "pytest-cov>=7.0.0",
+    "ruff>=0.15.10",
     "textual-dev>=1.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=src/hledger_textual --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/hledger_textual"]
+
+[tool.coverage.report]
+fail_under = 67
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]

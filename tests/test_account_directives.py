@@ -12,7 +12,6 @@ from hledger_textual.hledger import (
     load_account_directives,
     save_account_directive,
 )
-from hledger_textual.models import AccountDirective
 
 
 # ------------------------------------------------------------------
@@ -194,7 +193,7 @@ class TestSaveAccountDirective:
 # Integration tests (require hledger)
 # ------------------------------------------------------------------
 
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger  # noqa: E402
 
 integration_mark = pytest.mark.skipif(
     not has_hledger(), reason="hledger not installed"
@@ -243,9 +242,9 @@ class TestAccountMetadataScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("enter")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
 
             meta = app.screen.query_one("#acctxn-note")
             assert meta.display is True
@@ -259,9 +258,9 @@ class TestAccountMetadataScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("enter")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
 
             meta = app.screen.query_one("#acctxn-note")
             assert meta.display is False
@@ -275,10 +274,10 @@ class TestAccountMetadataScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("enter")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             await pilot.press("n")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
 
             assert isinstance(app.screen, AccountNoteModal)

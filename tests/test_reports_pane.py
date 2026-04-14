@@ -8,11 +8,10 @@ from pathlib import Path
 import pytest
 
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable, Select
+from textual.widgets import DataTable
 
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets.reports_pane import ReportsPane, _format_custom_output
-from tests.conftest import has_hledger
 
 
 class _ReportsApp(App):
@@ -217,7 +216,7 @@ class TestReportsPaneChart:
             await pilot.pause()
             assert isinstance(app.screen, ReportChartModal)
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert not isinstance(app.screen, ReportChartModal)
 
     async def test_c_key_does_nothing_without_data(
@@ -628,7 +627,7 @@ class TestReportsPaneDrillDown:
             assert "date:" in app.screen._date_query
 
             await pilot.press("escape")
-            await pilot.pause()
+            await pilot.pause(delay=0.5)
             assert not isinstance(app.screen, AccountTransactionsScreen)
 
     async def test_enter_on_account_column_has_no_date_filter(
