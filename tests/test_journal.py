@@ -1,5 +1,6 @@
 """Tests for journal file manipulation."""
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -1031,3 +1032,82 @@ class TestEuropeanFormatPreservation:
         content = european_journal.read_text(encoding="utf-8")
         assert "3000.00" not in content, "US-style dot decimal must not appear"
         assert "3.000.00" not in content, "Malformed double-dot format must not appear"
+
+
+class TestAmountStylePreservationRegression:
+    """Regression tests for issue #111 — amount style must survive non-amount edits."""
+
+    @pytest.fixture
+    def variants_journal(self, tmp_path: Path, style_variants_journal_path: Path) -> Path:
+        """Mutable copy of the style-variants fixture."""
+        dest = tmp_path / "style_variants.journal"
+        shutil.copy2(style_variants_journal_path, dest)
+        return dest
+
+    def _toggle_status(self, journal: Path, description: str) -> None:
+        txns = load_transactions(journal)
+        txn = next(t for t in txns if t.description == description)
+        new_status = (
+            TransactionStatus.UNMARKED
+            if txn.status == TransactionStatus.CLEARED
+            else TransactionStatus.CLEARED
+        )
+        toggled = dataclasses.replace(txn, status=new_status)
+        replace_transaction(journal, txn, toggled)
+
+    def test_trailing_symbol_quantity_preserved(self, variants_journal: Path):
+        """50,00 € keeps its quantity after a non-amount edit."""
+        self._toggle_status(variants_journal, "TrailingSymbol")
+        txns = load_transactions(variants_journal)
+        txn = next(item for item in txns if item.description == "TrailingSymbol")
+        assert txn.postings[0].amounts[0].quantity == Decimal("50")
+
+    def test_trailing_symbol_decimal_mark_preserved(self, variants_journal: Path):
+        """50,00 € preserves its exact posting style."""
+        self._toggle_status(variants_journal, "TrailingSymbol")
+        content = variants_journal.read_text(encoding="utf-8")
+        block = content.split("TrailingSymbol", 1)[1].split("\n\n", 1)[0]
+        assert "50,00 €" in block
+        assert "-50,00 €" in block
+
+    def test_us_style_quantity_preserved(self, variants_journal: Path):
+        """$50.00 keeps its quantity after a non-amount edit."""
+        self._toggle_status(variants_journal, "USStyle")
+        txns = load_transactions(variants_journal)
+        txn = next(item for item in txns if item.description == "USStyle")
+        assert txn.postings[0].amounts[0].quantity == Decimal("50")
+
+    def test_us_style_decimal_mark_preserved(self, variants_journal: Path):
+        """$50.00 preserves its exact posting style."""
+        self._toggle_status(variants_journal, "USStyle")
+        content = variants_journal.read_text(encoding="utf-8")
+        assert "$50.00" in content
+
+    def test_iso_code_quantity_preserved(self, variants_journal: Path):
+        """50.00 EUR keeps its quantity after a non-amount edit."""
+        self._toggle_status(variants_journal, "ISOCode")
+        txns = load_transactions(variants_journal)
+        txn = next(item for item in txns if item.description == "ISOCode")
+        assert txn.postings[0].amounts[0].quantity == Decimal("50")
+
+    def test_iso_code_style_preserved(self, variants_journal: Path):
+        """50.00 EUR preserves its trailing ISO code style."""
+        self._toggle_status(variants_journal, "ISOCode")
+        content = variants_journal.read_text(encoding="utf-8")
+        assert "50.00 EUR" in content
+
+    def test_negative_european_quantity_preserved(self, variants_journal: Path):
+        """1.234,56 € keeps its signed quantities after a non-amount edit."""
+        self._toggle_status(variants_journal, "NegativeEuropean")
+        txns = load_transactions(variants_journal)
+        txn = next(item for item in txns if item.description == "NegativeEuropean")
+        assert txn.postings[0].amounts[0].quantity == Decimal("1234.56")
+        assert txn.postings[1].amounts[0].quantity == Decimal("-1234.56")
+
+    def test_negative_european_thousands_separator_preserved(self, variants_journal: Path):
+        """1.234,56 € preserves exact European thousands and decimal formatting."""
+        self._toggle_status(variants_journal, "NegativeEuropean")
+        content = variants_journal.read_text(encoding="utf-8")
+        block = content.split("NegativeEuropean", 1)[1].split("\n\n", 1)[0]
+        assert "1.234,56 €" in block
+        assert "-1.234,56 €" in block

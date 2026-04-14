@@ -118,6 +118,12 @@ def us_journal_path() -> Path:
 
 
 @pytest.fixture
+def style_variants_journal_path() -> Path:
+    """Path to the style-variants journal fixture (multiple amount styles)."""
+    return FIXTURES_DIR / "style_variants.journal"
+
+
+@pytest.fixture
 def sample_budget_journal_path() -> Path:
     """Path to the sample budget journal fixture."""
     return FIXTURES_DIR / "sample_budget.journal"

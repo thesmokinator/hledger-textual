@@ -1,0 +1,22 @@
+; Style variants journal for regression testing of issue #111.
+; Each transaction uses a different amount formatting style.
+; replace_transaction must preserve each style exactly.
+
+commodity €1.000,00
+commodity $1,000.00
+
+2026-01-10 * TrailingSymbol
+    expenses:food             50,00 €
+    assets:bank:checking     -50,00 €
+
+2026-01-11 * USStyle
+    expenses:food             $50.00
+    assets:bank:checking     -$50.00
+
+2026-01-12 * ISOCode
+    expenses:food             50.00 EUR
+    assets:bank:checking     -50.00 EUR
+
+2026-01-13 * NegativeEuropean
+    expenses:food              1.234,56 €
+    assets:bank:checking      -1.234,56 €
