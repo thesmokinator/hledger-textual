@@ -506,8 +506,14 @@ def replace_transaction(
         start_line = transaction.source_pos[0].source_line - 1
         end_line = transaction.source_pos[1].source_line - 1
 
-        new_text = format_transaction(new_transaction) + "\n"
-        new_lines = new_text.splitlines(keepends=True)
+        original_lines = lines[start_line:end_line]
+        if original_lines and transaction.postings == new_transaction.postings:
+            header = format_transaction(new_transaction).splitlines()[0]
+            line_ending = "\r\n" if original_lines[0].endswith("\r\n") else "\n"
+            new_lines = [header + line_ending, *original_lines[1:]]
+        else:
+            new_text = format_transaction(new_transaction) + "\n"
+            new_lines = new_text.splitlines(keepends=True)
 
         lines[start_line:end_line] = new_lines
         source_file.write_text("".join(lines), encoding="utf-8")

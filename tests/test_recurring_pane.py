@@ -42,7 +42,7 @@ def recurring_journal(tmp_path: Path) -> Path:
     main = tmp_path / "test.journal"
     recurring = tmp_path / "recurring.journal"
     shutil.copy2(_SAMPLE_RECURRING, recurring)
-    main.write_text(f"include recurring.journal\n", encoding="utf-8")
+    main.write_text("include recurring.journal\n", encoding="utf-8")
     return main
 
 

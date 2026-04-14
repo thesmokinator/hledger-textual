@@ -16,7 +16,6 @@ from hledger_textual.app import HledgerTuiApp
 from hledger_textual.models import (
     Amount,
     AmountStyle,
-    BudgetRule,
     Posting,
     Transaction,
     TransactionStatus,
