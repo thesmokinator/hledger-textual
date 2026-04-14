@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from textual.widgets import DataTable
+
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.screens.move_confirm import MoveConfirmModal
 from hledger_textual.screens.transaction_form import TransactionFormScreen
@@ -198,8 +200,16 @@ class TestTransactionsPaneClone:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause(delay=0.5)
+            data_table = app3.query_one(TransactionsTable).query_one(DataTable)
+            for _ in range(10):
+                if data_table.row_count > 0 and data_table.has_focus:
+                    break
+                await pilot.pause(delay=0.1)
             await pilot.press("c")
-            await pilot.pause(delay=0.5)
+            for _ in range(10):
+                if isinstance(app3.screen, TransactionFormScreen):
+                    break
+                await pilot.pause(delay=0.1)
             assert isinstance(app3.screen, TransactionFormScreen)
 
 
