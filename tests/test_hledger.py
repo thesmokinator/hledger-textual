@@ -24,6 +24,7 @@ from hledger_textual.hledger import (
     load_investment_report,
     load_journal_stats,
     load_liabilities_breakdown,
+    load_multi_period_budget_report,
     load_period_summary,
     load_report,
     load_transactions,
@@ -1392,3 +1393,115 @@ class TestParseAmountCostAnnotation:
         assert amt.cost is not None
         # abs(-5 * 10000) = 50000
         assert amt.cost.quantity == Decimal("50000")
+
+
+class TestLoadMultiPeriodBudgetReport:
+    """Tests for load_multi_period_budget_report (issue #128)."""
+
+    _INLINE_CSV = (
+        '"Account","2026-01","2026-02","2026-03"\n'
+        '"expenses:food","€120.00=€150.00","€130.00=€150.00","€110.00=€150.00"\n'
+        '"expenses:rent","€800.00=€800.00","€800.00=€800.00","€800.00=€800.00"\n'
+    )
+
+    _SEPARATE_CSV = (
+        '"Account","2026-01","2026-01 budget","2026-02","2026-02 budget","2026-03","2026-03 budget"\n'
+        '"expenses:food","€120.00","€150.00","€130.00","€150.00","€110.00","€150.00"\n'
+        '"expenses:rent","€800.00","€800.00","€800.00","€800.00","€800.00","€800.00"\n'
+    )
+
+    def _patch(self, monkeypatch, csv_output: str) -> None:
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: csv_output,
+        )
+
+    def test_empty_output_returns_empty(self, monkeypatch, tmp_path: Path):
+        """Empty hledger output returns empty periods and rows."""
+        self._patch(monkeypatch, "")
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        periods, rows = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        assert periods == []
+        assert rows == {}
+
+    def test_inline_periods_extracted(self, monkeypatch, tmp_path: Path):
+        """Inline format returns the correct period labels."""
+        self._patch(monkeypatch, self._INLINE_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        periods, _ = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        assert periods == ["2026-01", "2026-02", "2026-03"]
+
+    def test_inline_actual_values(self, monkeypatch, tmp_path: Path):
+        """Inline format parses actual amounts correctly."""
+        self._patch(monkeypatch, self._INLINE_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        _, rows = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        food = rows["expenses:food"]
+        assert food[0].actual == Decimal("120")
+        assert food[1].actual == Decimal("130")
+        assert food[2].actual == Decimal("110")
+
+    def test_inline_budget_values(self, monkeypatch, tmp_path: Path):
+        """Inline format parses budget amounts correctly."""
+        self._patch(monkeypatch, self._INLINE_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        _, rows = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        food = rows["expenses:food"]
+        assert all(row.budget == Decimal("150") for row in food)
+
+    def test_separate_column_periods_extracted(self, monkeypatch, tmp_path: Path):
+        """Separate budget columns are excluded from the period list."""
+        self._patch(monkeypatch, self._SEPARATE_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        periods, _ = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        assert periods == ["2026-01", "2026-02", "2026-03"]
+        assert "2026-01 budget" not in periods
+
+    def test_separate_column_budget_non_zero(self, monkeypatch, tmp_path: Path):
+        """Separate budget columns yield non-zero budget values."""
+        self._patch(monkeypatch, self._SEPARATE_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        _, rows = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        food = rows["expenses:food"]
+        assert all(row.budget == Decimal("150") for row in food)
+
+    def test_separate_column_actual_values(self, monkeypatch, tmp_path: Path):
+        """Separate budget columns keep actual values aligned with the right period."""
+        self._patch(monkeypatch, self._SEPARATE_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        _, rows = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        rent = rows["expenses:rent"]
+        assert all(row.actual == Decimal("800") for row in rent)
+
+    def test_empty_budget_cell_returns_zero(self, monkeypatch, tmp_path: Path):
+        """A missing budget cell returns a zero budget."""
+        csv_output = (
+            '"Account","2026-01","2026-01 budget"\n'
+            '"expenses:food","€120.00",""\n'
+        )
+        self._patch(monkeypatch, csv_output)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        _, rows = load_multi_period_budget_report(journal, "2026-01", "2026-01")
+        food = rows["expenses:food"]
+        assert food[0].budget == Decimal("0")
+
+    def test_misaligned_row_does_not_crash(self, monkeypatch, tmp_path: Path):
+        """Rows shorter than the header still produce entries for each period."""
+        csv_output = (
+            '"Account","2026-01","2026-02"\n'
+            '"expenses:food","€120.00"\n'
+        )
+        self._patch(monkeypatch, csv_output)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        periods, rows = load_multi_period_budget_report(journal, "2026-01", "2026-02")
+        assert "expenses:food" in rows
+        assert len(rows["expenses:food"]) == len(periods)
