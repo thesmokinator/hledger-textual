@@ -1567,3 +1567,52 @@ class TestRunHledgerErrorHandling:
             lambda *args, **kwargs: (_ for _ in ()).throw(HledgerError("not found")),
         )
         assert get_hledger_version() == "?"
+
+
+class TestParseAmountPrecision:
+    """Multi-currency and precision edge cases for _parse_amount."""
+
+    def test_large_nine_digit_amount(self):
+        """A large 9-digit amount preserves magnitude and commodity."""
+        amt = _parse_amount(_amount_data("USD", 99999999999, 2))
+        assert amt.quantity == Decimal("999999999.99")
+        assert amt.commodity == "USD"
+
+    def test_zero_decimal_places(self):
+        """Integer amounts with zero decimal places remain whole numbers."""
+        amt = _parse_amount(_amount_data("EUR", 42, 0))
+        assert amt.quantity == Decimal("42")
+
+    def test_high_precision_crypto_8_places(self):
+        """Bitcoin-style 8-decimal amounts preserve their precision."""
+        amt = _parse_amount(_amount_data("BTC", 100000, 8, precision=8))
+        assert amt.quantity == Decimal("0.00100000")
+        assert amt.commodity == "BTC"
+
+    def test_negative_amount(self):
+        """Negative mantissas yield negative Decimal quantities."""
+        amt = _parse_amount(_amount_data("EUR", -15050, 2))
+        assert amt.quantity == Decimal("-150.50")
+
+    def test_european_comma_decimal_style(self):
+        """A European decimal mark is preserved in AmountStyle."""
+        amt = _parse_amount(_amount_data("EUR", 100000, 2, decimal_mark=",", precision=2))
+        assert amt.style.decimal_mark == ","
+        assert amt.quantity == Decimal("1000.00")
+
+    def test_right_side_commodity(self):
+        """A right-side commodity stays on the right in AmountStyle."""
+        amt = _parse_amount(_amount_data("EUR", 5000, 2, side="R"))
+        assert amt.style.commodity_side == "R"
+        assert amt.quantity == Decimal("50.00")
+
+    def test_multi_currency_conversion_posting(self):
+        """UnitCost with a foreign commodity stores total cost in the target commodity."""
+        btc_data = _amount_data("BTC", 50000000, 8)  # 0.5 BTC
+        eur_price = _amount_data("EUR", 2000000, 2)  # 20000.00 EUR per BTC
+        btc_data["acost"] = {"tag": "UnitCost", "contents": eur_price}
+        amt = _parse_amount(btc_data)
+        assert amt.commodity == "BTC"
+        assert amt.cost is not None
+        assert amt.cost.commodity == "EUR"
+        assert amt.cost.quantity == Decimal("10000.00")

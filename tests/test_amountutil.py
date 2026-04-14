@@ -153,3 +153,73 @@ class TestNormalizeNumberString:
     def test_plain_integer(self):
         """Plain integer with no separators passes through unchanged."""
         assert _normalize_number_string("3000") == "3000"
+
+
+# ---------------------------------------------------------------------------
+# Edge cases: precision, large amounts, multi-currency
+# ---------------------------------------------------------------------------
+
+
+class TestParseAmountStringEdgeCases:
+    """Precision, large amounts, and multi-currency edge cases."""
+
+    def test_nine_digit_us_amount(self):
+        """Parse a 9-digit US amount with three thousands separators."""
+        qty, commodity = parse_amount_string("999,999,999.99 USD")
+        assert qty == Decimal("999999999.99")
+        assert commodity == "USD"
+
+    def test_sub_cent_precision(self):
+        """Parse an amount with 3 decimal places (sub-cent)."""
+        qty, commodity = parse_amount_string("$0.001")
+        assert qty == Decimal("0.001")
+        assert commodity == "$"
+
+    def test_bitcoin_style_8_decimals(self):
+        """Parse a Bitcoin-style amount with 8 decimal places."""
+        qty, commodity = parse_amount_string("0.00100000 BTC")
+        assert qty == Decimal("0.00100000")
+        assert commodity == "BTC"
+
+    def test_negative_right_commodity(self):
+        """Parse a negative amount with right-side commodity."""
+        qty, commodity = parse_amount_string("-1,500.75 EUR")
+        assert qty == Decimal("-1500.75")
+        assert commodity == "EUR"
+
+    def test_integer_no_decimal(self):
+        """Parse an integer amount with no decimal point."""
+        qty, commodity = parse_amount_string("100 USD")
+        assert qty == Decimal("100")
+        assert commodity == "USD"
+
+    def test_european_nine_digit(self):
+        """Parse a large European amount: 999.999.999,99 EUR."""
+        qty, commodity = parse_amount_string("999.999.999,99 EUR")
+        assert qty == Decimal("999999999.99")
+        assert commodity == "EUR"
+
+
+class TestDecimalArithmeticInvariants:
+    """Decimal arithmetic properties relevant to budget rounding."""
+
+    def test_thirds_rounding(self):
+        """3 × 33.33 should equal 99.99, not 100 (no implicit rounding)."""
+        third = Decimal("33.33")
+        total = third * 3
+        assert total == Decimal("99.99")
+        assert total != Decimal("100")
+
+    def test_large_sum_precision(self):
+        """Sum of large Decimal values preserves full precision."""
+        a = Decimal("999999999.99")
+        b = Decimal("0.01")
+        assert a + b == Decimal("1000000000.00")
+
+    def test_negative_budget_delta(self):
+        """Negative minus positive stays negative (overspend scenario)."""
+        actual = Decimal("-200.00")
+        budget = Decimal("100.00")
+        delta = actual - budget
+        assert delta == Decimal("-300.00")
+        assert delta < 0
