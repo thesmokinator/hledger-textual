@@ -269,10 +269,10 @@ class TestBudgetFormCategory:
 
 
 class TestBudgetFormUnknownAccountWarning:
-    """Tests for the on-blur warning when the account is not in the journal."""
+    """Tests for the on-blur inline warning when the account is not in the journal."""
 
     async def test_warns_when_account_unknown_after_blur(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """Typing an unknown account and tabbing away surfaces a warning toast."""
+        """Typing an unknown account and tabbing away shows the inline warning widget."""
         from hledger_textual.screens import budget_form
 
         # Pretend the journal already knows about a couple of accounts so the
@@ -287,17 +287,13 @@ class TestBudgetFormUnknownAccountWarning:
         async with app.run_test() as pilot:
             await pilot.pause()
             form = app.screen
-            warnings: list[str] = []
-            original_notify = form.notify
-
-            def capture(message, *args, **kwargs):
-                if kwargs.get("severity") == "warning":
-                    warnings.append(message)
-                return original_notify(message, *args, **kwargs)
-
-            form.notify = capture  # type: ignore[method-assign]
 
             account_input = form.query_one("#budget-input-account", Input)
+            warning = form.query_one("#budget-account-warning", Static)
+            # Warning starts hidden with empty content.
+            assert warning.has_class("hidden")
+            assert str(warning.renderable) == ""
+
             account_input.value = "Expenses:Groceres"  # typo, not in known list
             account_input.focus()
             await pilot.pause()
@@ -305,12 +301,14 @@ class TestBudgetFormUnknownAccountWarning:
             form.query_one("#budget-input-amount", Input).focus()
             await pilot.pause()
 
-            assert any("Expenses:Groceres" in m and "not found" in m for m in warnings), (
-                f"Expected unknown-account warning, got {warnings!r}"
+            rendered = str(warning.renderable)
+            assert not warning.has_class("hidden"), "Warning widget should be visible after blur on unknown account"
+            assert "Expenses:Groceres" in rendered and "not found" in rendered, (
+                f"Expected unknown-account inline warning, got {rendered!r}"
             )
 
     async def test_no_warning_when_account_is_known(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """Tabbing away from a known account does not surface any warning toast."""
+        """Tabbing away from a known account keeps the inline warning hidden."""
         from hledger_textual.screens import budget_form
 
         monkeypatch.setattr(
@@ -323,27 +321,21 @@ class TestBudgetFormUnknownAccountWarning:
         async with app.run_test() as pilot:
             await pilot.pause()
             form = app.screen
-            warnings: list[str] = []
-            original_notify = form.notify
-
-            def capture(message, *args, **kwargs):
-                if kwargs.get("severity") == "warning":
-                    warnings.append(message)
-                return original_notify(message, *args, **kwargs)
-
-            form.notify = capture  # type: ignore[method-assign]
 
             account_input = form.query_one("#budget-input-account", Input)
+            warning = form.query_one("#budget-account-warning", Static)
+
             account_input.value = "Expenses:Food"
             account_input.focus()
             await pilot.pause()
             form.query_one("#budget-input-amount", Input).focus()
             await pilot.pause()
 
-            assert warnings == []
+            assert warning.has_class("hidden"), "Warning should stay hidden for known accounts"
+            assert str(warning.renderable) == ""
 
     async def test_no_warning_when_journal_has_no_accounts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """If load_accounts returns nothing, blur stays silent (fresh journal)."""
+        """If load_accounts returns nothing, blur leaves the warning hidden (fresh journal)."""
         from hledger_textual.screens import budget_form
 
         monkeypatch.setattr(budget_form, "load_accounts", lambda _path: [])
@@ -352,21 +344,51 @@ class TestBudgetFormUnknownAccountWarning:
         async with app.run_test() as pilot:
             await pilot.pause()
             form = app.screen
-            warnings: list[str] = []
-            original_notify = form.notify
-
-            def capture(message, *args, **kwargs):
-                if kwargs.get("severity") == "warning":
-                    warnings.append(message)
-                return original_notify(message, *args, **kwargs)
-
-            form.notify = capture  # type: ignore[method-assign]
 
             account_input = form.query_one("#budget-input-account", Input)
+            warning = form.query_one("#budget-account-warning", Static)
+
             account_input.value = "Anything:Goes"
             account_input.focus()
             await pilot.pause()
             form.query_one("#budget-input-amount", Input).focus()
             await pilot.pause()
 
-            assert warnings == []
+            assert warning.has_class("hidden")
+            assert str(warning.renderable) == ""
+
+    async def test_warning_cleared_after_correcting_to_known_account(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Fixing a typo to a known account hides the previously-shown warning on the next blur."""
+        from hledger_textual.screens import budget_form
+
+        monkeypatch.setattr(
+            budget_form,
+            "load_accounts",
+            lambda _path: ["Expenses:Food", "Expenses:Rent"],
+        )
+
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+
+            account_input = form.query_one("#budget-input-account", Input)
+            amount_input = form.query_one("#budget-input-amount", Input)
+            warning = form.query_one("#budget-account-warning", Static)
+
+            # First blur: unknown account -> warning visible.
+            account_input.value = "Expenses:Fod"
+            account_input.focus()
+            await pilot.pause()
+            amount_input.focus()
+            await pilot.pause()
+            assert not warning.has_class("hidden")
+
+            # Correct the account, re-focus, then blur again.
+            account_input.focus()
+            await pilot.pause()
+            account_input.value = "Expenses:Food"
+            amount_input.focus()
+            await pilot.pause()
+            assert warning.has_class("hidden")
+            assert str(warning.renderable) == ""

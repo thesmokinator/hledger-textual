@@ -608,6 +608,18 @@ BudgetFormScreen {
     width: 1fr;
 }
 
+#budget-account-warning {
+    color: $warning;
+    text-style: bold;
+    height: auto;
+    margin: 0 0 0 10;
+    padding: 0;
+}
+
+#budget-account-warning.hidden {
+    display: none;
+}
+
 
 /* --- Budget Overview Modal --- */
 

@@ -66,6 +66,8 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
                     id="budget-input-account",
                 )
 
+            yield Static("", id="budget-account-warning", classes="field-warning hidden")
+
             with Horizontal(classes="form-field"):
                 yield Label("Amount:")
                 yield NumericAmountInput(
@@ -113,23 +115,26 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
 
         hledger creates accounts on first use, so this is intentionally a
         warning rather than an error - users typing into a fresh journal
-        haven't done anything wrong. The toast just catches typos like
+        haven't done anything wrong. The inline indicator catches typos like
         ``Expenses:Groceres`` before the budget is filed.
         """
         widget = event.widget
         if widget.id != "budget-input-account":
             return
+        warning = self.query_one("#budget-account-warning", Static)
         # Skip when the user has nothing typed (the empty-account error is
         # raised by _save) or when we never managed to load any accounts.
         value = widget.value.strip()
         if not value or not self._known_accounts:
+            warning.update("")
+            warning.add_class("hidden")
             return
         if value not in self._known_accounts:
-            self.notify(
-                f"Account '{value}' not found - will be created on first use.",
-                severity="warning",
-                timeout=4,
-            )
+            warning.update(f"Account '{value}' not found - will be created on first use.")
+            warning.remove_class("hidden")
+        else:
+            warning.update("")
+            warning.add_class("hidden")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
