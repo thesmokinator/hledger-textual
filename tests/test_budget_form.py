@@ -266,3 +266,107 @@ class TestBudgetFormCategory:
             await pilot.pause()
             assert len(app.results) == 1
             assert app.results[0].category == ""
+
+
+class TestBudgetFormUnknownAccountWarning:
+    """Tests for the on-blur warning when the account is not in the journal."""
+
+    async def test_warns_when_account_unknown_after_blur(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Typing an unknown account and tabbing away surfaces a warning toast."""
+        from hledger_textual.screens import budget_form
+
+        # Pretend the journal already knows about a couple of accounts so the
+        # form has something to compare against.
+        monkeypatch.setattr(
+            budget_form,
+            "load_accounts",
+            lambda _path: ["Expenses:Food", "Expenses:Rent", "Income:Salary"],
+        )
+
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            warnings: list[str] = []
+            original_notify = form.notify
+
+            def capture(message, *args, **kwargs):
+                if kwargs.get("severity") == "warning":
+                    warnings.append(message)
+                return original_notify(message, *args, **kwargs)
+
+            form.notify = capture  # type: ignore[method-assign]
+
+            account_input = form.query_one("#budget-input-account", Input)
+            account_input.value = "Expenses:Groceres"  # typo, not in known list
+            account_input.focus()
+            await pilot.pause()
+            # Move focus away from the account field to fire the blur event.
+            form.query_one("#budget-input-amount", Input).focus()
+            await pilot.pause()
+
+            assert any("Expenses:Groceres" in m and "not found" in m for m in warnings), (
+                f"Expected unknown-account warning, got {warnings!r}"
+            )
+
+    async def test_no_warning_when_account_is_known(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Tabbing away from a known account does not surface any warning toast."""
+        from hledger_textual.screens import budget_form
+
+        monkeypatch.setattr(
+            budget_form,
+            "load_accounts",
+            lambda _path: ["Expenses:Food", "Expenses:Rent"],
+        )
+
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            warnings: list[str] = []
+            original_notify = form.notify
+
+            def capture(message, *args, **kwargs):
+                if kwargs.get("severity") == "warning":
+                    warnings.append(message)
+                return original_notify(message, *args, **kwargs)
+
+            form.notify = capture  # type: ignore[method-assign]
+
+            account_input = form.query_one("#budget-input-account", Input)
+            account_input.value = "Expenses:Food"
+            account_input.focus()
+            await pilot.pause()
+            form.query_one("#budget-input-amount", Input).focus()
+            await pilot.pause()
+
+            assert warnings == []
+
+    async def test_no_warning_when_journal_has_no_accounts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """If load_accounts returns nothing, blur stays silent (fresh journal)."""
+        from hledger_textual.screens import budget_form
+
+        monkeypatch.setattr(budget_form, "load_accounts", lambda _path: [])
+
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            warnings: list[str] = []
+            original_notify = form.notify
+
+            def capture(message, *args, **kwargs):
+                if kwargs.get("severity") == "warning":
+                    warnings.append(message)
+                return original_notify(message, *args, **kwargs)
+
+            form.notify = capture  # type: ignore[method-assign]
+
+            account_input = form.query_one("#budget-input-account", Input)
+            account_input.value = "Anything:Goes"
+            account_input.focus()
+            await pilot.pause()
+            form.query_one("#budget-input-amount", Input).focus()
+            await pilot.pause()
+
+            assert warnings == []

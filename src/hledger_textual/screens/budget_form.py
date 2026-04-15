@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -40,6 +41,10 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
         super().__init__()
         self.journal_file = journal_file
         self.rule = rule
+        # Cached list of known accounts from the journal. Populated in
+        # on_mount so we can re-use it for both autocomplete and blur-time
+        # validation without re-shelling out to hledger.
+        self._known_accounts: list[str] = []
 
     @property
     def is_edit(self) -> bool:
@@ -96,9 +101,34 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
         except HledgerError:
             accounts = []
 
+        self._known_accounts = accounts
+
         if accounts:
-            self.query_one("#budget-input-account", AutocompleteInput).suggester = (
-                SuggestFromList(accounts, case_sensitive=False)
+            self.query_one("#budget-input-account", AutocompleteInput).suggester = SuggestFromList(
+                accounts, case_sensitive=False
+            )
+
+    def on_descendant_blur(self, event: events.DescendantBlur) -> None:
+        """Warn when the account field is left holding an unknown name.
+
+        hledger creates accounts on first use, so this is intentionally a
+        warning rather than an error - users typing into a fresh journal
+        haven't done anything wrong. The toast just catches typos like
+        ``Expenses:Groceres`` before the budget is filed.
+        """
+        widget = event.widget
+        if widget.id != "budget-input-account":
+            return
+        # Skip when the user has nothing typed (the empty-account error is
+        # raised by _save) or when we never managed to load any accounts.
+        value = widget.value.strip()
+        if not value or not self._known_accounts:
+            return
+        if value not in self._known_accounts:
+            self.notify(
+                f"Account '{value}' not found - will be created on first use.",
+                severity="warning",
+                timeout=4,
             )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -145,9 +175,7 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
             commodity_side="L",
             commodity_spaced=False,
             precision=max(
-                abs(quantity.as_tuple().exponent)
-                if isinstance(quantity.as_tuple().exponent, int)
-                else 2,
+                abs(quantity.as_tuple().exponent) if isinstance(quantity.as_tuple().exponent, int) else 2,
                 2,
             ),
         )
