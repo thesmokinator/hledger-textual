@@ -58,15 +58,16 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
         with Vertical(id="budget-form-dialog"):
             yield Static(title, id="budget-form-title")
 
-            with Horizontal(classes="form-field"):
-                yield Label("Account:")
-                yield AutocompleteInput(
-                    value=self.rule.account if self.is_edit else "",
-                    placeholder="e.g. Expenses:Groceries",
-                    id="budget-input-account",
-                )
+            with Vertical(classes="form-field-group"):
+                with Horizontal(classes="form-field"):
+                    yield Label("Account:")
+                    yield AutocompleteInput(
+                        value=self.rule.account if self.is_edit else "",
+                        placeholder="e.g. Expenses:Groceries",
+                        id="budget-input-account",
+                    )
 
-            yield Static("", id="budget-account-warning", classes="field-warning hidden")
+                yield Static("", id="budget-account-warning", classes="field-warning hidden")
 
             with Horizontal(classes="form-field"):
                 yield Label("Amount:")

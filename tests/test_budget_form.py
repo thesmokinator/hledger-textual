@@ -357,7 +357,9 @@ class TestBudgetFormUnknownAccountWarning:
             assert warning.has_class("hidden")
             assert str(warning.renderable) == ""
 
-    async def test_warning_cleared_after_correcting_to_known_account(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    async def test_warning_cleared_after_correcting_to_known_account(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         """Fixing a typo to a known account hides the previously-shown warning on the next blur."""
         from hledger_textual.screens import budget_form
 
@@ -392,3 +394,15 @@ class TestBudgetFormUnknownAccountWarning:
             await pilot.pause()
             assert warning.has_class("hidden")
             assert str(warning.renderable) == ""
+
+    async def test_warning_is_grouped_with_account_field(self, tmp_path: Path):
+        """The inline warning lives in the same field group as the account input."""
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+
+            account_group = form.query_one(".form-field-group")
+            warning = form.query_one("#budget-account-warning", Static)
+
+            assert warning.parent is account_group
