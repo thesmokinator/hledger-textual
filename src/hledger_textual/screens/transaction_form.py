@@ -716,8 +716,9 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
                 if total != 0:
                     commodity_sym = next(iter(commodities))
                     self.notify(
-                        f"Transaction is unbalanced (sum: {total:+g} {commodity_sym}). "
-                        "Negate one amount or leave one blank to auto-balance.",
+                        f"Transaction is unbalanced. Sum: {total:+g} {commodity_sym}. "
+                        "Tip: leave one amount blank to auto-balance, or add a "
+                        "posting to absorb the difference.",
                         severity="error",
                         timeout=6,
                     )

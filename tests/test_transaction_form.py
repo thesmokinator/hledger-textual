@@ -368,6 +368,18 @@ class TestBalanceValidation:
             # Form must NOT have dismissed — still showing the form
             assert isinstance(app.screen, TransactionFormScreen)
 
+            # Toast must mention BOTH the imbalance amount and a concrete fix.
+            messages = [str(n.message) for n in app._notifications]
+            unbalanced = [m for m in messages if "unbalanced" in m]
+            assert unbalanced, (
+                f"expected an 'unbalanced' notification, got: {messages}"
+            )
+            msg = unbalanced[-1]
+            assert "200" in msg, f"missing imbalance amount in: {msg!r}"
+            assert "blank to auto-balance" in msg, (
+                f"missing actionable fix tip in: {msg!r}"
+            )
+
     async def test_balanced_same_commodity_is_accepted(self, app: HledgerTuiApp):
         from textual.widgets import Input
 
