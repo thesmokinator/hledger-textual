@@ -109,7 +109,7 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                     yield Label("Expression:")
                     yield Input(
                         value=initial_custom,
-                        placeholder="e.g. every 2 weeks  (also: every 3 days, every 1st month)",
+                        placeholder="e.g. every 2 weeks  (also: every 3 days, monthly)",
                         id="recurring-input-custom-period",
                     )
 
@@ -118,7 +118,7 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                 # accepted. Sits above the validation feedback below.
                 with Horizontal(classes="form-field", id="recurring-custom-period-hint-row"):
                     yield Label(
-                        "Examples: every 2 weeks · every 3 days · every 1st month · weekly · biweekly",
+                        "Examples: every 2 weeks · every 3 days · weekly · biweekly · monthly",
                         id="recurring-custom-period-hint",
                         classes="form-hint",
                     )

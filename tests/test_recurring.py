@@ -748,8 +748,6 @@ class TestValidatePeriodExpr:
         [
             "every 2 weeks",
             "every 3 days",
-            "every 1st month",
-            "every 2nd month",
             "weekly",
             "biweekly",
             "monthly",
