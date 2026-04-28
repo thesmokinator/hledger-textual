@@ -109,8 +109,28 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                     yield Label("Expression:")
                     yield Input(
                         value=initial_custom,
-                        placeholder="e.g. every 2 weeks",
+                        placeholder="e.g. every 2 weeks  (also: every 3 days, every 1st month)",
                         id="recurring-input-custom-period",
+                    )
+
+                # Inline hint mirroring hledger's periodic-rules grammar so
+                # users don't have to flip to the docs to discover what's
+                # accepted. Sits above the validation feedback below.
+                with Horizontal(classes="form-field", id="recurring-custom-period-hint-row"):
+                    yield Label(
+                        "Examples: every 2 weeks · every 3 days · every 1st month · weekly · biweekly",
+                        id="recurring-custom-period-hint",
+                        classes="form-hint",
+                    )
+
+                # Live validation feedback. Empty until the user submits
+                # (Enter / focus-out); errors render here. Cleared whenever
+                # the input becomes valid again.
+                with Horizontal(classes="form-field", id="recurring-custom-period-error-row"):
+                    yield Label(
+                        "",
+                        id="recurring-custom-period-error",
+                        classes="form-error",
                     )
 
                 with Horizontal(classes="form-field"):
@@ -203,8 +223,51 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
     @on(Select.Changed, "#recurring-select-period")
     def on_recurring_select_period_changed(self, event: Select.Changed) -> None:
         """Show or hide the custom expression field based on period selection."""
-        custom_row = self.query_one("#recurring-custom-period-row")
-        custom_row.display = event.value == "custom"
+        is_custom = event.value == "custom"
+        for row_id in (
+            "#recurring-custom-period-row",
+            "#recurring-custom-period-hint-row",
+            "#recurring-custom-period-error-row",
+        ):
+            self.query_one(row_id).display = is_custom
+        if not is_custom:
+            # Leave no stale error visible if the user flips back to a preset.
+            self.query_one("#recurring-custom-period-error", Label).update("")
+
+    @on(Input.Submitted, "#recurring-input-custom-period")
+    def on_custom_period_submitted(self, event: Input.Submitted) -> None:
+        """Validate the custom hledger period expression on submit (Enter).
+
+        Catches typos before the user reaches the Save button. The same
+        check still runs in :meth:`_save`; this just surfaces the error
+        sooner.
+        """
+        self._refresh_custom_period_feedback(event.value)
+
+    @on(Input.Changed, "#recurring-input-custom-period")
+    def on_custom_period_changed(self, event: Input.Changed) -> None:
+        """Clear any prior validation error as soon as the user edits."""
+        # Avoid running hledger on every keystroke; just clear the error
+        # so the form doesn't show a stale message while the user is mid-type.
+        # Re-validation happens on Submitted (Enter) or Save.
+        if not event.value.strip():
+            self.query_one("#recurring-custom-period-error", Label).update("")
+        else:
+            current = self.query_one("#recurring-custom-period-error", Label)
+            if str(current.renderable):
+                current.update("")
+
+    def _refresh_custom_period_feedback(self, expr: str) -> None:
+        """Run :func:`validate_period_expr` and render the result inline."""
+        error_label = self.query_one("#recurring-custom-period-error", Label)
+        expr = expr.strip()
+        if not expr:
+            error_label.update("")
+            return
+        if validate_period_expr(expr):
+            error_label.update("")
+        else:
+            error_label.update(f"Invalid period: {expr!r}. Try 'every 2 weeks' or 'every 3 days'.")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -294,18 +357,14 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                 try:
                     quantity = Decimal(amount_str)
                 except InvalidOperation:
-                    self.notify(
-                        f"Invalid amount: {amount_str}", severity="error", timeout=3
-                    )
+                    self.notify(f"Invalid amount: {amount_str}", severity="error", timeout=3)
                     return
 
                 style = AmountStyle(
                     commodity_side="L",
                     commodity_spaced=False,
                     precision=max(
-                        abs(quantity.as_tuple().exponent)
-                        if isinstance(quantity.as_tuple().exponent, int)
-                        else 2,
+                        abs(quantity.as_tuple().exponent) if isinstance(quantity.as_tuple().exponent, int) else 2,
                         2,
                     ),
                 )

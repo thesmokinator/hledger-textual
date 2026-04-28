@@ -23,6 +23,7 @@ from hledger_textual.recurring import (
     ensure_recurring_file,
     parse_recurring_rules,
     update_recurring_rule,
+    validate_period_expr,
 )
 from tests.conftest import has_hledger
 
@@ -735,3 +736,40 @@ class TestGenerateOccurrencesEdgeCases:
         """An occurrence one day past end is excluded."""
         result = _generate_occurrences(date(2026, 1, 1), "monthly", date(2026, 2, 28))
         assert date(2026, 3, 1) not in result
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestValidatePeriodExpr:
+    """Cover the period-expression validator behind the recurring form
+    placeholder hint (issue #152)."""
+
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "every 2 weeks",
+            "every 3 days",
+            "every 1st month",
+            "every 2nd month",
+            "weekly",
+            "biweekly",
+            "monthly",
+        ],
+    )
+    def test_accepts_documented_forms(self, expr: str):
+        """The forms shown in the recurring-form hint must all pass."""
+        assert validate_period_expr(expr) is True, (
+            f"Hint shows {expr!r} as valid but hledger rejected it"
+        )
+
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "every 2 banana",
+            "ever 2 weeks",  # typo
+            "completely bogus",
+        ],
+    )
+    def test_rejects_invalid_forms(self, expr: str):
+        """Obvious typos and made-up units must be rejected so the
+        recurring-form error label can fire."""
+        assert validate_period_expr(expr) is False
