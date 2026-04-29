@@ -14,6 +14,7 @@ from hledger_textual.screens.transaction_form import (
     TransactionFormScreen,
     _build_commodity_data,
     _extract_commodity_and_qty,
+    load_journal_commodity_styles,
     parse_amount_str,
 )
 from hledger_textual.widgets.amount_input import AmountInput
@@ -489,6 +490,135 @@ class TestEuropeanStylePreservation:
         assert "€10.00" not in file_text
 
 
+class TestEuropeanNewTransactionParsing:
+    """Regression tests for issues #167 and #195."""
+
+    @pytest.fixture
+    def european_eur_journal(self, tmp_path: Path) -> Path:
+        content = (
+            "commodity EUR 1.000,00\n"
+            "\n"
+            f"{_D1.isoformat()} Opening\n"
+            "    assets:bank      EUR 1,00\n"
+            "    equity:opening\n"
+        )
+        dest = tmp_path / "european-eur.journal"
+        dest.write_text(content)
+        return dest
+
+    @pytest.fixture
+    def european_eur_app(self, european_eur_journal: Path) -> HledgerTuiApp:
+        return HledgerTuiApp(journal_file=european_eur_journal)
+
+    async def test_new_transaction_uses_journal_commodity_as_default(
+        self,
+        european_eur_app: HledgerTuiApp,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Plain numbers use the commodity declared by the journal."""
+        from textual.widgets import Input
+
+        monkeypatch.setattr(
+            "hledger_textual.screens.transaction_form.load_default_commodity",
+            lambda: "$",
+        )
+
+        async with european_eur_app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = european_eur_app.screen
+            assert isinstance(form, TransactionFormScreen)
+            captured: list = []
+            form.dismiss = captured.append
+
+            form.query_one("#input-description", Input).value = "Default commodity test"
+            rows = list(form.query(PostingRow))
+            rows[0].query_one("#account-0", Input).value = "expenses:food"
+            rows[0].query_one("#amount-0", Input).value = "1,00"
+            rows[1].query_one("#account-1", Input).value = "assets:bank"
+            form._save()
+            await pilot.pause(delay=1.0)
+
+            assert captured
+            transaction = captured[0]
+            assert transaction is not None
+            amount = transaction.postings[0].amounts[0]
+            assert amount.commodity == "EUR"
+            assert amount.quantity == Decimal("1.00")
+            assert amount.format() == "EUR 1,00"
+
+    async def test_new_transaction_accepts_left_named_commodity(
+        self,
+        european_eur_app: HledgerTuiApp,
+    ):
+        """Named commodities are accepted before the number."""
+        from textual.widgets import Input
+
+        async with european_eur_app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = european_eur_app.screen
+            assert isinstance(form, TransactionFormScreen)
+            captured: list = []
+            form.dismiss = captured.append
+
+            form.query_one("#input-description", Input).value = "Left commodity test"
+            rows = list(form.query(PostingRow))
+            rows[0].query_one("#account-0", Input).value = "expenses:food"
+            rows[0].query_one("#amount-0", Input).value = "EUR 5"
+            rows[1].query_one("#account-1", Input).value = "assets:bank"
+            form._save()
+            await pilot.pause(delay=1.0)
+
+            assert captured
+            transaction = captured[0]
+            assert transaction is not None
+            amount = transaction.postings[0].amounts[0]
+            assert amount.commodity == "EUR"
+            assert amount.quantity == Decimal("5")
+            assert amount.format() == "EUR 5,00"
+
+    async def test_new_transaction_dot_decimal_is_not_group_separator(
+        self,
+        european_eur_app: HledgerTuiApp,
+    ):
+        """A lone dot remains a decimal separator for user input."""
+        from textual.widgets import Input
+
+        async with european_eur_app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = european_eur_app.screen
+            assert isinstance(form, TransactionFormScreen)
+            captured: list = []
+            form.dismiss = captured.append
+
+            form.query_one("#input-description", Input).value = "Dot decimal test"
+            rows = list(form.query(PostingRow))
+            rows[0].query_one("#account-0", Input).value = "expenses:food"
+            rows[0].query_one("#amount-0", Input).value = "5.5 EUR"
+            rows[1].query_one("#account-1", Input).value = "assets:bank"
+            form._save()
+            await pilot.pause(delay=1.0)
+
+            assert captured
+            transaction = captured[0]
+            assert transaction is not None
+            amount = transaction.postings[0].amounts[0]
+            assert amount.commodity == "EUR"
+            assert amount.quantity == Decimal("5.5")
+            assert amount.format() == "EUR 5,50"
+
+
 class TestDateValidation:
     """Tests for the _validate_date method directly."""
 
@@ -868,6 +998,92 @@ class TestParseAmountStr:
         assert amt.cost.quantity == Decimal("200.00")
         # format() must produce a valid hledger string (positive cost)
         assert amt.format() == "-10 STCK @@ €200.00"
+
+    def test_european_decimal_comma_with_default_commodity(self):
+        """European decimal commas parse without scaling by 100."""
+        styles = {
+            "EUR": AmountStyle(
+                commodity_side="L",
+                commodity_spaced=True,
+                decimal_mark=",",
+                digit_group_separator=".",
+                digit_group_sizes=[3],
+                precision=2,
+            )
+        }
+        amt = parse_amount_str("1,00", "EUR", styles)
+        assert amt is not None
+        assert amt.commodity == "EUR"
+        assert amt.quantity == Decimal("1.00")
+        assert amt.format() == "EUR 1,00"
+
+    def test_left_named_commodity_prefix(self):
+        """Named commodities can appear before the quantity."""
+        styles = {
+            "EUR": AmountStyle(
+                commodity_side="L",
+                commodity_spaced=True,
+                decimal_mark=",",
+                digit_group_separator=".",
+                digit_group_sizes=[3],
+                precision=2,
+            )
+        }
+        amt = parse_amount_str("EUR 5", "$", styles)
+        assert amt is not None
+        assert amt.commodity == "EUR"
+        assert amt.quantity == Decimal("5")
+        assert amt.format() == "EUR 5,00"
+
+    def test_dot_decimal_with_european_commodity_style(self):
+        """A lone dot in user input is parsed as decimal, not grouping."""
+        styles = {
+            "EUR": AmountStyle(
+                commodity_side="L",
+                commodity_spaced=True,
+                decimal_mark=",",
+                digit_group_separator=".",
+                digit_group_sizes=[3],
+                precision=2,
+            )
+        }
+        amt = parse_amount_str("5.5 EUR", "$", styles)
+        assert amt is not None
+        assert amt.commodity == "EUR"
+        assert amt.quantity == Decimal("5.5")
+        assert amt.format() == "EUR 5,50"
+
+    def test_european_thousands_separator_still_parses_as_grouping(self):
+        """Three digits after the group separator remain a thousands group."""
+        styles = {
+            "EUR": AmountStyle(
+                commodity_side="L",
+                commodity_spaced=True,
+                decimal_mark=",",
+                digit_group_separator=".",
+                digit_group_sizes=[3],
+                precision=2,
+            )
+        }
+        amt = parse_amount_str("1.000 EUR", "$", styles)
+        assert amt is not None
+        assert amt.commodity == "EUR"
+        assert amt.quantity == Decimal("1000")
+        assert amt.format() == "EUR 1.000,00"
+
+    def test_loads_commodity_style_from_journal_directive(self, tmp_path: Path):
+        """Commodity directives provide the parser's default style."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("commodity EUR 1.000,00\n")
+        styles = load_journal_commodity_styles(journal)
+        assert styles["EUR"] == AmountStyle(
+            commodity_side="L",
+            commodity_spaced=True,
+            decimal_mark=",",
+            digit_group_separator=".",
+            digit_group_sizes=[3],
+            precision=2,
+        )
 
 
 class TestExtractCommodityAndQty:

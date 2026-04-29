@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from decimal import Decimal, InvalidOperation
 
+from hledger_textual.models import AmountStyle
+
 
 def _normalize_number_string(s: str) -> str:
     """Normalize a raw number string to standard decimal notation.
@@ -49,6 +51,74 @@ def _normalize_number_string(s: str) -> str:
         normalized = core
 
     return f"-{normalized}" if negative else normalized
+
+
+def normalize_number_string_for_style(s: str, style: AmountStyle | None = None) -> str:
+    """Normalize a number string using a known commodity style when available.
+
+    Args:
+        s: A raw number string, optionally prefixed with a minus sign.
+        style: The style declared for the active commodity.
+
+    Returns:
+        The number string in standard ``Decimal``-parseable notation.
+    """
+    if style is None:
+        return _normalize_number_string(s)
+
+    negative = s.startswith("-")
+    core = s[1:] if negative else s
+    decimal_mark = style.decimal_mark or "."
+    group_separator = style.digit_group_separator
+
+    if decimal_mark != "." and decimal_mark in core:
+        if group_separator:
+            core = core.replace(group_separator, "")
+        normalized = core.replace(decimal_mark, ".")
+    elif "." in core and "," not in core:
+        # Users often type dot decimals even in comma-decimal journals.  Treat
+        # a lone dot followed by one or two digits as a decimal mark rather
+        # than the commodity's group mark.
+        after_last_dot = core[core.rfind(".") + 1:]
+        if group_separator == "." and len(after_last_dot) == 3:
+            normalized = core.replace(".", "")
+        else:
+            normalized = core
+    elif group_separator:
+        normalized = core.replace(group_separator, "")
+    else:
+        normalized = _normalize_number_string(core)
+
+    return f"-{normalized}" if negative else normalized
+
+
+def decimal_places_for_number_string(s: str, style: AmountStyle | None = None) -> int:
+    """Return decimal places from a raw number string.
+
+    Args:
+        s: A raw number string, optionally prefixed with a minus sign.
+        style: The style declared for the active commodity.
+
+    Returns:
+        Number of explicit fractional digits in the input.
+    """
+    core = s[1:] if s.startswith("-") else s
+    if style is not None and style.decimal_mark in core:
+        return len(core.rsplit(style.decimal_mark, 1)[1])
+    if "." in core and "," not in core:
+        if style is not None and style.digit_group_separator == ".":
+            after_last_dot = core[core.rfind(".") + 1:]
+            if len(after_last_dot) == 3:
+                return 0
+        return len(core.rsplit(".", 1)[1])
+    if "," in core and "." not in core:
+        after_last_comma = core[core.rfind(",") + 1:]
+        if len(after_last_comma) <= 2 and after_last_comma.isdigit():
+            return len(after_last_comma)
+    if "." in core and "," in core:
+        separator = "," if core.rfind(",") > core.rfind(".") else "."
+        return len(core.rsplit(separator, 1)[1])
+    return 0
 
 
 def parse_amount_string(s: str) -> tuple[Decimal, str]:
