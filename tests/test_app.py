@@ -163,16 +163,25 @@ class TestRefresh:
 class TestDelete:
     """Tests for the delete flow."""
 
+    async def _wait_for_delete_modal(self, app: HledgerTuiApp, pilot):
+        """Wait for the delete confirmation modal to become active."""
+        from hledger_textual.screens.delete_confirm import DeleteConfirmModal
+
+        for _ in range(10):
+            if isinstance(app.screen, DeleteConfirmModal):
+                return app.screen
+            await pilot.pause(delay=0.1)
+
+        assert isinstance(app.screen, DeleteConfirmModal)
+        return app.screen
+
     async def test_delete_shows_modal(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("d")
-            await pilot.pause()
-            from hledger_textual.screens.delete_confirm import DeleteConfirmModal
-
-            assert isinstance(app.screen, DeleteConfirmModal)
+            await self._wait_for_delete_modal(app, pilot)
 
     async def test_delete_cancel(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
@@ -180,7 +189,7 @@ class TestDelete:
             await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("d")
-            await pilot.pause()
+            await self._wait_for_delete_modal(app, pilot)
             await pilot.press("escape")
             await pilot.pause(delay=0.5)
             table = app.screen.query_one("#transactions-table")
@@ -192,7 +201,7 @@ class TestDelete:
             await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("d")
-            await pilot.pause()
+            await self._wait_for_delete_modal(app, pilot)
             delete_btn = app.screen.query_one("#btn-delete")
             await pilot.click(delete_btn)
             await pilot.pause(delay=1.0)
