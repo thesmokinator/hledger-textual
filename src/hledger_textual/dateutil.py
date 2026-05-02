@@ -3,7 +3,29 @@
 from __future__ import annotations
 
 import calendar
+import re
 from datetime import date
+
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def validate_iso_date(value: str) -> bool:
+    """Return True if value is a syntactically valid YYYY-MM-DD date.
+
+    Args:
+        value: The date string to validate.
+
+    Returns:
+        True if value matches YYYY-MM-DD AND represents a real calendar date.
+    """
+    if not _ISO_DATE_RE.match(value):
+        return False
+    try:
+        year, month, day = value.split("-")
+        date(int(year), int(month), int(day))
+        return True
+    except ValueError:
+        return False
 
 
 def prev_month(d: date) -> date:

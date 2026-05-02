@@ -16,6 +16,7 @@ from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.config import load_default_commodity
+from hledger_textual.dateutil import validate_iso_date
 from hledger_textual.hledger import (
     HledgerError,
     load_accounts,
@@ -33,8 +34,6 @@ from hledger_textual.models import (
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
-
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # ---------------------------------------------------------------------------
 # Hledger amount string parser
@@ -554,24 +553,6 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
         """Cancel the form."""
         self.dismiss(None)
 
-    def _validate_date(self, date_str: str) -> bool:
-        """Validate that the date is in ISO format YYYY-MM-DD.
-
-        Args:
-            date_str: The date string to validate.
-
-        Returns:
-            True if the date is valid.
-        """
-        if not DATE_RE.match(date_str):
-            return False
-        try:
-            year, month, day = date_str.split("-")
-            date(int(year), int(month), int(day))
-            return True
-        except ValueError:
-            return False
-
     @staticmethod
     def _reuse_initial_amounts(row: PostingRow) -> list[Amount] | None:
         """Return the original amounts if *row*'s input is semantically unchanged.
@@ -654,7 +635,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
             self.notify("Date is required", severity="error", timeout=3)
             return
 
-        if not self._validate_date(date_str):
+        if not validate_iso_date(date_str):
             self.notify(
                 "Invalid date. Use ISO format: YYYY-MM-DD",
                 severity="error",
