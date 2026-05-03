@@ -16,9 +16,9 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.config import load_default_commodity
-from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
 from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
+from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 
@@ -43,7 +43,7 @@ def _slugify(text: str) -> str:
     return slug or "rule"
 
 
-class RecurringFormScreen(ModalScreen[RecurringRule | None]):
+class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule | None]):
     """Centered modal form for creating or editing a recurring rule."""
 
     BINDINGS = [
@@ -161,10 +161,7 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
 
     def on_mount(self) -> None:
         """Load accounts for autocomplete and populate posting rows."""
-        try:
-            self.accounts = load_accounts(self.journal_file)
-        except HledgerError:
-            self.accounts = []
+        self._configure_account_suggestions()
 
         # Hide custom expression row unless the period is already "custom"
         period_select = self.query_one("#recurring-select-period", Select)

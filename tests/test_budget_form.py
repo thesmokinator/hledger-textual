@@ -273,13 +273,10 @@ class TestBudgetFormUnknownAccountWarning:
 
     async def test_warns_when_account_unknown_after_blur(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Typing an unknown account and tabbing away shows the inline warning widget."""
-        from hledger_textual.screens import budget_form
-
         # Pretend the journal already knows about a couple of accounts so the
         # form has something to compare against.
         monkeypatch.setattr(
-            budget_form,
-            "load_accounts",
+            "hledger_textual.screens._form_account_suggestions.load_accounts",
             lambda _path: ["Expenses:Food", "Expenses:Rent", "Income:Salary"],
         )
 
@@ -309,11 +306,8 @@ class TestBudgetFormUnknownAccountWarning:
 
     async def test_no_warning_when_account_is_known(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Tabbing away from a known account keeps the inline warning hidden."""
-        from hledger_textual.screens import budget_form
-
         monkeypatch.setattr(
-            budget_form,
-            "load_accounts",
+            "hledger_textual.screens._form_account_suggestions.load_accounts",
             lambda _path: ["Expenses:Food", "Expenses:Rent"],
         )
 
@@ -336,9 +330,10 @@ class TestBudgetFormUnknownAccountWarning:
 
     async def test_no_warning_when_journal_has_no_accounts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """If load_accounts returns nothing, blur leaves the warning hidden (fresh journal)."""
-        from hledger_textual.screens import budget_form
-
-        monkeypatch.setattr(budget_form, "load_accounts", lambda _path: [])
+        monkeypatch.setattr(
+            "hledger_textual.screens._form_account_suggestions.load_accounts",
+            lambda _path: [],
+        )
 
         app = _FormApp(tmp_path / "test.journal")
         async with app.run_test() as pilot:
@@ -361,11 +356,8 @@ class TestBudgetFormUnknownAccountWarning:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
         """Fixing a typo to a known account hides the previously-shown warning on the next blur."""
-        from hledger_textual.screens import budget_form
-
         monkeypatch.setattr(
-            budget_form,
-            "load_accounts",
+            "hledger_textual.screens._form_account_suggestions.load_accounts",
             lambda _path: ["Expenses:Food", "Expenses:Rent"],
         )
 

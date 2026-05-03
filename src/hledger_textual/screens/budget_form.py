@@ -10,17 +10,16 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Static
 
 from hledger_textual.config import load_default_commodity
-from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
+from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.widgets.amount_input import NumericAmountInput
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
-class BudgetFormScreen(ModalScreen[BudgetRule | None]):
+class BudgetFormScreen(FormAccountSuggestionsMixin, ModalScreen[BudgetRule | None]):
     """Centered modal form for creating or editing a budget rule."""
 
     BINDINGS = [
@@ -99,17 +98,8 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
 
     def on_mount(self) -> None:
         """Load accounts for autocomplete."""
-        try:
-            accounts = load_accounts(self.journal_file)
-        except HledgerError:
-            accounts = []
-
-        self._known_accounts = accounts
-
-        if accounts:
-            self.query_one("#budget-input-account", AutocompleteInput).suggester = SuggestFromList(
-                accounts, case_sensitive=False
-            )
+        self._configure_account_suggestions("budget-input-account")
+        self._known_accounts = self.accounts
 
     def on_descendant_blur(self, event: events.DescendantBlur) -> None:
         """Warn when the account field is left holding an unknown name.

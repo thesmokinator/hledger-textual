@@ -22,7 +22,6 @@ from hledger_textual.amountutil import (
 from hledger_textual.config import load_default_commodity
 from hledger_textual.hledger import (
     HledgerError,
-    load_accounts,
     load_descriptions,
     load_investment_cost,
     load_investment_positions,
@@ -34,6 +33,7 @@ from hledger_textual.models import (
     Transaction,
     TransactionStatus,
 )
+from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
@@ -365,7 +365,7 @@ STATUS_OPTIONS = [
 ]
 
 
-class TransactionFormScreen(ModalScreen[Transaction | None]):
+class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction | None]):
     """Centered modal form for creating or editing a transaction."""
 
     BINDINGS = [
@@ -497,10 +497,7 @@ class TransactionFormScreen(ModalScreen[Transaction | None]):
 
     def on_mount(self) -> None:
         """Load accounts and descriptions for autocomplete, and add initial posting rows."""
-        try:
-            self.accounts = load_accounts(self.journal_file)
-        except HledgerError:
-            self.accounts = []
+        self._configure_account_suggestions()
 
         try:
             descriptions = load_descriptions(self.journal_file)
