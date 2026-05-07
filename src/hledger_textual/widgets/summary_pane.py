@@ -19,6 +19,7 @@ from hledger_textual.cache import HledgerCache
 from hledger_textual.config import load_price_tickers
 from hledger_textual.formatter import normalize_commodity
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import (
     fmt_amount,
 )
@@ -84,6 +85,10 @@ class SummaryPane(Widget):
         self.journal_file = journal_file
         self._cache = cache
         self._current_month: date = date.today().replace(day=1)
+        self._static_loaded = False
+        self._breakdown_loaded = False
+        self._has_static_sections = False
+        self._has_breakdown_sections = False
 
     # ------------------------------------------------------------------
     # Layout
@@ -91,49 +96,56 @@ class SummaryPane(Widget):
 
     def compose(self) -> ComposeResult:
         """Create the summary pane layout."""
-        yield Static(
-            "Overview",
-            id="summary-overview-title",
-            classes="summary-section-title",
+        yield EmptyState(
+            "No data yet",
+            "Add transactions to see your summary.",
+            icon="📭",
+            id="summary-empty-state",
         )
-        yield PeriodSummaryCards(id="summary-cards")
-
-        # Liabilities section (total outstanding balance)
-        with Vertical(id="summary-liabilities"):
+        with Vertical(id="summary-content"):
             yield Static(
-                "Liabilities",
-                id="summary-liabilities-title",
+                "Overview",
+                id="summary-overview-title",
                 classes="summary-section-title",
             )
-            yield _DisplayTable(id="summary-liabilities-table", show_cursor=False)
+            yield PeriodSummaryCards(id="summary-cards")
 
-        # Investments section
-        with Vertical(id="summary-portfolio"):
-            yield Static(
-                "Investments",
-                id="summary-portfolio-title",
-                classes="summary-section-title",
-            )
-            yield _DisplayTable(id="summary-portfolio-table", show_cursor=False)
-            yield Static("", id="summary-portfolio-loading", classes="summary-portfolio-loading-line")
+            # Liabilities section (total outstanding balance)
+            with Vertical(id="summary-liabilities"):
+                yield Static(
+                    "Liabilities",
+                    id="summary-liabilities-title",
+                    classes="summary-section-title",
+                )
+                yield _DisplayTable(id="summary-liabilities-table", show_cursor=False)
 
-        # Income breakdown — current month
-        with Vertical(id="summary-income-breakdown"):
-            yield Static(
-                "Income",
-                id="summary-income-title",
-                classes="summary-section-title",
-            )
-            yield DataTable(id="summary-income-table")
+            # Investments section
+            with Vertical(id="summary-portfolio"):
+                yield Static(
+                    "Investments",
+                    id="summary-portfolio-title",
+                    classes="summary-section-title",
+                )
+                yield _DisplayTable(id="summary-portfolio-table", show_cursor=False)
+                yield Static("", id="summary-portfolio-loading", classes="summary-portfolio-loading-line")
 
-        # Expense breakdown — current month only
-        with Vertical(id="summary-breakdown"):
-            yield Static(
-                "Expenses",
-                id="summary-breakdown-title",
-                classes="summary-section-title",
-            )
-            yield DataTable(id="summary-breakdown-table")
+            # Income breakdown — current month
+            with Vertical(id="summary-income-breakdown"):
+                yield Static(
+                    "Income",
+                    id="summary-income-title",
+                    classes="summary-section-title",
+                )
+                yield DataTable(id="summary-income-table")
+
+            # Expense breakdown — current month only
+            with Vertical(id="summary-breakdown"):
+                yield Static(
+                    "Expenses",
+                    id="summary-breakdown-title",
+                    classes="summary-section-title",
+                )
+                yield DataTable(id="summary-breakdown-table")
 
     # Column index → fixed width for portfolio table (col 0 = flex)
     _PORTFOLIO_FIXED = {1: 12, 2: 18, 3: 18}
@@ -169,6 +181,7 @@ class SummaryPane(Widget):
         breakdown_table.add_column("Amount", width=self._BREAKDOWN_FIXED[1])
         breakdown_table.add_column("% of total", width=self._BREAKDOWN_FIXED[2])
 
+        self._set_empty_state_visible(False)
         self._load_static_data()
         self._load_breakdown_data()
 
@@ -333,6 +346,15 @@ class SummaryPane(Widget):
 
         # Income / Expenses / Net cards — delegated to PeriodSummaryCards
         self.query_one(PeriodSummaryCards).update_summary(summary)
+        self._static_loaded = True
+        self._has_static_sections = bool(
+            (
+                summary is not None
+                and (summary.income or summary.expenses or summary.investments)
+            )
+            or positions
+            or liabilities
+        )
 
         # Investments table — columns are fixed; clear rows only
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
@@ -375,6 +397,7 @@ class SummaryPane(Widget):
                 self.call_after_refresh(
                     distribute_column_widths, ltable, self._BREAKDOWN_FIXED
                 )
+        self._sync_empty_state()
 
     def _apply_portfolio_eur(
         self,
@@ -496,12 +519,14 @@ class SummaryPane(Widget):
             f"{month_name} Income"
         )
 
+        income_section = self.query_one("#summary-income-breakdown")
         itable = self.query_one("#summary-income-table", DataTable)
         itable.clear()
 
         if not income_breakdown:
-            itable.add_row("[dim]No income recorded this month[/dim]", "", "")
+            income_section.display = False
         else:
+            income_section.display = True
             total_inc = sum(qty for _, qty, _ in income_breakdown)
             for account, qty, commodity in income_breakdown:
                 pct = float(qty / total_inc * 100) if total_inc else 0.0
@@ -520,13 +545,19 @@ class SummaryPane(Widget):
             f"{month_name} Expenses"
         )
 
+        expense_section = self.query_one("#summary-breakdown")
         table = self.query_one("#summary-breakdown-table", DataTable)
         table.clear()
 
+        self._breakdown_loaded = True
+        self._has_breakdown_sections = bool(income_breakdown or breakdown)
+
         if not breakdown:
-            table.add_row("[dim]No expenses recorded this month[/dim]", "", "")
+            expense_section.display = False
+            self._sync_empty_state()
             return
 
+        expense_section.display = True
         total_exp = sum(qty for _, qty, _ in breakdown)
         for account, qty, commodity in breakdown:
             pct = float(qty / total_exp * 100) if total_exp else 0.0
@@ -540,3 +571,17 @@ class SummaryPane(Widget):
         self.call_after_refresh(
             distribute_column_widths, table, self._BREAKDOWN_FIXED
         )
+        self._sync_empty_state()
+
+    def _sync_empty_state(self) -> None:
+        """Show the summary empty state once all summary sections have loaded."""
+        if not (self._static_loaded and self._breakdown_loaded):
+            return
+        self._set_empty_state_visible(
+            not (self._has_static_sections or self._has_breakdown_sections)
+        )
+
+    def _set_empty_state_visible(self, visible: bool) -> None:
+        """Toggle the summary empty state and mounted content."""
+        self.query_one("#summary-empty-state", EmptyState).display = visible
+        self.query_one("#summary-content").display = not visible

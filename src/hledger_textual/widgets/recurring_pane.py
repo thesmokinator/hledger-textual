@@ -23,6 +23,7 @@ from hledger_textual.recurring import (
     parse_recurring_rules,
     update_recurring_rule,
 )
+from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 
 
@@ -60,6 +61,12 @@ class RecurringPane(DataTablePaneMixin, Widget):
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
+        yield EmptyState(
+            "No recurring rules",
+            "Press `a` to create one.",
+            icon="📭",
+            id="recurring-empty-state",
+        )
         yield DataTable(id="recurring-table")
 
     def on_mount(self) -> None:
@@ -71,6 +78,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
         table.add_column("Start", width=10)
         table.add_column("End", width=10)
         table.add_column("Postings", width=20)
+        self._set_empty_state_visible(False)
         self._load_data()
         table.focus()
 
@@ -97,11 +105,9 @@ class RecurringPane(DataTablePaneMixin, Widget):
         table.clear()
 
         if not self._rules:
-            table.add_row(
-                "No recurring rules. Press [a] to add one.",
-                "", "", "", "",
-            )
+            self._set_empty_state_visible(True)
             return
+        self._set_empty_state_visible(False)
 
         for rule in self._rules:
             postings_summary = ", ".join(
@@ -115,6 +121,11 @@ class RecurringPane(DataTablePaneMixin, Widget):
                 postings_summary,
                 key=rule.rule_id,
             )
+
+    def _set_empty_state_visible(self, visible: bool) -> None:
+        """Toggle the no-recurring-rules message and DataTable visibility."""
+        self.query_one("#recurring-empty-state", EmptyState).display = visible
+        self.query_one("#recurring-table", DataTable).display = not visible
 
     def _get_selected_rule(self) -> RecurringRule | None:
         """Return the RecurringRule for the currently highlighted row."""

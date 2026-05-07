@@ -19,6 +19,7 @@ from hledger_textual.cache import HledgerCache
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
@@ -138,6 +139,12 @@ class TransactionsTable(Widget):
                     id="txn-search-input",
                     disabled=True,
                 )
+        yield EmptyState(
+            "No transactions",
+            "Press `a` to add one or `/` to search.",
+            icon="📭",
+            id="transactions-empty-state",
+        )
         yield DataTable(id="transactions-table")
 
     # Date, Type, Status, Amount fixed; Description and Accounts flex
@@ -159,6 +166,7 @@ class TransactionsTable(Widget):
             Text("Loading transactions…", style="dim italic"),
             "", "", "", "", "",
         )
+        self._set_empty_state_visible(False)
         self._load_transactions()
         table.focus()
 
@@ -436,6 +444,11 @@ class TransactionsTable(Widget):
         self._all_transactions = txns
         self._update_table(txns)
 
+    def _set_empty_state_visible(self, visible: bool) -> None:
+        """Toggle the empty-state message and table visibility."""
+        self.query_one("#transactions-empty-state", EmptyState).display = visible
+        self.query_one("#transactions-table", DataTable).display = not visible
+
     def _update_table(self, transactions: list[Transaction]) -> None:
         """Repopulate the DataTable with *transactions*.
 
@@ -445,6 +458,7 @@ class TransactionsTable(Widget):
         """
         table = self.query_one(DataTable)
         table.clear()
+        self._set_empty_state_visible(not self._all_transactions)
 
         today = date.today()
         today_iso = today.isoformat()

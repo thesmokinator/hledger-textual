@@ -26,6 +26,7 @@ from hledger_textual.hledger import HledgerError, load_investment_report, load_r
 from hledger_textual.models import CustomReport, ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.constants import TREE_INDENT
+from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
@@ -246,6 +247,12 @@ class ReportsPane(DataTablePaneMixin, Widget):
             )
 
         yield Static("", id="report-context-bar")
+        yield EmptyState(
+            "No data for this report",
+            "Check your filters and date range.",
+            icon="📭",
+            id="reports-empty-state",
+        )
         yield DataTable(id="reports-table")
         with VerticalScroll(id="custom-report-output"):
             yield Static("", id="custom-report-text")
@@ -256,6 +263,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         table.cursor_type = "cell"
         self._refresh_custom_report_select()
         self._update_context_bar_builtin()
+        self._set_empty_state_visible(False)
         self._load_report_data()
 
     def on_resize(self) -> None:
@@ -312,10 +320,14 @@ class ReportsPane(DataTablePaneMixin, Widget):
         period_select = self.query_one("#report-period-select", Select)
         type_select = self.query_one("#report-type-select", Select)
 
-        table.display = not active
         output.display = active
         type_select.display = not active
         period_select.display = not active
+        if active:
+            table.display = False
+            self.query_one("#reports-empty-state", EmptyState).display = False
+        else:
+            self._sync_empty_state()
 
         self.post_message(self.CustomReportStateChanged(active))
 
@@ -524,6 +536,22 @@ class ReportsPane(DataTablePaneMixin, Widget):
             distribute_column_widths(table, self._fixed_widths)
 
         self._update_context_bar_builtin()
+        self._sync_empty_state()
+
+    def _sync_empty_state(self) -> None:
+        """Show the built-in report empty state when loaded data has no rows."""
+        data = self._report_data
+        if self._custom_report_name is not None:
+            self.query_one("#reports-empty-state", EmptyState).display = False
+            self.query_one("#reports-table", DataTable).display = False
+            return
+        visible = data is not None and not data.rows
+        self._set_empty_state_visible(visible)
+
+    def _set_empty_state_visible(self, visible: bool) -> None:
+        """Toggle the empty report message and DataTable visibility."""
+        self.query_one("#reports-empty-state", EmptyState).display = visible
+        self.query_one("#reports-table", DataTable).display = not visible
 
     # --- Drill-down helpers ---
 
