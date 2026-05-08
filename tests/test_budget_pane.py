@@ -97,14 +97,15 @@ class TestBudgetEmptyState:
     """Tests for the empty budget state."""
 
     async def test_empty_state_message(self, empty_budget_app: HledgerTuiApp):
-        """Shows empty state message when no budget rules exist."""
+        """Shows the EmptyState widget when no budget rules exist."""
         async with empty_budget_app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("4")
             await pilot.pause(delay=1.0)
+            empty_state = empty_budget_app.screen.query_one("#budget-empty-state")
+            assert empty_state.display is True
             table = empty_budget_app.screen.query_one("#budget-table")
-            # Should have 1 row with the empty state message
-            assert table.row_count == 1
+            assert table.display is False
 
 
 class TestBudgetAdd:

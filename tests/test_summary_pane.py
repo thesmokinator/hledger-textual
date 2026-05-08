@@ -379,12 +379,14 @@ class TestSummaryPaneBreakdown:
             assert table.row_count > 0
 
     async def test_empty_breakdown_shows_message(self, empty_summary_journal: Path):
-        """An empty journal shows a 'no expenses' message row."""
+        """An empty journal shows the EmptyState widget instead of breakdown sections."""
         app = _SummaryApp(empty_summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            table = app.query_one("#summary-breakdown-table", DataTable)
-            assert table.row_count == 1
+            empty_state = app.query_one("#summary-empty-state")
+            assert empty_state.display is True
+            content = app.query_one("#summary-content")
+            assert content.display is False
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -408,12 +410,14 @@ class TestSummaryPaneIncomeBreakdown:
             assert table.row_count > 0
 
     async def test_empty_income_shows_message(self, empty_summary_journal: Path):
-        """An empty journal shows a 'no income' message row."""
+        """An empty journal hides the income table behind the EmptyState widget."""
         app = _SummaryApp(empty_summary_journal)
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
-            table = app.query_one("#summary-income-table", DataTable)
-            assert table.row_count == 1
+            empty_state = app.query_one("#summary-empty-state")
+            assert empty_state.display is True
+            content = app.query_one("#summary-content")
+            assert content.display is False
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
