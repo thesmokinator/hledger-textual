@@ -465,6 +465,23 @@ TransactionFormScreen {
     width: 1fr;
 }
 
+/* Required fields render the trailing "*" in $primary so the marker stands
+   out without changing the field layout. Optional fields use a muted label
+   colour so users can scan the form for what they need to fill in. */
+.form-field--required Label {
+    color: $primary;
+}
+
+.form-field--optional Label {
+    color: $text-muted;
+}
+
+.form-required-footer {
+    color: $text-muted;
+    margin-top: 1;
+    text-style: italic;
+}
+
 /* --- Postings Section --- */
 
 #postings-header {

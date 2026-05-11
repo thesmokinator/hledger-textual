@@ -107,15 +107,15 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             # --- Step 0: CSV Preview ---
             with Vertical(id="wizard-step-0", classes="wizard-step"):
                 yield Static("CSV Preview", classes="wizard-step-title")
-                with Horizontal(classes="form-field"):
-                    yield Label("Separator:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Separator:*")
                     yield Select(
                         options=_SEPARATOR_OPTIONS,
                         value=",",
                         id="wizard-separator",
                     )
-                with Horizontal(classes="form-field"):
-                    yield Label("Header row:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Header row:*")
                     yield Select(
                         options=_HEADER_OPTIONS,
                         value="yes",
@@ -135,26 +135,26 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             # --- Step 2: Basic Settings ---
             with Vertical(id="wizard-step-2", classes="wizard-step"):
                 yield Static("Settings", classes="wizard-step-title")
-                with Horizontal(classes="form-field"):
-                    yield Label("Rules name:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Rules name:*")
                     yield Input(
                         placeholder="e.g. UniCredit Checking",
                         id="wizard-rules-name",
                     )
-                with Horizontal(classes="form-field"):
-                    yield Label("Bank account:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Bank account:*")
                     yield AutocompleteInput(
                         placeholder="e.g. assets:bank:checking",
                         id="wizard-account1",
                     )
-                with Horizontal(classes="form-field"):
-                    yield Label("Currency:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Currency:*")
                     yield Input(
                         value=load_default_commodity(),
                         id="wizard-currency",
                     )
-                with Horizontal(classes="form-field"):
-                    yield Label("Date format:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Date format:*")
                     yield Input(
                         id="wizard-date-format",
                     )
@@ -179,6 +179,8 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             with Vertical(id="wizard-step-4", classes="wizard-step"):
                 yield Static("Review & Save", classes="wizard-step-title")
                 yield TextArea(id="wizard-raw-editor")
+
+            yield Static("* required", classes="form-required-footer")
 
             # --- Navigation ---
             with Horizontal(id="wizard-nav-buttons"):

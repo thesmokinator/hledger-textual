@@ -53,16 +53,16 @@ class CustomReportFormScreen(ModalScreen[CustomReport | None]):
         with Vertical(id="custom-report-form-dialog"):
             yield Static(title, id="custom-report-form-title")
 
-            with Horizontal(classes="form-field"):
-                yield Label("Name:")
+            with Horizontal(classes="form-field form-field--required"):
+                yield Label("Name:*")
                 yield Input(
                     value=self.report.name if self.is_edit else "",
                     placeholder="e.g. Monthly expenses tree",
                     id="custom-report-input-name",
                 )
 
-            with Horizontal(classes="form-field"):
-                yield Label("Command:")
+            with Horizontal(classes="form-field form-field--required"):
+                yield Label("Command:*")
                 yield Input(
                     value=self.report.command if self.is_edit else "",
                     placeholder="e.g. balance expenses --tree -M",
@@ -74,6 +74,8 @@ class CustomReportFormScreen(ModalScreen[CustomReport | None]):
                 *[Option(f"{cmd}  [{desc}]", id=cmd) for cmd, desc in _EXAMPLES],
                 id="custom-report-examples",
             )
+
+            yield Static("* required", classes="form-required-footer")
 
             with Horizontal(id="custom-report-form-buttons"):
                 yield Button("Cancel", variant="default", id="btn-custom-report-cancel")

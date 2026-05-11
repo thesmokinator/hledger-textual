@@ -89,24 +89,24 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
             yield Static(title, id="form-title")
 
             with VerticalScroll(id="form-scroll"):
-                with Horizontal(classes="form-field"):
-                    yield Label("Description:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Description:*")
                     yield Input(
                         value=r.description if r else "",
                         placeholder="e.g. Rent payment",
                         id="recurring-input-description",
                     )
 
-                with Horizontal(classes="form-field"):
-                    yield Label("Period:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Period:*")
                     yield Select(
                         options=_PERIOD_OPTIONS,
                         value=initial_period,
                         id="recurring-select-period",
                     )
 
-                with Horizontal(classes="form-field", id="recurring-custom-period-row"):
-                    yield Label("Expression:")
+                with Horizontal(classes="form-field form-field--required", id="recurring-custom-period-row"):
+                    yield Label("Expression:*")
                     yield Input(
                         value=initial_custom,
                         placeholder="e.g. every 2 weeks  (also: every 3 days, monthly)",
@@ -133,14 +133,14 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                         classes="form-error",
                     )
 
-                with Horizontal(classes="form-field"):
-                    yield Label("Start date:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Start date:*")
                     yield DateInput(
                         value=r.start_date if (r and r.start_date) else date.today().isoformat(),
                         id="recurring-input-start",
                     )
 
-                with Horizontal(classes="form-field"):
+                with Horizontal(classes="form-field form-field--optional"):
                     yield Label("End date:")
                     yield DateInput(
                         value=r.end_date if (r and r.end_date) else "",
@@ -148,12 +148,14 @@ class RecurringFormScreen(ModalScreen[RecurringRule | None]):
                         id="recurring-input-end",
                     )
 
-                yield Static("Postings", id="postings-header")
+                yield Static("Postings*", id="postings-header")
                 yield Vertical(id="postings-container")
 
                 with Horizontal(id="posting-buttons"):
                     yield Button("\\[+] Add posting", id="btn-add-posting")
                     yield Button("\\[-] Remove last", id="btn-remove-posting")
+
+            yield Static("* required", classes="form-required-footer")
 
             with Horizontal(id="form-buttons"):
                 yield Button("Cancel", variant="default", id="btn-form-cancel")

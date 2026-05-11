@@ -59,8 +59,8 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
             yield Static(title, id="budget-form-title")
 
             with Vertical(classes="form-field-group"):
-                with Horizontal(classes="form-field"):
-                    yield Label("Account:")
+                with Horizontal(classes="form-field form-field--required"):
+                    yield Label("Account:*")
                     yield AutocompleteInput(
                         value=self.rule.account if self.is_edit else "",
                         placeholder="e.g. Expenses:Groceries",
@@ -69,15 +69,15 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
 
                 yield Static("", id="budget-account-warning", classes="field-warning hidden")
 
-            with Horizontal(classes="form-field"):
-                yield Label("Amount:")
+            with Horizontal(classes="form-field form-field--required"):
+                yield Label("Amount:*")
                 yield NumericAmountInput(
                     value=f"{self.rule.amount.quantity:.2f}" if self.is_edit else "",
                     id="budget-input-amount",
                 )
 
-            with Horizontal(classes="form-field"):
-                yield Label("Commodity:")
+            with Horizontal(classes="form-field form-field--required"):
+                yield Label("Commodity:*")
                 default_commodity = load_default_commodity()
                 yield Input(
                     value=self.rule.amount.commodity if self.is_edit else default_commodity,
@@ -85,13 +85,15 @@ class BudgetFormScreen(ModalScreen[BudgetRule | None]):
                     id="budget-input-commodity",
                 )
 
-            with Horizontal(classes="form-field"):
+            with Horizontal(classes="form-field form-field--optional"):
                 yield Label("Category:")
                 yield Input(
                     value=self.rule.category if self.is_edit else "",
                     placeholder="e.g. Fixed, Variable, Food (optional)",
                     id="budget-input-category",
                 )
+
+            yield Static("* required", classes="form-required-footer")
 
             with Horizontal(id="budget-form-buttons"):
                 yield Button("Cancel", variant="default", id="btn-budget-cancel")
