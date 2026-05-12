@@ -583,5 +583,8 @@ class SummaryPane(Widget):
 
     def _set_empty_state_visible(self, visible: bool) -> None:
         """Toggle the summary empty state and mounted content."""
-        self.query_one("#summary-empty-state", EmptyState).display = visible
-        self.query_one("#summary-content").display = not visible
+        try:
+            self.query_one("#summary-empty-state", EmptyState).display = visible
+            self.query_one("#summary-content").display = not visible
+        except NoMatches:
+            return
