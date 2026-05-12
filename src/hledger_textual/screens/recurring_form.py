@@ -16,13 +16,12 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.config import load_default_commodity
+from hledger_textual.dateutil import validate_iso_date
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
 from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
-
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 _PERIOD_OPTIONS = [(p.capitalize(), p) for p in SUPPORTED_PERIODS] + [("Custom", "custom")]
 
@@ -282,24 +281,6 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
         """Cancel the form."""
         self.dismiss(None)
 
-    def _validate_date(self, date_str: str) -> bool:
-        """Validate that the date string is a valid ISO date.
-
-        Args:
-            date_str: The date string to validate.
-
-        Returns:
-            True if the date is valid.
-        """
-        if not DATE_RE.match(date_str):
-            return False
-        try:
-            year, month, day = date_str.split("-")
-            date(int(year), int(month), int(day))
-            return True
-        except ValueError:
-            return False
-
     def _save(self) -> None:
         """Validate inputs and dismiss with a RecurringRule (or None on cancel)."""
         description = self.query_one("#recurring-input-description", Input).value.strip()
@@ -328,11 +309,11 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
             self.notify("Period is required", severity="error", timeout=3)
             return
 
-        if start_str and not self._validate_date(start_str):
+        if start_str and not validate_iso_date(start_str):
             self.notify(f"Invalid start date: {start_str}", severity="error", timeout=3)
             return
 
-        if end_str and not self._validate_date(end_str):
+        if end_str and not validate_iso_date(end_str):
             self.notify(f"Invalid end date: {end_str}", severity="error", timeout=3)
             return
 

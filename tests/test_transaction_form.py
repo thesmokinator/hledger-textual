@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from hledger_textual.app import HledgerTuiApp
+from hledger_textual.dateutil import validate_iso_date
 from hledger_textual.models import Amount, AmountStyle, Posting, TransactionStatus
 from hledger_textual.screens.transaction_form import (
     TransactionFormScreen,
@@ -620,39 +621,31 @@ class TestEuropeanNewTransactionParsing:
 
 
 class TestDateValidation:
-    """Tests for the _validate_date method directly."""
+    """Tests for ISO date validation used by the transaction form."""
 
     def test_valid_date(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("2026-01-15") is True
+        assert validate_iso_date("2026-01-15") is True
 
     def test_valid_leap_year(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("2024-02-29") is True
+        assert validate_iso_date("2024-02-29") is True
 
     def test_invalid_leap_year(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("2026-02-29") is False
+        assert validate_iso_date("2026-02-29") is False
 
     def test_invalid_format(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("not-a-date") is False
+        assert validate_iso_date("not-a-date") is False
 
     def test_slash_separator(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("2026/01/15") is False
+        assert validate_iso_date("2026/01/15") is False
 
     def test_empty_string(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("") is False
+        assert validate_iso_date("") is False
 
     def test_impossible_month(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("2026-13-01") is False
+        assert validate_iso_date("2026-13-01") is False
 
     def test_impossible_day(self):
-        form = TransactionFormScreen.__new__(TransactionFormScreen)
-        assert form._validate_date("2026-01-32") is False
+        assert validate_iso_date("2026-01-32") is False
 
 
 class TestDateInputFormat:

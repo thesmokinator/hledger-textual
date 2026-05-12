@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from hledger_textual.dateutil import next_month, prev_month
+from hledger_textual.dateutil import next_month, prev_month, validate_iso_date
 
 
 class TestPrevMonth:
@@ -62,3 +62,39 @@ class TestRoundtrip:
         """Roundtrip across a year boundary is consistent."""
         d = date(2026, 1, 15)
         assert next_month(prev_month(d)) == date(2026, 1, 1)
+
+
+class TestValidateIsoDate:
+    """Tests for validate_iso_date."""
+
+    def test_valid_mid_month_date(self):
+        """A valid ISO date returns True."""
+        assert validate_iso_date("2024-01-15") is True
+
+    def test_valid_end_of_year_date(self):
+        """Another valid ISO date returns True."""
+        assert validate_iso_date("2026-12-31") is True
+
+    def test_rejects_single_digit_month_and_day(self):
+        """Single-digit month and day are not valid ISO date syntax."""
+        assert validate_iso_date("2024-1-1") is False
+
+    def test_rejects_two_digit_year(self):
+        """Two-digit years are not valid ISO date syntax."""
+        assert validate_iso_date("24-01-01") is False
+
+    def test_rejects_non_date_text(self):
+        """Non-date text returns False."""
+        assert validate_iso_date("not-a-date") is False
+
+    def test_rejects_empty_string(self):
+        """An empty string returns False."""
+        assert validate_iso_date("") is False
+
+    def test_rejects_impossible_day(self):
+        """Impossible calendar dates return False."""
+        assert validate_iso_date("2024-02-30") is False
+
+    def test_rejects_impossible_month(self):
+        """Impossible months return False."""
+        assert validate_iso_date("2024-13-01") is False
