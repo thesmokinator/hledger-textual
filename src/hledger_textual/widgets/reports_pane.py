@@ -27,7 +27,13 @@ from hledger_textual.models import CustomReport, ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.constants import TREE_INDENT
 from hledger_textual.widgets.empty_state import EmptyState
-from hledger_textual.widgets.formatting import fmt_amount_str
+from hledger_textual.amountutil import parse_amount_string
+from hledger_textual.widgets.formatting import (
+    fmt_amount_str,
+    fmt_single_amount_str,
+    get_commodity_name,
+    split_raw_commodities,
+)
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
@@ -193,6 +199,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         Binding("i", "toggle_investments", "Investments", show=False, priority=True),
         Binding("t", "toggle_tree", "Tree/Flat", show=True, priority=True),
         Binding("S", "toggle_sort_amount", "Sort amount", show=True, priority=True),
+        Binding("M", "toggle_stacked_currency", "Stacked", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
         Binding("n", "new_custom_report", "New report", show=True, priority=True),
         Binding("e", "edit_custom_report", "Edit report", show=False, priority=True),
@@ -221,6 +228,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._show_investments: bool = False
         self._tree_mode: bool = False
         self._sort_amount: bool = False
+        self._stacked_currency: bool = True
         self._custom_report_name: str | None = None
         self._period_begin: date | None = None
         self._table_rows: list[ReportRow | None] = []
@@ -478,6 +486,22 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._row_full_paths = []
         path_stack: list[str] = []
 
+        def _has_multi_commodity(amounts: list[str]) -> bool:
+            """Check whether any amount in the list spans multiple commodities."""
+            return any(", " in amt for amt in amounts)
+
+        def _make_account_text(r: ReportRow) -> Text:
+            """Build the Rich Text for the account column of a data row."""
+            if r.is_section_header:
+                return Text.from_markup(
+                    f"[bold cyan]{r.account}[/bold cyan]", emoji=False
+                )
+            if r.is_total:
+                return Text.from_markup(
+                    f"[bold yellow]{r.account}[/bold yellow]", emoji=False
+                )
+            return Text(TREE_INDENT * r.depth + r.account)
+
         for idx, row in enumerate(data.rows):
             if row.is_section_header and idx > 0:
                 table.add_row(*empty_row)
@@ -508,18 +532,73 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 else:
                     full_path = row.account
 
-            if row.is_section_header:
-                account_text = Text.from_markup(
-                    f"[bold cyan]{row.account}[/bold cyan]", emoji=False
-                )
-            elif row.is_total:
-                account_text = Text.from_markup(
-                    f"[bold yellow]{row.account}[/bold yellow]", emoji=False
-                )
-            else:
-                account_text = Text(TREE_INDENT * row.depth + row.account)
+            account_text = _make_account_text(row)
 
-            cells = [account_text]
+            # --- Stacked multi-currency mode ---
+            if (
+                self._stacked_currency
+                and not row.is_section_header
+                and not row.is_total
+                and _has_multi_commodity(row.amounts)
+            ):
+                from decimal import Decimal
+
+                n_periods = len(data.period_headers)
+                period_splits: list[list[str]] = [
+                    split_raw_commodities(amt) for amt in row.amounts
+                ]
+
+                # Group raw sub-amounts by commodity name across all periods
+                # and compute each commodity's total absolute value for sorting.
+                commodity_sum: dict[str, Decimal] = {}
+                commodity_periods: dict[str, dict[int, str]] = {}
+
+                for p_idx, split_items in enumerate(period_splits):
+                    for raw_amt in split_items:
+                        name = get_commodity_name(raw_amt)
+                        if not name:
+                            continue
+                        if name not in commodity_periods:
+                            commodity_periods[name] = {}
+                            commodity_sum[name] = Decimal("0")
+                        commodity_periods[name][p_idx] = raw_amt
+                        try:
+                            qty, _ = parse_amount_string(raw_amt)
+                            commodity_sum[name] += abs(qty)
+                        except ValueError:
+                            pass
+
+                # Sort commodities by total absolute value (descending).
+                sorted_commodities = sorted(
+                    commodity_periods.keys(),
+                    key=lambda c: commodity_sum[c],
+                    reverse=True,
+                )
+
+                # One row per commodity.
+                for c_idx, commodity in enumerate(sorted_commodities):
+                    p_map = commodity_periods[commodity]
+                    if c_idx == 0:
+                        # Primary row — full account name.
+                        row_cells: list[str | Text] = [account_text]
+                    else:
+                        # Child row — dimmed commodity name, indented.
+                        row_cells = [Text(f"  {commodity}", style="dim")]
+
+                    for p_idx in range(n_periods):
+                        raw = p_map.get(p_idx, "")
+                        row_cells.append(fmt_single_amount_str(raw) if raw else "")
+
+                    while len(row_cells) < n_periods + 1:
+                        row_cells.append("")
+                    table.add_row(*row_cells)
+                    self._table_rows.append(row)
+                    self._row_full_paths.append(full_path)
+
+                continue
+
+            # --- Single-currency or non-stacked path ---
+            cells: list[str | Text] = [account_text]
             for amt in row.amounts:
                 formatted = fmt_amount_str(amt)
                 if row.is_total:
@@ -659,6 +738,15 @@ class ReportsPane(DataTablePaneMixin, Widget):
         self._tree_mode = not self._tree_mode
         self.notify("Tree view" if self._tree_mode else "Flat view", timeout=2)
         self._load_report_data()
+
+    def action_toggle_stacked_currency(self) -> None:
+        """Toggle stacked multi-currency display on/off."""
+        if self._custom_report_name is not None:
+            return
+        self._stacked_currency = not self._stacked_currency
+        label = "Stacked" if self._stacked_currency else "Flat"
+        self.notify(f"Multi-currency: {label}", timeout=2)
+        self._apply_report()
 
     def action_toggle_sort_amount(self) -> None:
         """Toggle sorting report rows by amount (hledger --sort-amount)."""

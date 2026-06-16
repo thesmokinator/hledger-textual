@@ -1,4 +1,4 @@
-"""Tests for transaction formatter."""
+"""Tests for transaction formatter and amount formatting helpers."""
 
 from decimal import Decimal
 
@@ -9,6 +9,13 @@ from hledger_textual.models import (
     Posting,
     Transaction,
     TransactionStatus,
+)
+from hledger_textual.widgets.formatting import (
+    fmt_amount_str,
+    fmt_single_amount_str,
+    get_commodity_name,
+    split_multi_commodity_amounts,
+    split_raw_commodities,
 )
 
 
@@ -132,3 +139,141 @@ class TestFormatTransaction:
         assert "expenses:food:groceries" in result
         assert "assets:bank:checking" in result
         assert "€40.80" in result
+
+
+class TestFmtAmountStr:
+    """Tests for fmt_amount_str — single and multi-commodity formatting."""
+
+    def test_single_euro(self):
+        """Single-commodity EUR amount gets locale formatting."""
+        assert fmt_amount_str("€3741.81") == "€3,741.81"
+
+    def test_single_dollar(self):
+        """Single-commodity USD amount gets locale formatting."""
+        assert fmt_amount_str("$5750.00") == "$5,750.00"
+
+    def test_single_named_commodity(self):
+        """Named-commodity amounts pass through unchanged."""
+        assert fmt_amount_str("0.17500000 BTC") == "0.17500000 BTC"
+        assert fmt_amount_str("28.0000 XDWD") == "28.0000 XDWD"
+
+    def test_negative_symbol(self):
+        """Negative amounts with left-side symbol are formatted correctly."""
+        assert fmt_amount_str("£-8.99") == "£-8.99"
+        # -€1.73 gets normalized to €-1.73 (sign after symbol)
+        assert fmt_amount_str("-€1.73") == "€-1.73"
+
+    def test_two_commodities(self):
+        """Two currencies joined by ', ' are split and joined with newline."""
+        result = fmt_amount_str("£-8.99, €3741.81")
+        assert result == "£-8.99\n€3,741.81"
+
+    def test_six_commodities(self):
+        """Full multi-commodity cell from hledger gets stacked formatting."""
+        raw = "$5750.00, 0.17500000 BTC, 28.0000 XDWD, 15.0000 XEON, £-8.99, €3741.81"
+        result = fmt_amount_str(raw)
+        lines = result.split("\n")
+        assert len(lines) == 6
+        assert lines[0] == "$5,750.00"
+        assert lines[1] == "0.17500000 BTC"
+        assert lines[5] == "€3,741.81"
+
+    def test_empty_string(self):
+        """Empty string returns empty string."""
+        assert fmt_amount_str("") == ""
+
+    def test_zero(self):
+        """Zero amount passes through unchanged."""
+        assert fmt_amount_str("0") == "0"
+
+    def test_locale_uses_en_us_in_tests(self):
+        """The test fixture forces en_US locale (period decimal, comma thousands)."""
+        assert fmt_amount_str("€1234.56") == "€1,234.56"
+
+
+class TestFmtSingleAmountStr:
+    """Tests for fmt_single_amount_str — no multi-commodity splitting."""
+
+    def test_formats_single_currency(self):
+        """Left-side currency symbol with 2+ decimals gets formatted."""
+        assert fmt_single_amount_str("€3741.81") == "€3,741.81"
+
+    def test_passes_named_through(self):
+        """Named commodities are returned unchanged."""
+        assert fmt_single_amount_str("0.17500000 BTC") == "0.17500000 BTC"
+
+    def test_passes_comma_separated_through(self):
+        """Comma-separated string is NOT split by this function."""
+        assert fmt_single_amount_str("£-8.99, €3741.81") == "£-8.99, €3741.81"
+
+
+class TestSplitRawCommodities:
+    """Tests for split_raw_commodities."""
+
+    def test_single_commodity(self):
+        """Single commodity returns a one-element list."""
+        assert split_raw_commodities("€3741.81") == ["€3741.81"]
+
+    def test_multi_commodity(self):
+        """Multi-commodity string is split on ', '."""
+        result = split_raw_commodities("£-8.99, €3741.81")
+        assert result == ["£-8.99", "€3741.81"]
+
+    def test_six_commodities(self):
+        """Full multi-commodity string is split correctly."""
+        raw = "$5750.00, 0.17500000 BTC, 28.0000 XDWD, 15.0000 XEON, £-8.99, €3741.81"
+        result = split_raw_commodities(raw)
+        assert len(result) == 6
+        assert "0.17500000 BTC" in result
+        assert "15.0000 XEON" in result
+
+    def test_empty_string(self):
+        """Empty string returns single-element list with empty string."""
+        assert split_raw_commodities("") == [""]
+
+    def test_named_commodity(self):
+        """Named commodity is returned as single-element list."""
+        assert split_raw_commodities("28.0000 XDWD") == ["28.0000 XDWD"]
+
+
+class TestSplitMultiCommodityAmounts:
+    """Tests for split_multi_commodity_amounts."""
+
+    def test_single_commodity_formatted(self):
+        """Single commodity gets formatted and returned in a list."""
+        result = split_multi_commodity_amounts("€3741.81")
+        assert result == ["€3,741.81"]
+
+    def test_multi_commodity_formatted(self):
+        """Each sub-amount is individually formatted."""
+        result = split_multi_commodity_amounts("£-8.99, €3741.81")
+        assert result == ["£-8.99", "€3,741.81"]
+
+    def test_named_commodities_unchanged(self):
+        """Named commodities stay as-is."""
+        result = split_multi_commodity_amounts("0.17500000 BTC, 28.0000 XDWD")
+        assert result == ["0.17500000 BTC", "28.0000 XDWD"]
+
+    def test_empty_string(self):
+        """Empty string returns a list with empty string."""
+        assert split_multi_commodity_amounts("") == [""]
+
+
+class TestGetCommodityName:
+    """Tests for get_commodity_name."""
+
+    def test_symbol_commodity(self):
+        """Single-char symbol is returned as-is."""
+        assert get_commodity_name("€3741.81") == "€"
+        assert get_commodity_name("$5750.00") == "$"
+        assert get_commodity_name("£-8.99") == "£"
+
+    def test_named_commodity(self):
+        """Multi-char commodity code is returned."""
+        assert get_commodity_name("0.17500000 BTC") == "BTC"
+        assert get_commodity_name("28.0000 XDWD") == "XDWD"
+
+    def test_unparseable_returns_empty(self):
+        """Unparseable amounts return empty string."""
+        assert get_commodity_name("") == ""
+        assert get_commodity_name("not an amount") == ""

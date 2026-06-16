@@ -130,6 +130,12 @@ def sample_budget_journal_path() -> Path:
 
 
 @pytest.fixture
+def multicurrency_journal_path() -> Path:
+    """Path to the multi-currency demo journal (from examples/)."""
+    return Path(__file__).parent.parent / "examples" / "multicurrency.journal"
+
+
+@pytest.fixture
 def tmp_budget_journal(tmp_path: Path, sample_budget_journal_path: Path) -> Path:
     """A temporary copy of the sample budget journal for mutation tests."""
     dest = tmp_path / "budget.journal"

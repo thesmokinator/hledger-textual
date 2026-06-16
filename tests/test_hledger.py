@@ -556,6 +556,45 @@ class TestParseReportCsv:
         assert data.title == ""
         assert data.rows == []
 
+    _MULTI_CSV = (
+        '"Monthly Balance Sheet 2026-01-01..2026-03-01","","",""\n'
+        '"Account","Jan","Feb","Mar"\n'
+        '"Assets","","",""\n'
+        '"assets:bank:checking","£-8.99, €3741.81","£682.02, €5738.07","£673.03, €5425.58"\n'
+        '"assets:bank:savings","$5750.00","$5731.00","$7941.00"\n'
+        '"assets:crypto:wallet","0.17500000 BTC","0.17500000 BTC","0.20500000 BTC"\n'
+        '"Liabilities","","",""\n'
+        '"liabilities:credit-card","$250.00","$430.00, €150.00","$640.00"\n'
+        '"Total:","$5500.00, 0.17500000 BTC, £-8.99, €3741.81","$5301.00, 0.17500000 BTC, £682.02, €5738.07","$7301.00, 0.20500000 BTC, £673.03, €5425.58"\n'
+    )
+
+    def test_multi_currency_amounts_parsed(self):
+        """Multi-commodity CSV cells are stored as single strings with ', ' separator."""
+        data = _parse_report_csv(self._MULTI_CSV)
+        checking = [r for r in data.rows if r.account == "assets:bank:checking"]
+        assert len(checking) == 1
+        assert checking[0].amounts[0] == "£-8.99, €3741.81"
+        assert checking[0].amounts[1] == "£682.02, €5738.07"
+
+    def test_multi_currency_section_headers(self):
+        """Section headers detected correctly in multi-currency report."""
+        data = _parse_report_csv(self._MULTI_CSV)
+        headers = [r.account for r in data.rows if r.is_section_header]
+        assert "Assets" in headers
+        assert "Liabilities" in headers
+
+    def test_multi_currency_total_row(self):
+        """Total row with multi-commodity amounts parsed correctly."""
+        data = _parse_report_csv(self._MULTI_CSV)
+        totals = [r for r in data.rows if r.is_total]
+        assert len(totals) == 1
+        assert totals[0].amounts[0] == "$5500.00, 0.17500000 BTC, £-8.99, €3741.81"
+
+    def test_multi_currency_period_headers(self):
+        """Period headers are correct for multi-currency report."""
+        data = _parse_report_csv(self._MULTI_CSV)
+        assert data.period_headers == ["Jan", "Feb", "Mar"]
+
 
 class TestLoadReportTreeDepth:
     """Tests for tree-mode depth detection via real hledger."""
