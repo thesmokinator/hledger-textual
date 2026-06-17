@@ -92,7 +92,7 @@ class TestRoundTrip:
         self, app: HledgerTuiApp, round_trip_journal: Path
     ) -> None:
         """Editing a transaction description should update the journal file."""
-        from textual.widgets import Input
+        from textual.widgets import DataTable, Input
 
         # Table is sorted newest-first → D3 (Office supplies) is at the top
         original_desc = "Office supplies"
@@ -101,17 +101,28 @@ class TestRoundTrip:
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+
+            # Wait for the transactions table to finish loading.
+            table = app.query_one("#transactions-table", DataTable)
+            while table.row_count == 0:
+                await pilot.pause(delay=0.1)
+
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
+            # Wait for the form screen to appear.
+            from hledger_textual.screens.transaction_form import TransactionFormScreen
+            for _ in range(200):
+                if isinstance(app.screen, TransactionFormScreen):
+                    break
+                await pilot.pause(delay=0.05)
+            else:
+                pytest.fail(
+                    f"Expected TransactionFormScreen, got {type(app.screen).__name__}"
+                )
 
-            form = app.screen
-            assert isinstance(form, TransactionFormScreen)
-
-            desc_input = form.query_one("#input-description", Input)
+            desc_input = app.screen.query_one("#input-description", Input)
             desc_input.value = new_desc
 
-            form._save()
+            app.screen._save()
             await pilot.pause(delay=1.0)
 
         content = round_trip_journal.read_text(encoding="utf-8")
