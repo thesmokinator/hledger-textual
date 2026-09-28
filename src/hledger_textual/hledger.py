@@ -315,12 +315,17 @@ def load_transactions(
 def load_account_balances(
     file: str | Path,
     cache: HledgerCache | None = None,
+    commodity: str | None = None,
 ) -> list[tuple[str, str]]:
     """Load all accounts with their current balances.
 
     Args:
         file: Path to the journal file.
         cache: Optional cache instance to avoid repeated subprocess calls.
+        commodity: Optional target commodity for conversion (``-X``).  When
+            set, hledger converts every balance to this commodity using
+            ``P`` price directives from the journal; unconverted commodities
+            are kept as-is (hledger's ``-X`` semantics).
 
     Returns:
         A list of (account_name, balance_string) tuples, ordered as hledger
@@ -329,13 +334,16 @@ def load_account_balances(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_account_balances", str(file))
+    cache_key = ("load_account_balances", str(file), commodity)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
-    output = run_hledger("balance", "--flat", "--no-total", "-O", "csv", file=file)
+    args = ["--flat", "--no-total", "-O", "csv"]
+    if commodity:
+        args.extend(["-X", commodity, "--infer-market-prices"])
+    output = run_hledger("balance", *args, file=file)
     reader = csv.reader(io.StringIO(output))
     next(reader, None)  # skip header row ("account","balance")
     result = [
@@ -370,7 +378,10 @@ def _parse_tree_account(raw: str) -> tuple[str, int]:
     return stripped, depth
 
 
-def load_account_tree_balances(file: str | Path) -> list[AccountNode]:
+def load_account_tree_balances(
+    file: str | Path,
+    commodity: str | None = None,
+) -> list[AccountNode]:
     """Load accounts as a tree with hierarchical balances.
 
     Uses ``hledger balance --tree`` to get indented account names with
@@ -378,6 +389,10 @@ def load_account_tree_balances(file: str | Path) -> list[AccountNode]:
 
     Args:
         file: Path to the journal file.
+        commodity: Optional target commodity for conversion (``-X``).  When
+            set, hledger converts every balance to this commodity using
+            ``P`` price directives from the journal; unconverted commodities
+            are kept as-is (hledger's ``-X`` semantics).
 
     Returns:
         A list of root-level :class:`AccountNode` instances, each with
@@ -388,7 +403,10 @@ def load_account_tree_balances(file: str | Path) -> list[AccountNode]:
     """
     from hledger_textual.models import AccountNode
 
-    output = run_hledger("balance", "--tree", "--no-total", "-O", "csv", file=file)
+    args = ["--tree", "--no-total", "-O", "csv"]
+    if commodity:
+        args.extend(["-X", commodity, "--infer-market-prices"])
+    output = run_hledger("balance", *args, file=file)
     reader = csv.reader(io.StringIO(output))
     next(reader, None)  # skip header row
 
@@ -864,6 +882,7 @@ def load_period_summary(
     file: str | Path,
     period: str | None = None,
     cache: HledgerCache | None = None,
+    commodity: str | None = None,
 ) -> PeriodSummary:
     """Load income, expense, and investment totals for a single period.
 
@@ -878,6 +897,10 @@ def load_period_summary(
             When ``None``, all transactions across the entire journal are
             included (no ``-p`` flag is passed).
         cache: Optional cache instance to avoid repeated subprocess calls.
+        commodity: Optional target commodity for conversion (``-X``) applied
+            to the income/expense queries only; the investments query stays at
+            cost (``-B``).  Requires ``P`` price directives for conversion;
+            unconverted commodities pass through unchanged.
 
     Returns:
         A :class:`PeriodSummary` instance.
@@ -885,22 +908,28 @@ def load_period_summary(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_period_summary", str(file), period)
+    cache_key = ("load_period_summary", str(file), period, commodity)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
+    from hledger_textual.widgets.formatting import split_raw_commodities
+
     period_args = ("-p", period) if period else ()
+    x_args = ("-X", commodity, "--infer-market-prices") if commodity else ()
 
     # Query 1a: income/revenue accounts (type:R — respects account type metadata)
     income = Decimal("0")
     expenses = Decimal("0")
-    commodity = ""
+    # When a target commodity was requested via -X, trust it directly rather
+    # than inferring from output cells — a leftover unconverted commodity in a
+    # mixed cell (no price available) must not relabel the converted total.
+    commodity_out = commodity or ""
 
     output_r = run_hledger(
         "balance", "type:R",
-        *period_args, "--flat", "--no-total", "-O", "csv",
+        *period_args, *x_args, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
     reader_r = csv.reader(io.StringIO(output_r))
@@ -908,15 +937,16 @@ def load_period_summary(
     for row in reader_r:
         if len(row) < 2 or not row[0]:
             continue
-        qty, com = _parse_budget_amount(row[1].strip())
-        if not commodity and com:
-            commodity = com
-        income += abs(qty)
+        for sub in split_raw_commodities(row[1].strip()):
+            qty, com = _parse_budget_amount(sub)
+            if not commodity_out and com:
+                commodity_out = com
+            income += abs(qty)
 
     # Query 1b: expense accounts (type:X — respects account type metadata)
     output_x = run_hledger(
         "balance", "type:X",
-        *period_args, "--flat", "--no-total", "-O", "csv",
+        *period_args, *x_args, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
     reader_x = csv.reader(io.StringIO(output_x))
@@ -924,10 +954,11 @@ def load_period_summary(
     for row in reader_x:
         if len(row) < 2 or not row[0]:
             continue
-        qty, com = _parse_budget_amount(row[1].strip())
-        if not commodity and com:
-            commodity = com
-        expenses += abs(qty)
+        for sub in split_raw_commodities(row[1].strip()):
+            qty, com = _parse_budget_amount(sub)
+            if not commodity_out and com:
+                commodity_out = com
+            expenses += abs(qty)
 
     # Query 2: investments at cost (-B converts units to purchase price)
     investments = Decimal("0")
@@ -944,8 +975,8 @@ def load_period_summary(
             if len(row) < 2 or not row[0]:
                 continue
             qty, com = _parse_budget_amount(row[1].strip())
-            if not commodity and com:
-                commodity = com
+            if not commodity_out and com:
+                commodity_out = com
             if qty > 0:
                 investments += qty
     except HledgerError:
@@ -953,13 +984,109 @@ def load_period_summary(
 
     result = PeriodSummary(
         income=income, expenses=expenses,
-        commodity=commodity, investments=investments,
+        commodity=commodity_out, investments=investments,
     )
 
     if cache is not None:
         cache.put(cache_key, result, file=file)
 
     return result
+
+
+def _period_side_by_commodity(
+    file: str | Path,
+    side: str,
+    period: str | None,
+    cache: HledgerCache | None,
+) -> list[tuple[str, Decimal]]:
+    """Shared helper: |sum| of ``side`` (``type:R``/``type:X``) per commodity.
+
+    Runs a flat ``balance`` CSV query and splits multi-commodity cells.  The
+    result is cached per (function, file, period) — the cache key includes the
+    loader name so income/expense/net entries cannot alias.
+    """
+    from hledger_textual.widgets.formatting import split_raw_commodities
+
+    cache_key = (f"load_period_{side}_by_commodity", str(file), period)
+    if cache is not None:
+        cached = cache.get(cache_key, file=file)
+        if cached is not None:
+            return cached
+
+    period_args = ("-p", period) if period else ()
+    output = run_hledger(
+        "balance", side,
+        *period_args, "--flat", "--no-total", "-O", "csv",
+        file=file,
+    )
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    sums: dict[str, Decimal] = {}
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        for sub in split_raw_commodities(row[1]):
+            qty, com = _parse_budget_amount(sub)
+            if com:
+                sums[com] = sums.get(com, Decimal("0")) + abs(qty)
+
+    result = sorted(sums.items())
+
+    if cache is not None:
+        cache.put(cache_key, result, file=file)
+
+    return result
+
+
+def load_period_income_by_commodity(
+    file: str | Path,
+    period: str | None = None,
+    cache: HledgerCache | None = None,
+) -> list[tuple[str, Decimal]]:
+    """Income per commodity for the period (no ``-X`` conversion)."""
+    return _period_side_by_commodity(file, "type:R", period, cache)
+
+
+def load_period_expenses_by_commodity(
+    file: str | Path,
+    period: str | None = None,
+    cache: HledgerCache | None = None,
+) -> list[tuple[str, Decimal]]:
+    """Expenses per commodity for the period (no ``-X`` conversion)."""
+    return _period_side_by_commodity(file, "type:X", period, cache)
+
+
+def load_period_net_by_commodity(
+    file: str | Path,
+    period: str | None = None,
+    cache: HledgerCache | None = None,
+) -> list[tuple[str, Decimal]]:
+    """Load net income per commodity for a period, without any conversion.
+
+    Runs the same ``type:R`` / ``type:X`` balance queries as
+    :func:`load_period_summary` but never applies ``-X``, splits the
+    multi-commodity CSV cells, and computes ``|income| - |expenses|`` per
+    commodity.  This feeds the Summary pane's per-currency balance line.
+
+    Args:
+        file: Path to the journal file.
+        period: A period string like ``'2026-02'``, or ``None`` for all time.
+        cache: Optional cache instance to avoid repeated subprocess calls.
+
+    Returns:
+        A sorted list of ``(commodity, net)`` tuples.  Commodities with no
+        amounts are omitted; a commodity present on only one side appears
+        with its absolute net.
+
+    Raises:
+        HledgerError: If hledger fails or is not found.
+    """
+    income = dict(_period_side_by_commodity(file, "type:R", period, cache))
+    expenses = dict(_period_side_by_commodity(file, "type:X", period, cache))
+    return sorted(
+        (com, income.get(com, Decimal("0")) - expenses.get(com, Decimal("0")))
+        for com in income.keys() | expenses.keys()
+    )
 
 
 def _load_account_breakdown(

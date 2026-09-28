@@ -41,6 +41,8 @@ from hledger_textual.widgets.report_chart import extract_chart_data
 _ONLY_SEPS = re.compile(r'^[\s=\-\+\|]+$')
 _STANDALONE_ZERO = re.compile(r'(?<![\d.])0(?![\d.])')
 
+MULTI_COMMODITY_MARKER = "◆ "
+
 _REPORT_LABELS = {"is": "Income Statement", "bs": "Balance Sheet", "cf": "Cash Flow"}
 _PERIOD_LABELS = {3: "3 months", 6: "6 months", 12: "12 months", 0: "Year to date"}
 
@@ -534,6 +536,15 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
             account_text = _make_account_text(row)
 
+            if (
+                not self._tree_mode
+                and not self._stacked_currency
+                and not row.is_section_header
+                and not row.is_total
+                and _has_multi_commodity(row.amounts)
+            ):
+                account_text = Text(MULTI_COMMODITY_MARKER) + account_text
+
             # --- Stacked multi-currency mode ---
             if (
                 self._stacked_currency
@@ -609,7 +620,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
             while len(cells) < len(data.period_headers) + 1:
                 cells.append("")
 
-            table.add_row(*cells)
+            table.add_row(*cells, height=None)
             self._table_rows.append(row)
             self._row_full_paths.append(full_path)
 

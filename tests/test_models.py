@@ -304,6 +304,50 @@ class TestPeriodSummary:
         )
         assert summary.net == Decimal("-300")
 
+    def test_net_by_commodity_defaults_to_empty(self):
+        """net_by_commodity is an empty list unless populated."""
+        summary = PeriodSummary(
+            income=Decimal("3000"), expenses=Decimal("1000"), commodity="€"
+        )
+        assert summary.net_by_commodity == []
+        assert isinstance(summary.net_by_commodity, list)
+
+    def test_net_by_commodity_settable(self):
+        """net_by_commodity accepts a per-commodity (commodity, net) list."""
+        summary = PeriodSummary(
+            income=Decimal("3000"),
+            expenses=Decimal("1000"),
+            commodity="€",
+            net_by_commodity=[("€", Decimal("1500")), ("£", Decimal("500"))],
+        )
+        assert summary.net_by_commodity == [
+            ("€", Decimal("1500")),
+            ("£", Decimal("500")),
+        ]
+
+    def test_per_side_lists_default_to_empty(self):
+        """income_by_commodity and expenses_by_commodity default to []."""
+        summary = PeriodSummary(
+            income=Decimal("3000"), expenses=Decimal("1000"), commodity="€"
+        )
+        assert summary.income_by_commodity == []
+        assert summary.expenses_by_commodity == []
+
+    def test_per_side_lists_settable(self):
+        """income_by_commodity / expenses_by_commodity accept per-commodity lists."""
+        summary = PeriodSummary(
+            income=Decimal("3000"),
+            expenses=Decimal("1000"),
+            commodity="€",
+            income_by_commodity=[("€", Decimal("2500")), ("$", Decimal("500"))],
+            expenses_by_commodity=[("€", Decimal("1000"))],
+        )
+        assert summary.income_by_commodity == [
+            ("€", Decimal("2500")),
+            ("$", Decimal("500")),
+        ]
+        assert summary.expenses_by_commodity == [("€", Decimal("1000"))]
+
 
 class TestTotalAmountWithCost:
     """Tests for Transaction.total_amount when postings carry cost annotations."""

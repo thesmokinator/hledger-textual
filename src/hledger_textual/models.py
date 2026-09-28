@@ -242,6 +242,9 @@ class PeriodSummary:
     expenses: Decimal
     commodity: str
     investments: Decimal = Decimal("0")
+    net_by_commodity: list[tuple[str, Decimal]] = field(default_factory=list)
+    income_by_commodity: list[tuple[str, Decimal]] = field(default_factory=list)
+    expenses_by_commodity: list[tuple[str, Decimal]] = field(default_factory=list)
 
     @property
     def net(self) -> Decimal:

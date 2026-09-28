@@ -149,6 +149,14 @@ SummaryPane {
     height: 1;
 }
 
+.summary-multicurrency, .income-multicurrency, .expenses-multicurrency {
+    height: 1;
+    width: 100%;
+    text-align: center;
+    color: $text-muted;
+    overflow: hidden;
+}
+
 /* Reusable period summary cards widget + inner container */
 PeriodSummaryCards {
     height: auto;

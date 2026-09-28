@@ -14,7 +14,11 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable, Input
 
 from hledger_textual.cache import HledgerCache
-from hledger_textual.config import load_accounts_view, save_accounts_view
+from hledger_textual.config import (
+    load_accounts_view,
+    resolve_default_commodity,
+    save_accounts_view,
+)
 from hledger_textual.hledger import (
     HledgerError,
     load_account_balances,
@@ -62,6 +66,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
         self._balances: list[tuple[str, str]] = []
         self._tree_roots: list[AccountNode] = []
         self._tree_mode: bool = load_accounts_view() == "tree"
+        self._commodity: str | None = resolve_default_commodity(self.journal_file)
         self.filter_text: str = ""
 
     def compose(self) -> ComposeResult:
@@ -91,17 +96,22 @@ class AccountsPane(DataTablePaneMixin, Widget):
         table.focus()
 
     def _load_data(self) -> None:
-        """Load account data from hledger for both views."""
-        try:
-            self._balances = load_account_balances(self.journal_file, cache=self._cache)
-        except HledgerError as exc:
-            self.notify(str(exc), severity="error", timeout=8)
-            self._balances = []
-
-        try:
-            self._tree_roots = load_account_tree_balances(self.journal_file)
-        except HledgerError:
-            self._tree_roots = []
+        """Load account data from hledger for the active view only."""
+        if self._tree_mode:
+            try:
+                self._tree_roots = load_account_tree_balances(
+                    self.journal_file, commodity=self._commodity
+                )
+            except HledgerError:
+                self._tree_roots = []
+        else:
+            try:
+                self._balances = load_account_balances(
+                    self.journal_file, cache=self._cache, commodity=self._commodity
+                )
+            except HledgerError as exc:
+                self.notify(str(exc), severity="error", timeout=8)
+                self._balances = []
 
         self._update_table()
 
@@ -124,7 +134,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
             if prev_group and group != prev_group:
                 table.add_row("", "", key=f"{self._SEP_KEY_PREFIX}{sep_idx}")
             prev_group = group
-            table.add_row(Text(account), fmt_amount_str(balance), key=account)
+            table.add_row(Text(account), fmt_amount_str(balance), height=None, key=account)
         self._set_empty_state_visible(table.row_count == 0)
 
     def _update_table_tree(self) -> None:
@@ -162,7 +172,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
         if node.children:
             label.stylize("bold")
 
-        table.add_row(label, fmt_amount_str(node.balance), key=node.full_path)
+        table.add_row(label, fmt_amount_str(node.balance), height=None, key=node.full_path)
 
         if node.expanded:
             for child in node.children:
@@ -181,7 +191,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
             label = Text(f"{indent}{icon}{full_path.rsplit(':', 1)[-1]}")
             if has_children:
                 label.stylize("bold")
-            table.add_row(label, fmt_amount_str(balance), key=full_path)
+            table.add_row(label, fmt_amount_str(balance), height=None, key=full_path)
 
     def _collect_filtered_rows(
         self, node: AccountNode, depth: int, term: str
@@ -287,7 +297,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
     def action_toggle_view(self) -> None:
         """Switch between flat and tree view and persist the choice."""
         self._tree_mode = not self._tree_mode
-        self._update_table()
+        self._load_data()
         mode = "tree" if self._tree_mode else "flat"
         save_accounts_view(mode)
         self.notify(f"{mode.capitalize()} view", timeout=2)

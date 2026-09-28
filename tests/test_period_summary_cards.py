@@ -9,6 +9,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Digits, Static
 
 from hledger_textual.models import PeriodSummary
+from hledger_textual.widgets.currency_marquee import CurrencyMarquee
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 
 
@@ -170,7 +171,7 @@ class TestPeriodSummaryCardsUpdate:
             summary = PeriodSummary(
                 income=Decimal("3000"),
                 expenses=Decimal("1000"),
-                commodity="\u20ac",
+                commodity="€",
                 investments=Decimal("500"),
             )
             cards.update_summary(summary)
@@ -179,3 +180,235 @@ class TestPeriodSummaryCardsUpdate:
             note = cards.query_one(".net-note", Static)
             assert "500" in note.renderable
             assert "invested" in note.renderable
+
+
+class TestPeriodSummaryCardsMarquee:
+    """Tests for the per-currency marquee line under the Net card."""
+
+    async def test_marquee_hidden_when_single_currency(self):
+        """One commodity in net_by_commodity leaves the marquee hidden."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            summary = PeriodSummary(
+                income=Decimal("3000"),
+                expenses=Decimal("1000"),
+                commodity="€",
+                net_by_commodity=[("€", Decimal("2000"))],
+            )
+            cards.update_summary(summary)
+            await pilot.pause()
+
+            marquee = cards.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is False
+            assert marquee._text == ""
+
+    async def test_marquee_hidden_when_empty(self):
+        """An empty net_by_commodity leaves the marquee hidden."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            summary = PeriodSummary(
+                income=Decimal("3000"),
+                expenses=Decimal("1000"),
+                commodity="€",
+            )
+            cards.update_summary(summary)
+            await pilot.pause()
+
+            marquee = cards.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is False
+
+    async def test_marquee_shows_joined_text_when_multi_currency(self):
+        """Multiple commodities show the marquee with the joined balances."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            summary = PeriodSummary(
+                income=Decimal("3000"),
+                expenses=Decimal("1000"),
+                commodity="€",
+                net_by_commodity=[
+                    ("€", Decimal("1500")),
+                    ("£", Decimal("420")),
+                    ("$", Decimal("-80")),
+                ],
+            )
+            cards.update_summary(summary)
+            await pilot.pause()
+
+            marquee = cards.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is True
+            assert "€" in marquee._text
+            assert "£" in marquee._text
+            assert "$" in marquee._text
+            assert ", " in marquee._text
+
+    async def test_marquee_resets_on_none_summary(self):
+        """update_summary(None) hides and clears the marquee."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            cards.update_summary(
+                PeriodSummary(
+                    income=Decimal("3000"),
+                    expenses=Decimal("1000"),
+                    commodity="€",
+                    net_by_commodity=[("€", Decimal("1")), ("£", Decimal("2"))],
+                )
+            )
+            await pilot.pause()
+            cards.update_summary(None)
+            await pilot.pause()
+
+            marquee = cards.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is False
+            assert marquee._text == ""
+
+    async def test_s6_marquee_rotates_when_overflowing_narrow_card(self):
+        """S6: in a narrow card the overflowing currency list scrolls."""
+        app = _CardsApp()
+        async with app.run_test(size=(36, 8)) as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            summary = PeriodSummary(
+                income=Decimal("20000"),
+                expenses=Decimal("1000"),
+                commodity="€",
+                net_by_commodity=[
+                    ("€", Decimal("8000.00")),
+                    ("£", Decimal("5000.00")),
+                    ("$", Decimal("3500.00")),
+                    ("BTC", Decimal("2500.00")),
+                ],
+            )
+            cards.update_summary(summary)
+            await pilot.pause()
+
+            marquee = cards.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is True
+            assert marquee._is_scrolling, (
+                f"marquee should scroll (text {len(marquee._text)}ch, "
+                f"width {marquee.size.width})"
+            )
+            start = marquee._offset
+            await pilot.pause(delay=0.3)
+            assert marquee._offset != start
+
+
+class TestPeriodSummaryCardsPerSideMarquee:
+    """Per-currency lines under the Income and Expenses cards (S10)."""
+
+    async def test_income_card_shows_marquee_when_multi_currency(self):
+        """Income card surfaces its own currencies when > 1 side commodity."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            cards.update_summary(
+                PeriodSummary(
+                    income=Decimal("30000"),
+                    expenses=Decimal("1000"),
+                    commodity="€",
+                    net_by_commodity=[("€", Decimal("100")), ("$", Decimal("200"))],
+                    income_by_commodity=[
+                        ("€", Decimal("2500")),
+                        ("$", Decimal("5300")),
+                    ],
+                )
+            )
+            await pilot.pause()
+            income_marquee = cards.query_one(
+                ".income-multicurrency", CurrencyMarquee
+            )
+            assert income_marquee.display is True
+            assert "€" in income_marquee._text
+            assert "$" in income_marquee._text
+
+    async def test_expenses_card_shows_marquee_when_multi_currency(self):
+        """Expenses card surfaces its own currencies when > 1 side commodity."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            cards.update_summary(
+                PeriodSummary(
+                    income=Decimal("30000"),
+                    expenses=Decimal("9000"),
+                    commodity="€",
+                    net_by_commodity=[("€", Decimal("100")), ("$", Decimal("200"))],
+                    expenses_by_commodity=[
+                        ("€", Decimal("5700")),
+                        ("£", Decimal("54")),
+                    ],
+                )
+            )
+            await pilot.pause()
+            expenses_marquee = cards.query_one(
+                ".expenses-multicurrency", CurrencyMarquee
+            )
+            assert expenses_marquee.display is True
+            assert "€" in expenses_marquee._text
+            assert "£" in expenses_marquee._text
+
+    async def test_side_marquees_hidden_when_single_currency(self):
+        """Income/Expenses marquees stay hidden for single-currency sides."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            cards.update_summary(
+                PeriodSummary(
+                    income=Decimal("3000"),
+                    expenses=Decimal("1000"),
+                    commodity="€",
+                    net_by_commodity=[("€", Decimal("2000"))],
+                    income_by_commodity=[("€", Decimal("3000"))],
+                    expenses_by_commodity=[("€", Decimal("1000"))],
+                )
+            )
+            await pilot.pause()
+            assert (
+                cards.query_one(
+                    ".income-multicurrency", CurrencyMarquee
+                ).display
+                is False
+            )
+            assert (
+                cards.query_one(
+                    ".expenses-multicurrency", CurrencyMarquee
+                ).display
+                is False
+            )
+
+    async def test_side_marquees_reset_on_none(self):
+        """update_summary(None) hides all three per-currency lines."""
+        app = _CardsApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            cards = app.query_one(PeriodSummaryCards)
+            cards.update_summary(
+                PeriodSummary(
+                    income=Decimal("30000"),
+                    expenses=Decimal("9000"),
+                    commodity="€",
+                    net_by_commodity=[("€", Decimal("100")), ("$", Decimal("1"))],
+                    income_by_commodity=[("€", Decimal("2500")), ("$", Decimal("5300"))],
+                    expenses_by_commodity=[("€", Decimal("5700")), ("£", Decimal("54"))],
+                )
+            )
+            await pilot.pause()
+            cards.update_summary(None)
+            await pilot.pause()
+            for cls in (
+                ".income-multicurrency",
+                ".expenses-multicurrency",
+                ".summary-multicurrency",
+            ):
+                w = cards.query_one(cls, CurrencyMarquee)
+                assert w.display is False, f"{cls} should hide"
+                assert w._text == ""

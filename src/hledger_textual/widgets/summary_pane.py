@@ -16,7 +16,7 @@ from rich.text import Text
 from textual.widgets import DataTable, Static
 
 from hledger_textual.cache import HledgerCache
-from hledger_textual.config import load_price_tickers
+from hledger_textual.config import load_price_tickers, resolve_default_commodity
 from hledger_textual.formatter import normalize_commodity
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.empty_state import EmptyState
@@ -32,6 +32,9 @@ from hledger_textual.hledger import (
     load_investment_eur_by_account,
     load_investment_positions,
     load_liabilities_breakdown,
+    load_period_expenses_by_commodity,
+    load_period_income_by_commodity,
+    load_period_net_by_commodity,
     load_period_summary,
 )
 from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
@@ -241,10 +244,34 @@ class SummaryPane(Widget):
         month and are not affected by the breakdown period navigation.
         """
         # --- All-time period summary for cards ---
+        commodity = resolve_default_commodity(self.journal_file)
         try:
-            summary = load_period_summary(self.journal_file, cache=self._cache)
+            summary = load_period_summary(
+                self.journal_file, cache=self._cache, commodity=commodity
+            )
         except HledgerError:
             summary = None
+
+        # Per-currency values for the marquee lines under each card.
+        if summary is not None:
+            try:
+                summary.net_by_commodity = load_period_net_by_commodity(
+                    self.journal_file, cache=self._cache
+                )
+            except HledgerError:
+                summary.net_by_commodity = []
+            try:
+                summary.income_by_commodity = load_period_income_by_commodity(
+                    self.journal_file, cache=self._cache
+                )
+            except HledgerError:
+                summary.income_by_commodity = []
+            try:
+                summary.expenses_by_commodity = load_period_expenses_by_commodity(
+                    self.journal_file, cache=self._cache
+                )
+            except HledgerError:
+                summary.expenses_by_commodity = []
 
         # --- Liabilities: total outstanding balance ---
         try:

@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from hledger_textual.app import HledgerTuiApp
+from hledger_textual.models import AccountNode
+from hledger_textual.widgets.accounts_pane import AccountsPane
 from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -209,3 +211,356 @@ class TestAccountsToggleView:
             await pilot.press("t")
             await pilot.pause(delay=0.3)
             assert pane._tree_mode == initial
+
+
+class TestAccountsLazyLoading:
+    """Only the loader matching the current view mode should be called."""
+
+    @pytest.fixture(autouse=True)
+    def _force_flat_view(self, monkeypatch: pytest.MonkeyPatch):
+        """Default these tests to flat mode regardless of user config."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_accounts_view",
+            lambda: "flat",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.save_accounts_view",
+            lambda _mode: None,
+        )
+
+    async def test_only_active_mode_loaded_on_mount(
+        self, accounts_app: HledgerTuiApp, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Default flat mode: flat loader called, tree loader untouched."""
+        flat_calls: list[dict] = []
+        tree_calls: list[dict] = []
+
+        def spy_flat(*args, **kwargs):
+            flat_calls.append({"args": args, "kwargs": kwargs})
+            return [("assets:x", "€1.00")]
+
+        def spy_tree(*args, **kwargs):
+            tree_calls.append({"args": args, "kwargs": kwargs})
+            return []
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_balances", spy_flat
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_tree_balances",
+            spy_tree,
+        )
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            assert len(flat_calls) >= 1
+            assert len(tree_calls) == 0
+
+    async def test_toggle_loads_other_mode(
+        self, accounts_app: HledgerTuiApp, monkeypatch: pytest.MonkeyPatch
+    ):
+        """After toggling to tree, the tree loader runs exactly once more."""
+        flat_calls: list[dict] = []
+        tree_calls: list[dict] = []
+
+        def spy_flat(*args, **kwargs):
+            flat_calls.append({"args": args, "kwargs": kwargs})
+            return [("assets:x", "€1.00")]
+
+        def spy_tree(*args, **kwargs):
+            tree_calls.append({"args": args, "kwargs": kwargs})
+            return []
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_balances", spy_flat
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_tree_balances",
+            spy_tree,
+        )
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            flat_before = len(flat_calls)
+            tree_before = len(tree_calls)
+            await pilot.press("6")
+            await pilot.pause(delay=0.3)
+            await pilot.press("t")
+            await pilot.pause(delay=0.3)
+            assert len(tree_calls) == tree_before + 1
+            assert len(flat_calls) == flat_before
+
+    async def test_toggle_reloads_flat_on_toggle_back(
+        self, accounts_app: HledgerTuiApp, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Toggling tree -> flat re-invokes the flat loader (reload-per-toggle)."""
+        flat_calls: list[dict] = []
+        tree_calls: list[dict] = []
+
+        def spy_flat(*args, **kwargs):
+            flat_calls.append({"args": args, "kwargs": kwargs})
+            return [("assets:x", "€1.00")]
+
+        def spy_tree(*args, **kwargs):
+            tree_calls.append({"args": args, "kwargs": kwargs})
+            return [
+                AccountNode(
+                    name="assets",
+                    full_path="assets",
+                    balance="€1.00",
+                    depth=0,
+                )
+            ]
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_balances", spy_flat
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_tree_balances",
+            spy_tree,
+        )
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            flat_after_mount = len(flat_calls)
+            await pilot.press("6")
+            await pilot.pause(delay=0.3)
+            pane = accounts_app.screen.query_one(AccountsPane)
+            await pilot.press("t")
+            await pilot.pause(delay=0.3)
+            assert pane._tree_mode, "expected tree mode after first toggle"
+            tree_after_first_toggle = len(tree_calls)
+            await pilot.press("t")
+            await pilot.pause(delay=0.3)
+            assert not pane._tree_mode, "expected flat mode after second toggle"
+            assert len(tree_calls) == tree_after_first_toggle, (
+                f"tree reloaded unexpectedly: {tree_calls}"
+            )
+            assert len(flat_calls) == flat_after_mount + 1
+
+
+class TestAccountsCommodityConversion:
+    """The configured default commodity must flow into the active loader."""
+
+    @pytest.fixture(autouse=True)
+    def _default_flat_view(self, monkeypatch: pytest.MonkeyPatch):
+        """Most tests here need flat mode at startup; tree-mode tests override."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_accounts_view",
+            lambda: "flat",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.save_accounts_view",
+            lambda _mode: None,
+        )
+
+    async def test_flat_load_passes_configured_commodity(
+        self, accounts_app: HledgerTuiApp, monkeypatch: pytest.MonkeyPatch
+    ):
+        """flat mode: load_account_balances receives commodity='€'."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        seen: list[dict] = []
+
+        def spy_flat(*args, **kwargs):
+            seen.append({"args": args, "kwargs": kwargs})
+            return [("assets:x", "€1.00")]
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_balances", spy_flat
+        )
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            assert len(seen) >= 1
+            assert seen[-1]["kwargs"].get("commodity") == "€"
+
+    async def test_flat_load_passes_none_when_unconfigured(
+        self, accounts_app: HledgerTuiApp, monkeypatch: pytest.MonkeyPatch
+    ):
+        """flat mode with no configured commodity: commodity=None is passed."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        seen: list[dict] = []
+
+        def spy_flat(*args, **kwargs):
+            seen.append({"args": args, "kwargs": kwargs})
+            return [("assets:x", "€1.00")]
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_balances", spy_flat
+        )
+
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            assert len(seen) >= 1
+            assert seen[-1]["kwargs"].get("commodity") is None
+
+    async def test_tree_load_passes_configured_commodity(
+        self, accounts_app_journal: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """tree mode: load_account_tree_balances receives commodity='€'."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_accounts_view",
+            lambda: "tree",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        seen: list[dict] = []
+
+        def spy_tree(*args, **kwargs):
+            seen.append({"args": args, "kwargs": kwargs})
+            return []
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_account_tree_balances",
+            spy_tree,
+        )
+
+        app = HledgerTuiApp(journal_file=accounts_app_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            assert len(seen) >= 1
+            assert seen[-1]["kwargs"].get("commodity") == "€"
+
+    async def test_integration_converted_balances(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """End-to-end: multicurrency journal, -X €, single-currency balance row."""
+        repo_root = Path(__file__).resolve().parent.parent
+        base = (repo_root / "examples" / "multicurrency.journal").read_text()
+        prices = (repo_root / "examples" / "multicurrency-prices.journal").read_text()
+        # Strip include directives that reference files outside tmp_path.
+        base_lines = [
+            line for line in base.splitlines() if not line.startswith("include ")
+        ]
+        journal = tmp_path / "multicurrency.journal"
+        journal.write_text("\n".join(base_lines) + "\n\n" + prices)
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("6")
+            await pilot.pause(delay=2.0)
+            table = app.screen.query_one("#accounts-table")
+            target_row = None
+            for i in range(table.row_count):
+                row = table.get_row_at(i)
+                account_cell = row[0]
+                plain = (
+                    account_cell.plain
+                    if hasattr(account_cell, "plain")
+                    else str(account_cell)
+                )
+                if plain == "assets:bank:checking":
+                    target_row = row
+                    break
+            assert target_row is not None, (
+                "assets:bank:checking row not found; rows: "
+                + repr(
+                    [
+                        (
+                            table.get_row_at(i)[0].plain
+                            if hasattr(table.get_row_at(i)[0], "plain")
+                            else str(table.get_row_at(i)[0])
+                        )
+                        for i in range(table.row_count)
+                    ]
+                )
+            )
+            balance_cell = target_row[1]
+            balance_plain = (
+                balance_cell.plain
+                if hasattr(balance_cell, "plain")
+                else str(balance_cell)
+            )
+            assert "€" in balance_plain
+            assert "£" not in balance_plain
+            assert "\n" not in balance_plain
+
+
+class TestAccountsRowHeight:
+    """Multi-currency rows must be tall enough to render every stacked line."""
+
+    @pytest.fixture(autouse=True)
+    def _default_flat_view(self, monkeypatch: pytest.MonkeyPatch):
+        """Flat mode at startup; config writes stubbed out."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_accounts_view",
+            lambda: "flat",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.save_accounts_view",
+            lambda _mode: None,
+        )
+
+    async def test_flat_multi_currency_row_has_multi_line_height(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A stacked multi-currency balance cell renders at height >= 2."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        journal = tmp_path / "multi.journal"
+        journal.write_text(
+            "2026-01-01 * opening\n"
+            "    assets:bank:checking      €100.00\n"
+            "    assets:bank:checking       £50.00\n"
+            "    assets:bank:savings        €42.00\n"
+            "    equity:opening-balances\n"
+        )
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("6")
+            await pilot.pause(delay=1.0)
+            table = app.screen.query_one("#accounts-table")
+            keys = {rk.value: rk for rk in table.rows.keys() if rk.value}
+            target = keys.get("assets:bank:checking")
+            assert target is not None, (
+                f"assets:bank:checking row not found; keys: {sorted(keys)}"
+            )
+            height = table.get_row_height(target)
+            assert height >= 2, (
+                f"multi-currency row height is {height}; stacked currencies clipped"
+            )
+
+    async def test_flat_single_currency_row_stays_single_line(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A single-currency balance cell renders at height 1."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        journal = tmp_path / "multi.journal"
+        journal.write_text(
+            "2026-01-01 * opening\n"
+            "    assets:bank:checking      €100.00\n"
+            "    assets:bank:checking       £50.00\n"
+            "    assets:bank:savings        €42.00\n"
+            "    equity:opening-balances\n"
+        )
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("6")
+            await pilot.pause(delay=1.0)
+            table = app.screen.query_one("#accounts-table")
+            keys = {rk.value: rk for rk in table.rows.keys() if rk.value}
+            target = keys.get("assets:bank:savings")
+            assert target is not None
+            height = table.get_row_height(target)
+            assert height == 1, f"single-currency row height is {height}"

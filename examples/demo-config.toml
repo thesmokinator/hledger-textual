@@ -1,5 +1,13 @@
 journal_file = "examples/demo.journal"
 
+# The default currency for Accounts/Summary/Reports views is resolved from
+# (1) the first `commodity` directive in your journal (includes followed),
+# then (2) this key.  Conversion runs `hledger -X --infer-market-prices`, so
+# `P` price directives in the journal are used automatically.  When neither
+# is set, balances are shown in their original currencies and the Reports
+# flat view marks multi-currency accounts with "◆".
+# default_commodity = "€"
+
 [prices]
 XDWD = "XDWD.MI"
 XEON = "XEON.MI"

@@ -8,11 +8,13 @@ from hledger_textual.config import (
     _load_config_dict,
     _save_config_dict,
     delete_filter,
+    load_configured_default_commodity,
     load_default_commodity,
     load_price_tickers,
     load_saved_filters,
     load_theme,
     parse_args,
+    resolve_default_commodity,
     resolve_journal_file,
     save_filter,
     save_theme,
@@ -193,6 +195,121 @@ class TestLoadDefaultCommodity:
             "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
         )
         assert load_default_commodity() == "$"
+
+
+class TestLoadConfiguredDefaultCommodity:
+    """Tests for load_configured_default_commodity configuration helper."""
+
+    def test_returns_none_when_not_set(self, tmp_path, monkeypatch):
+        """Returns None when config has no default_commodity key."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('theme = "nord"\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        assert load_configured_default_commodity() is None
+
+    def test_returns_configured_value(self, tmp_path, monkeypatch):
+        """Returns the raw configured commodity when set."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text('default_commodity = "\u20ac"\n')
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+        assert load_configured_default_commodity() == "\u20ac"
+
+    def test_returns_none_when_config_missing(self, tmp_path, monkeypatch):
+        """Returns None when the config file does not exist."""
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        assert load_configured_default_commodity() is None
+
+
+class TestResolveDefaultCommodity:
+    """Tests for resolve_default_commodity (ledger-first, config fallback)."""
+
+    def _patch_config(self, tmp_path, monkeypatch, content: str | None):
+        config_path = tmp_path / "config.toml"
+        if content is not None:
+            config_path.write_text(content)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
+
+    def test_journal_directive_wins_over_config(self, tmp_path, monkeypatch):
+        """A `commodity` directive in the journal beats the config value."""
+        self._patch_config(tmp_path, monkeypatch, 'default_commodity = "$"\n')
+        journal = tmp_path / "test.journal"
+        journal.write_text(
+            "commodity €1,000.00\n"
+            "commodity $1,000.00\n"
+            "\n"
+            "2026-01-01 * x\n"
+            "    assets:bank  €100.00\n"
+            "    income:salary\n"
+        )
+        assert resolve_default_commodity(journal) == "€"
+
+    def test_first_directive_wins(self, tmp_path, monkeypatch):
+        """The first `commodity` directive is used, not a later one."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        journal = tmp_path / "test.journal"
+        journal.write_text(
+            "commodity $1,000.00\n"
+            "commodity €1,000.00\n"
+        )
+        assert resolve_default_commodity(journal) == "$"
+
+    def test_right_side_named_commodity_format(self, tmp_path, monkeypatch):
+        """A `commodity` directive with a named unit on the right is resolved."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        journal = tmp_path / "test.journal"
+        journal.write_text("commodity 0.0000 XEON\n")
+        assert resolve_default_commodity(journal) == "XEON"
+
+    def test_include_directive_is_followed(self, tmp_path, monkeypatch):
+        """Commodity declarations in an included journal are considered."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        (tmp_path / "included.journal").write_text("commodity £1,000.00\n")
+        journal = tmp_path / "main.journal"
+        journal.write_text("include included.journal\n")
+        assert resolve_default_commodity(journal) == "£"
+
+    def test_main_directive_beats_included(self, tmp_path, monkeypatch):
+        """A directive in the main file wins over an included file's."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        (tmp_path / "included.journal").write_text("commodity £1,000.00\n")
+        journal = tmp_path / "main.journal"
+        journal.write_text(
+            "include included.journal\n"
+            "commodity €1,000.00\n"
+        )
+        assert resolve_default_commodity(journal) == "€"
+
+    def test_config_fallback_when_no_directive(self, tmp_path, monkeypatch):
+        """With no journal directive, the configured default commodity is used."""
+        self._patch_config(tmp_path, monkeypatch, 'default_commodity = "€"\n')
+        journal = tmp_path / "test.journal"
+        journal.write_text(
+            "2026-01-01 * x\n    assets:bank  €100.00\n    income:salary\n"
+        )
+        assert resolve_default_commodity(journal) == "€"
+
+    def test_none_when_no_directive_and_no_config(self, tmp_path, monkeypatch):
+        """With neither a journal directive nor config, returns None."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        journal = tmp_path / "test.journal"
+        journal.write_text(
+            "2026-01-01 * x\n    assets:bank  €100.00\n    income:salary\n"
+        )
+        assert resolve_default_commodity(journal) is None
+
+    def test_missing_journal_returns_config(self, tmp_path, monkeypatch):
+        """A missing journal file falls back to the configured value."""
+        self._patch_config(tmp_path, monkeypatch, 'default_commodity = "$"\n')
+        assert resolve_default_commodity(tmp_path / "nonexistent.journal") == "$"
+
+    def test_commented_directive_is_ignored(self, tmp_path, monkeypatch):
+        """A `;`-commented directive is not treated as a declaration."""
+        self._patch_config(tmp_path, monkeypatch, 'default_commodity = "$"\n')
+        journal = tmp_path / "test.journal"
+        journal.write_text("; commodity €1,000.00\n")
+        assert resolve_default_commodity(journal) == "$"
 
 
 class TestLoadPriceTickers:

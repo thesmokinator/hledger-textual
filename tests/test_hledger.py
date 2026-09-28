@@ -27,6 +27,9 @@ from hledger_textual.hledger import (
     load_journal_stats,
     load_liabilities_breakdown,
     load_multi_period_budget_report,
+    load_period_expenses_by_commodity,
+    load_period_income_by_commodity,
+    load_period_net_by_commodity,
     load_period_summary,
     load_report,
     load_transactions,
@@ -331,6 +334,281 @@ class TestLoadPeriodSummary:
         assert summary.expenses == Decimal("100.00")
         assert summary.investments == Decimal("600.00")
         assert summary.net == Decimal("2300.00")
+
+    def test_mixed_commodity_account_not_dropped(self, tmp_path: Path):
+        """An account whose balance spans multiple commodities in one CSV cell
+        must still contribute to income/expenses instead of being silently
+        zeroed out (the whole cell used to fail a single-commodity regex)."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            f"{d1.isoformat()} * Freelance EUR\n"
+            f"    assets:bank      €500.00\n"
+            f"    income:freelance\n"
+            f"\n"
+            f"{d2.isoformat()} * Freelance GBP\n"
+            f"    assets:bank      £300.00\n"
+            f"    income:freelance\n"
+        )
+        journal = tmp_path / "mixed.journal"
+        journal.write_text(content)
+        period = today.strftime("%Y-%m")
+        summary = load_period_summary(journal, period)
+        # income:freelance's balance is a single mixed cell ("€-500.00, £-300.00");
+        # both legs must be counted rather than the whole row dropping to zero.
+        assert summary.income == Decimal("800.00")
+
+    def test_commodity_flag_appended_to_rx_queries(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """With commodity set, type:R and type:X queries get -X <commodity>."""
+        captured: list[tuple] = []
+
+        def _capture(*args, **kwargs):
+            captured.append(args)
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_period_summary(journal, commodity="€")
+
+        r_calls = [c for c in captured if "type:R" in c]
+        x_calls = [c for c in captured if "type:X" in c]
+        inv_calls = [c for c in captured if "assets:investments" in c]
+        assert r_calls, "type:R query expected"
+        assert x_calls, "type:X query expected"
+        assert all("-X" in c for c in r_calls)
+        assert all("-X" in c for c in x_calls)
+        for c in r_calls + x_calls:
+            idx = c.index("-X")
+            assert c[idx + 1] == "€"
+        # Market prices from the journal are used for the conversion.
+        assert all("--infer-market-prices" in c for c in r_calls)
+        assert all("--infer-market-prices" in c for c in x_calls)
+        assert all("-X" not in c for c in inv_calls), (
+            "investments query must stay at cost (-B), no -X"
+        )
+
+    def test_no_commodity_flag_when_none(self, monkeypatch, tmp_path: Path):
+        """Without commodity, no -X is passed anywhere."""
+        captured: list[tuple] = []
+
+        def _capture(*args, **kwargs):
+            captured.append(args)
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_period_summary(journal)
+        assert captured, "expected run_hledger calls"
+        assert all("-X" not in c for c in captured)
+
+    def test_cache_key_distinguishes_commodity(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """Cache entries are keyed per commodity so a change refetches."""
+        from hledger_textual.cache import HledgerCache
+
+        put_keys: list[tuple] = []
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: '"account","balance"\n',
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        monkeypatch.setattr(
+            cache, "put", lambda key, value, file=None: put_keys.append(key)
+        )
+        monkeypatch.setattr(cache, "get", lambda key, file=None: None)
+
+        load_period_summary(journal, cache=cache)
+        load_period_summary(journal, cache=cache, commodity="€")
+
+        assert len(put_keys) == 2
+        assert put_keys[0] != put_keys[1]
+
+
+class TestLoadPeriodNetByCommodity:
+    """Tests for load_period_net_by_commodity (no -X: raw per-currency nets)."""
+
+    def test_aggregates_net_per_commodity(self, monkeypatch, tmp_path: Path):
+        """Per-commodity net = |type:R| - |type:X|, multi-commodity cells split."""
+        responses = {
+            "type:R": (
+                '"account","balance"\n'
+                '"income:freelance","£-4500.00, $-5300.00"\n'
+                '"income:salary","€-22500.00"\n'
+            ),
+            "type:X": (
+                '"account","balance"\n'
+                '"expenses:rent","€5700.00"\n'
+                '"expenses:subscriptions","£53.94, €89.94"\n'
+            ),
+        }
+
+        def _fake(*args, **kwargs):
+            for key, csv_out in responses.items():
+                if key in args:
+                    return csv_out
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+
+        result = load_period_net_by_commodity(journal)
+
+        assert dict(result) == {
+            "$": Decimal("5300.00"),
+            "£": Decimal("4446.06"),
+            "€": Decimal("16710.06"),
+        }
+        assert [c for c, _ in result] == sorted(c for c, _ in result)
+
+    def test_passes_no_x_flag(self, monkeypatch, tmp_path: Path):
+        """Per-currency loader must never apply -X conversion."""
+        captured: list[tuple] = []
+
+        def _capture(*args, **kwargs):
+            captured.append(args)
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_period_net_by_commodity(journal)
+        assert captured
+        assert all("-X" not in c for c in captured)
+
+    def test_period_flag_threaded(self, monkeypatch, tmp_path: Path):
+        """The -p period argument is forwarded to both queries when given."""
+        captured: list[tuple] = []
+
+        def _capture(*args, **kwargs):
+            captured.append(args)
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_period_net_by_commodity(journal, period="2026-02")
+        assert captured
+        assert all("-p" in c for c in captured)
+        assert all("2026-02" in c for c in captured)
+
+    def test_commodities_only_on_one_side(self, monkeypatch, tmp_path: Path):
+        """A commodity present only in income (or only expenses) still appears."""
+        responses = {
+            "type:R": '"account","balance"\n"income:salary","€-100.00"\n',
+            "type:X": '"account","balance"\n"expenses:food","€-40.00"\n',
+        }
+
+        def _fake(*args, **kwargs):
+            for key, csv_out in responses.items():
+                if key in args:
+                    return csv_out
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        result = load_period_net_by_commodity(journal)
+        assert dict(result) == {"€": Decimal("60.00")}
+
+    def test_caches_roundtrip(self, monkeypatch, tmp_path: Path):
+        """Second call with same args is served from the cache."""
+        call_count = 0
+
+        def _fake(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if "type:R" in args:
+                return '"account","balance"\n"income:salary","€-100.00"\n'
+            return '"account","balance"\n'
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "test.journal"
+        journal.write_text("2026-01-01 * x\n    income:salary  €-100.00\n    assets:bank\n")
+        cache = HledgerCache()
+        first = load_period_net_by_commodity(journal, cache=cache)
+        second = load_period_net_by_commodity(journal, cache=cache)
+        assert first == second == [("€", Decimal("100.00"))]
+        assert call_count == 2  # R + X queries on first call only
+
+
+class TestLoadPeriodIncomeExpensesByCommodity:
+    """Tests for per-side per-commodity loaders (no -X conversion)."""
+
+    def test_income_by_commodity_aggregates(self, monkeypatch, tmp_path: Path):
+        """Income per commodity = |sum of type:R balances|."""
+        responses = {
+            "type:R": (
+                '"account","balance"\n'
+                '"income:freelance","£-4500.00, $-5300.00"\n'
+                '"income:salary","€-22500.00"\n'
+            ),
+        }
+
+        def _fake(*args, **kwargs):
+            for key, csv_out in responses.items():
+                if key in args:
+                    return csv_out
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        result = load_period_income_by_commodity(journal)
+        assert dict(result) == {
+            "£": Decimal("4500.00"),
+            "$": Decimal("5300.00"),
+            "€": Decimal("22500.00"),
+        }
+        assert [c for c, _ in result] == sorted(c for c, _ in result)
+
+    def test_expenses_by_commodity_aggregates(self, monkeypatch, tmp_path: Path):
+        """Expenses per commodity = |sum of type:X balances|."""
+        responses = {
+            "type:X": (
+                '"account","balance"\n'
+                '"expenses:rent","€5700.00"\n'
+                '"expenses:subscriptions","£53.94, €89.94"\n'
+            ),
+        }
+
+        def _fake(*args, **kwargs):
+            for key, csv_out in responses.items():
+                if key in args:
+                    return csv_out
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        result = load_period_expenses_by_commodity(journal)
+        assert dict(result) == {"€": Decimal("5789.94"), "£": Decimal("53.94")}
+
+    def test_per_side_passes_no_x(self, monkeypatch, tmp_path: Path):
+        """Per-side loaders never apply -X."""
+        captured: list[tuple] = []
+
+        def _capture(*args, **kwargs):
+            captured.append(args)
+            return '"account","balance"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_period_income_by_commodity(journal)
+        load_period_expenses_by_commodity(journal)
+        assert captured
+        assert all("-X" not in c for c in captured)
 
 
 class TestLoadPeriodSummaryEuropeanFormat:
@@ -1059,6 +1337,59 @@ class TestLoadAccountBalances:
         balances = load_account_balances(journal)
         accounts = [row[0] for row in balances]
         assert accounts.count("assets:cash") == 1
+
+    def test_commodity_flag_appended(self, monkeypatch, tmp_path: Path):
+        """load_account_balances passes -X <commodity> when commodity is set."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return '"account","balance"\n"assets:cash","€10.00"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_account_balances(journal, commodity="€")
+        assert "-X" in captured_args
+        idx = captured_args.index("-X")
+        assert captured_args[idx + 1] == "€"
+        assert "--infer-market-prices" in captured_args
+
+    def test_no_commodity_flag_when_none(self, monkeypatch, tmp_path: Path):
+        """load_account_balances does not pass -X when commodity is None."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return '"account","balance"\n"assets:cash","€10.00"\n'
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _capture)
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        load_account_balances(journal)
+        assert "-X" not in captured_args
+
+    def test_cache_key_distinguishes_commodity(self, monkeypatch, tmp_path: Path):
+        """Cached results are keyed per commodity so a mode change refetches."""
+        from hledger_textual.cache import HledgerCache
+
+        put_keys: list[tuple] = []
+        real_csv = '"account","balance"\n"assets:cash","€10.00"\n'
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: real_csv,
+        )
+        journal = tmp_path / "test.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        monkeypatch.setattr(cache, "put", lambda key, value, file=None: put_keys.append(key))
+        monkeypatch.setattr(cache, "get", lambda key, file=None: None)
+
+        load_account_balances(journal, cache=cache)
+        load_account_balances(journal, cache=cache, commodity="€")
+
+        assert len(put_keys) == 2
+        assert put_keys[0] != put_keys[1]
 
 
 class TestRunHledgerOverrides:

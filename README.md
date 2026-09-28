@@ -47,6 +47,32 @@ The journal file is resolved in this order:
 3. `~/.config/hledger-textual/config.toml` (`journal_file` key)
 4. `~/.hledger.journal`
 
+### Default currency
+
+For multi-currency journals, the default currency is resolved in this order:
+
+1. The first `commodity` directive declared in the journal (following
+   `include` files), e.g. `commodity €1,000.00`.
+2. The `default_commodity` key in `~/.config/hledger-textual/config.toml`.
+
+When resolved, the Accounts and Summary views convert balances to that
+currency using `hledger -X --infer-market-prices`, so `P` price directives in
+the journal are honored (see `examples/multicurrency-prices.journal`).
+Commodities without a price are shown in their original currency.
+
+When nothing is resolved, the Accounts view shows each account's balances in
+their original currencies (stacked within the cell), the Reports view's flat
+multi-period mode marks multi-currency accounts with a `◆` prefix, and the
+Summary overview shows a per-currency balance line under each card (marquee
+scrolling when it overflows). The Reports view's stacked mode (`M`) always
+expands each currency into its own row.
+
+To pin a currency via config instead:
+
+```toml
+default_commodity = "€"
+```
+
 ## Documentation
 
 See the [Wiki](https://github.com/thesmokinator/hledger-textual/wiki) for the full documentation: feature overview, configuration, investment tracking, and per-tab reference.

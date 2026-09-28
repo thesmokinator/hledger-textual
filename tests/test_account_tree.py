@@ -118,6 +118,35 @@ class TestLoadAccountTreeBalances:
 
         assert roots == []
 
+    def test_commodity_flag_appended(self) -> None:
+        """load_account_tree_balances passes -X <commodity> when set."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return _TREE_CSV
+
+        with patch("hledger_textual.hledger.run_hledger", _capture):
+            load_account_tree_balances("test.journal", commodity="€")
+
+        assert "-X" in captured_args
+        idx = captured_args.index("-X")
+        assert captured_args[idx + 1] == "€"
+        assert "--infer-market-prices" in captured_args
+
+    def test_no_commodity_flag_when_none(self) -> None:
+        """load_account_tree_balances does not pass -X when commodity is None."""
+        captured_args: list[str] = []
+
+        def _capture(*args, **kwargs):
+            captured_args.extend(args)
+            return _TREE_CSV
+
+        with patch("hledger_textual.hledger.run_hledger", _capture):
+            load_account_tree_balances("test.journal")
+
+        assert "-X" not in captured_args
+
 
 # --- AccountNode model tests ---
 

@@ -9,6 +9,7 @@ from textual.widget import Widget
 from textual.widgets import Digits, Static
 
 from hledger_textual.models import PeriodSummary
+from hledger_textual.widgets.currency_marquee import CurrencyMarquee
 from hledger_textual.widgets.formatting import (
     compute_saving_rate,
     fmt_amount,
@@ -41,14 +42,17 @@ class PeriodSummaryCards(Widget):
             with Vertical(classes="summary-card"):
                 yield Static("Income", classes="summary-card-title")
                 yield Digits("--", classes="summary-card-value income-value")
+                yield CurrencyMarquee("", classes="income-multicurrency")
             with Vertical(classes="summary-card"):
                 yield Static("Expenses", classes="summary-card-title")
                 yield Digits("--", classes="summary-card-value expenses-value")
+                yield CurrencyMarquee("", classes="expenses-multicurrency")
             with Vertical(classes="summary-card"):
                 yield Static("Net", classes="summary-card-title")
                 yield Digits("--", classes="summary-card-value net-value")
                 yield Static("", classes="net-note")
                 yield Static("", classes="saving-rate")
+                yield CurrencyMarquee("", classes="summary-multicurrency net-multicurrency")
 
     def update_summary(self, summary: PeriodSummary | None) -> None:
         """Update all card values from a PeriodSummary.
@@ -91,9 +95,58 @@ class PeriodSummaryCards(Widget):
                 rate_widget.update(f"Saving rate: {rate:.0f}%")
             else:
                 rate_widget.update("")
+
+            net_marquee = self.query_one(".net-multicurrency", CurrencyMarquee)
+            if len(summary.net_by_commodity) > 1:
+                net_marquee.set_content(
+                    ", ".join(
+                        fmt_amount(net, cur)
+                        for cur, net in summary.net_by_commodity
+                    )
+                )
+                net_marquee.display = True
+            else:
+                net_marquee.set_content("")
+                net_marquee.display = False
+
+            income_marquee = self.query_one(".income-multicurrency", CurrencyMarquee)
+            if len(summary.income_by_commodity) > 1:
+                income_marquee.set_content(
+                    ", ".join(
+                        fmt_amount(amt, cur)
+                        for cur, amt in summary.income_by_commodity
+                    )
+                )
+                income_marquee.display = True
+            else:
+                income_marquee.set_content("")
+                income_marquee.display = False
+
+            expenses_marquee = self.query_one(
+                ".expenses-multicurrency", CurrencyMarquee
+            )
+            if len(summary.expenses_by_commodity) > 1:
+                expenses_marquee.set_content(
+                    ", ".join(
+                        fmt_amount(amt, cur)
+                        for cur, amt in summary.expenses_by_commodity
+                    )
+                )
+                expenses_marquee.display = True
+            else:
+                expenses_marquee.set_content("")
+                expenses_marquee.display = False
         else:
             for cls in (".income-value", ".expenses-value", ".net-value"):
                 self.query_one(cls, Digits).update("--")
             self.query_one(".net-note", Static).update("")
             self.query_one(".net-note", Static).display = False
             self.query_one(".saving-rate", Static).update("")
+            for cls in (
+                ".income-multicurrency",
+                ".expenses-multicurrency",
+                ".net-multicurrency",
+            ):
+                m = self.query_one(cls, CurrencyMarquee)
+                m.set_content("")
+                m.display = False

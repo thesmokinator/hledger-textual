@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from textual.app import App, ComposeResult
+from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from hledger_textual.models import ReportData, ReportRow
@@ -812,3 +813,270 @@ class TestReportsPaneDrillDown:
             assert app.screen.account == "income:salary"
 
             await pilot.press("escape")
+
+
+class TestFlatMultiCommodityMarker:
+    """Markers for multi-commodity account rows in flat (non-stacked) mode."""
+
+    @staticmethod
+    def _make_data() -> ReportData:
+        """Deterministic report with mixed multi/single-commodity rows."""
+        return ReportData(
+            title="BS",
+            period_headers=["Jan", "Feb"],
+            rows=[
+                ReportRow(
+                    account="assets:bank:checking",
+                    amounts=["£100.00, €50.00", "£120.00, €60.00"],
+                ),
+                ReportRow(
+                    account="assets:bank:savings",
+                    amounts=["$500.00", "$600.00"],
+                ),
+                ReportRow(
+                    account="Total:",
+                    amounts=["£220.00, €110.00", "£240.00, €120.00"],
+                    is_total=True,
+                ),
+            ],
+        )
+
+    @staticmethod
+    def _cell_text(table: DataTable, row_idx: int) -> str:
+        """Get the plain text of the account cell at a row index."""
+        from textual.coordinate import Coordinate
+
+        cell = table.get_cell_at(Coordinate(row_idx, 0))
+        return cell.plain if hasattr(cell, "plain") else str(cell)
+
+    async def test_marker_constant_exported(self):
+        """The module exports MULTI_COMMODITY_MARKER as U+25C6 + space."""
+        from hledger_textual.widgets.reports_pane import MULTI_COMMODITY_MARKER
+
+        assert MULTI_COMMODITY_MARKER == "◆ "
+
+    async def test_flat_mode_multi_commodity_shows_marker(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Flat-mode multi-commodity data row prepends the marker."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            pane._stacked_currency = False
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            found = False
+            for row_idx in range(table.row_count):
+                text = self._cell_text(table, row_idx)
+                if "assets:bank:checking" in text:
+                    assert text.startswith("◆ "), f"expected marker, got {text!r}"
+                    found = True
+            assert found, "checking row not found"
+
+    async def test_flat_mode_single_currency_no_marker(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Flat-mode single-currency data row has no marker."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            pane._stacked_currency = False
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            found = False
+            for row_idx in range(table.row_count):
+                text = self._cell_text(table, row_idx)
+                if "assets:bank:savings" in text:
+                    assert not text.startswith("◆"), f"unexpected marker on {text!r}"
+                    found = True
+            assert found, "savings row not found"
+
+    async def test_flat_mode_total_row_no_marker(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Total rows never receive the marker even when multi-commodity."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            pane._stacked_currency = False
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            found = False
+            for row_idx in range(table.row_count):
+                text = self._cell_text(table, row_idx)
+                if "Total:" in text:
+                    assert not text.startswith("◆"), f"unexpected marker on {text!r}"
+                    found = True
+            assert found, "Total row not found"
+
+    async def test_stacked_mode_no_marker(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """In stacked mode, rows are split per commodity — no marker."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            # _stacked_currency defaults to True
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            for row_idx in range(table.row_count):
+                text = self._cell_text(table, row_idx)
+                assert not text.startswith("◆"), f"unexpected marker at row {row_idx}: {text!r}"
+
+    async def test_tree_mode_no_marker(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Tree mode already shows depth — never adds the marker."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            pane._stacked_currency = False
+            pane._tree_mode = True
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            for row_idx in range(table.row_count):
+                text = self._cell_text(table, row_idx)
+                assert not text.startswith("◆"), f"unexpected marker at row {row_idx}: {text!r}"
+
+
+class TestFlatMultiCommodityRowHeight:
+    """Multi-commodity rows in flat (non-stacked) mode must render every
+    stacked currency line, not just the first."""
+
+    @staticmethod
+    def _make_data() -> ReportData:
+        """Deterministic report with mixed multi/single-commodity rows."""
+        return ReportData(
+            title="BS",
+            period_headers=["Jan", "Feb"],
+            rows=[
+                ReportRow(
+                    account="assets:bank:checking",
+                    amounts=["£100.00, €50.00", "£120.00, €60.00"],
+                ),
+                ReportRow(
+                    account="assets:bank:savings",
+                    amounts=["$500.00", "$600.00"],
+                ),
+            ],
+        )
+
+    @staticmethod
+    def _row_height_by_account_text(table: DataTable, needle: str) -> int:
+        """Return the rendered height of the row whose account cell matches."""
+        keys = list(table.rows.keys())
+        for row_idx in range(table.row_count):
+            cell = table.get_cell_at(Coordinate(row_idx, 0))
+            text = cell.plain if hasattr(cell, "plain") else str(cell)
+            if needle in text:
+                return table.get_row_height(keys[row_idx])
+        raise AssertionError(f"row containing {needle!r} not found")
+
+    async def test_flat_multi_commodity_row_has_multi_line_height(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """A flat multi-commodity row renders at height >= 2."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            pane._stacked_currency = False
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            height = self._row_height_by_account_text(table, "checking")
+            assert height >= 2, (
+                f"multi-commodity row height is {height}; stacked currencies clipped"
+            )
+
+    async def test_flat_single_commodity_row_stays_single_line(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """A flat single-commodity row renders at height 1."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            pane._stacked_currency = False
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            height = self._row_height_by_account_text(table, "savings")
+            assert height == 1, f"single-commodity row height is {height}"
+
+    async def test_stacked_mode_rows_stay_single_line(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Stacked mode emits one row per commodity — all height 1."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: ReportData(title="", period_headers=[], rows=[]),
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._report_data = self._make_data()
+            # _stacked_currency defaults to True
+            pane._apply_report()
+            await pilot.pause()
+
+            table = app.query_one("#reports-table", DataTable)
+            keys = list(table.rows.keys())
+            for row_idx in range(table.row_count):
+                height = table.get_row_height(keys[row_idx])
+                assert height == 1, (
+                    f"stacked row {row_idx} height is {height}; expected 1"
+                )

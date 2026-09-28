@@ -530,3 +530,167 @@ class TestSummaryPaneLiabilities:
             assert app.query_one(SummaryPane) is not None
 
 
+class TestSummaryPaneMulticurrency:
+    """Currency conversion + per-currency line wiring in SummaryPane."""
+
+    async def test_configured_commodity_passed_to_summary_loader(
+        self, summary_journal: Path, monkeypatch
+    ):
+        """load_period_summary receives commodity from config; marquee populated."""
+        from hledger_textual.models import PeriodSummary
+        from hledger_textual.widgets.currency_marquee import CurrencyMarquee
+
+        captured: dict = {}
+
+        def _fake_summary(file, period=None, cache=None, commodity=None):
+            captured["commodity"] = commodity
+            return PeriodSummary(
+                income=Decimal("100"), expenses=Decimal("40"), commodity="€"
+            )
+
+        def _fake_net(file, period=None, cache=None):
+            captured["net_called"] = True
+            return [("€", Decimal("50")), ("£", Decimal("10"))]
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_summary", _fake_summary
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_net_by_commodity",
+            _fake_net,
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_price_tickers", lambda: {}
+        )
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            assert captured["commodity"] == "€"
+            assert captured["net_called"] is True
+            marquee = app.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is True
+            assert "€" in marquee._text and "£" in marquee._text
+
+    async def test_unconfigured_commodity_passes_none(
+        self, summary_journal: Path, monkeypatch
+    ):
+        """Without a configured default, no -X conversion happens."""
+        from hledger_textual.models import PeriodSummary
+
+        captured: dict = {}
+
+        def _fake_summary(file, period=None, cache=None, commodity=None):
+            captured["commodity"] = commodity
+            return PeriodSummary(
+                income=Decimal("100"), expenses=Decimal("40"), commodity="€"
+            )
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_summary", _fake_summary
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_net_by_commodity",
+            lambda *a, **k: [],
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_price_tickers", lambda: {}
+        )
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            assert captured["commodity"] is None
+
+    async def test_net_by_commodity_error_falls_back_to_empty(
+        self, summary_journal: Path, monkeypatch
+    ):
+        """HledgerError from the per-commodity loader leaves the marquee hidden."""
+        from hledger_textual.hledger import HledgerError
+        from hledger_textual.models import PeriodSummary
+        from hledger_textual.widgets.currency_marquee import CurrencyMarquee
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_summary",
+            lambda *a, **k: PeriodSummary(
+                income=Decimal("100"), expenses=Decimal("40"), commodity="€"
+            ),
+        )
+
+        def _raise(*args, **kwargs):
+            raise HledgerError("net by commodity failed")
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_net_by_commodity",
+            _raise,
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_price_tickers", lambda: {}
+        )
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            marquee = app.query_one(".summary-multicurrency", CurrencyMarquee)
+            assert marquee.display is False
+            marquee_text = marquee._text
+            assert marquee_text == ""
+
+    async def test_income_expenses_lists_threaded_to_cards(
+        self, summary_journal: Path, monkeypatch
+    ):
+        """Per-side loaders feed income/expenses marquees on the real pane."""
+        from hledger_textual.models import PeriodSummary
+        from hledger_textual.widgets.currency_marquee import CurrencyMarquee
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_summary",
+            lambda *a, **k: PeriodSummary(
+                income=Decimal("30000"),
+                expenses=Decimal("10000"),
+                commodity="€",
+            ),
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_net_by_commodity",
+            lambda *a, **k: [("€", Decimal("15000")), ("$", Decimal("5000"))],
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_income_by_commodity",
+            lambda *a, **k: [("€", Decimal("25000")), ("$", Decimal("5000"))],
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_period_expenses_by_commodity",
+            lambda *a, **k: [("€", Decimal("9000")), ("£", Decimal("1000"))],
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.load_price_tickers", lambda: {}
+        )
+        app = _SummaryApp(summary_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=1.0)
+            from textual.css.query import NoMatches
+            try:
+                inc = app.query_one(".income-multicurrency", CurrencyMarquee)
+                exp = app.query_one(".expenses-multicurrency", CurrencyMarquee)
+                net = app.query_one(".summary-multicurrency", CurrencyMarquee)
+            except NoMatches as exc:
+                raise AssertionError(f"marquee missing: {exc}")
+            assert inc.display is True and "€" in inc._text and "$" in inc._text
+            assert exp.display is True and "€" in exp._text and "£" in exp._text
+            assert net.display is True
+
+

@@ -11,10 +11,21 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
 _CONFIG_PATH = Path.home() / ".config" / "hledger-textual" / "config.toml"
+
+# Matches a hledger `commodity` directive, e.g.:
+#   commodity €1,000.00      -> captures "€"
+#   commodity 0.0000 XEON    -> captures "XEON"
+_COMMODITY_DIRECTIVE_RE = re.compile(
+    r"^commodity\s+(?:([^\d\s.,;-]+)[\d\s.,]*|[-\d\s.,]*([^\d\s.,;]+))\s*$"
+)
+
+# Matches an `include` directive, capturing the included path.
+_INCLUDE_RE = re.compile(r'^include\s+([^;]+?)\s*(?:;.*)?$')
 
 
 def _load_config_dict() -> dict:
@@ -92,6 +103,76 @@ def load_default_commodity() -> str:
         Commodity string (e.g. ``"€"``, ``"$"``).
     """
     return _load_config_dict().get("default_commodity", "$")
+
+
+def load_configured_default_commodity() -> str | None:
+    """Return the explicitly configured default commodity, or ``None`` if unset.
+
+    Unlike :func:`load_default_commodity`, this returns ``None`` when the
+    ``default_commodity`` key is absent from config.toml.  Callers that
+    should only convert currencies on explicit opt-in (e.g. the Accounts
+    pane) use this; callers with established ``"$"``-default behaviour
+    (e.g. the Reports pane) use :func:`load_default_commodity`.
+
+    Returns:
+        Commodity string (e.g. ``"€"``), or ``None`` when not configured.
+    """
+    return _load_config_dict().get("default_commodity")
+
+
+def _first_commodity_directive(path: Path, *, _seen: frozenset[Path] = frozenset()) -> str | None:
+    """Return the first ``commodity`` directive's unit in a journal, following includes.
+
+    Reads the journal's text directly (no hledger invocation), scans lines in
+    order, and follows ``include`` directives breadth-first when the main file
+    declares nothing.  Cycles are guarded by the ``_seen`` set.  Comment lines
+    (``;`` / ``#``) are ignored because the directive regex anchors at column 0
+    on the word ``commodity``.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    if path in _seen:
+        return None
+    _seen = _seen | {path}
+
+    include_paths: list[Path] = []
+    for line in text.splitlines():
+        m = _COMMODITY_DIRECTIVE_RE.match(line)
+        if m:
+            return m.group(1) or m.group(2)
+        inc = _INCLUDE_RE.match(line)
+        if inc:
+            include_paths.append(path.parent / inc.group(1))
+
+    for included in include_paths:
+        found = _first_commodity_directive(included, _seen=_seen)
+        if found:
+            return found
+    return None
+
+
+def resolve_default_commodity(journal_file: str | Path) -> str | None:
+    """Resolve the default commodity, ledger-first then config.
+
+    Uses the first ``commodity`` directive declared in the journal (following
+    ``include`` directives).  Falls back to the ``default_commodity`` key in
+    config.toml.  Returns ``None`` when neither is set — in which case callers
+    should not convert (raw multi-currency display).
+
+    Args:
+        journal_file: Path to the top-level journal file.
+
+    Returns:
+        Commodity string (e.g. ``"€"``, ``"XEON"``), or ``None`` when
+        undeclared and unconfigured.
+    """
+    declared = _first_commodity_directive(Path(journal_file))
+    if declared:
+        return declared
+    return load_configured_default_commodity()
 
 
 def load_price_tickers() -> dict[str, str]:
