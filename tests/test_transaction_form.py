@@ -7,7 +7,6 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from textual.widgets import DataTable
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.dateutil import validate_iso_date
@@ -23,7 +22,7 @@ from hledger_textual.widgets.amount_input import AmountInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 
-from tests.conftest import has_hledger, wait_until
+from tests.conftest import has_hledger, select_first_transaction, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -81,8 +80,7 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            table = app.query_one("#transactions-table", DataTable)
-            await wait_until(pilot, lambda: table.row_count > 0)
+            await select_first_transaction(pilot, app)
             await pilot.press("e")
             await wait_until(
                 pilot, lambda: isinstance(app.screen, TransactionFormScreen)
@@ -118,8 +116,7 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            table = app.query_one("#transactions-table", DataTable)
-            await wait_until(pilot, lambda: table.row_count > 0)
+            await select_first_transaction(pilot, app)
             await pilot.press("e")
             await wait_until(
                 pilot, lambda: isinstance(app.screen, TransactionFormScreen)
@@ -133,8 +130,7 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            table = app.query_one("#transactions-table", DataTable)
-            await wait_until(pilot, lambda: table.row_count > 0)
+            await select_first_transaction(pilot, app)
             await pilot.press("e")
             await wait_until(
                 pilot, lambda: isinstance(app.screen, TransactionFormScreen)
@@ -479,8 +475,7 @@ class TestEuropeanStylePreservation:
         async with european_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            table = european_app.query_one("#transactions-table", DataTable)
-            await wait_until(pilot, lambda: table.row_count > 0)
+            await select_first_transaction(pilot, european_app)
             await pilot.press("e")
             await wait_until(
                 pilot,

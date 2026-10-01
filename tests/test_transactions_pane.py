@@ -7,13 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from textual.widgets import DataTable
-
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.screens.move_confirm import MoveConfirmModal
 from hledger_textual.screens.transaction_form import TransactionFormScreen
 from hledger_textual.widgets.transactions_table import TransactionsTable
-from tests.conftest import has_hledger, wait_until
+from tests.conftest import has_hledger, select_first_transaction, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -207,10 +205,7 @@ class TestTransactionsPaneClone:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause(delay=0.5)
-            data_table = app3.query_one(TransactionsTable).query_one(DataTable)
-            await _wait_until(
-                pilot, lambda: data_table.row_count > 0
-            )
+            await select_first_transaction(pilot, app3)
             await pilot.press("c")
             await _wait_until(
                 pilot, lambda: isinstance(app3.screen, TransactionFormScreen)
@@ -239,10 +234,7 @@ class TestTransactionsPaneMove:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause(delay=0.5)
-            data_table = app3.query_one(TransactionsTable).query_one(DataTable)
-            await _wait_until(
-                pilot, lambda: data_table.row_count > 0
-            )
+            await select_first_transaction(pilot, app3)
             await pilot.press("m")
             await _wait_until(pilot, lambda: isinstance(app3.screen, MoveConfirmModal))
             assert isinstance(app3.screen, MoveConfirmModal)
@@ -252,10 +244,7 @@ class TestTransactionsPaneMove:
             await pilot.pause()
             await pilot.press("2")
             await pilot.pause(delay=0.5)
-            data_table = app3.query_one(TransactionsTable).query_one(DataTable)
-            await _wait_until(
-                pilot, lambda: data_table.row_count > 0
-            )
+            await select_first_transaction(pilot, app3)
             await pilot.press("m")
             await _wait_until(pilot, lambda: isinstance(app3.screen, MoveConfirmModal))
             assert isinstance(app3.screen, MoveConfirmModal)

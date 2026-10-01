@@ -127,6 +127,23 @@ async def wait_until(pilot, condition, *, timeout: float = 10.0, interval: float
         await pilot.pause(delay=interval)
 
 
+async def select_first_transaction(pilot, app):
+    """Wait for the transactions table, then focus it and select the first row.
+
+    Keypress actions (edit/delete/toggle/move) operate on the highlighted row,
+    so tests must not fire them before the table is loaded *and* has a cursor.
+    Returns the focused ``DataTable``.
+    """
+    from textual.widgets import DataTable
+
+    table = app.query_one("#transactions-table", DataTable)
+    await wait_until(pilot, lambda: table.row_count > 0)
+    table.focus()
+    table.move_cursor(row=0)
+    await pilot.pause()
+    return table
+
+
 @pytest.fixture
 def european_journal_path() -> Path:
     """Path to the European-format journal fixture (€1.000,00)."""

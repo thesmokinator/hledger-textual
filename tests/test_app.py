@@ -11,7 +11,7 @@ from textual.widgets import DataTable
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.hledger import load_transactions
-from tests.conftest import has_hledger, wait_until
+from tests.conftest import has_hledger, select_first_transaction, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -185,7 +185,7 @@ class TestDelete:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            await select_first_transaction(pilot, app)
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
 
@@ -193,7 +193,7 @@ class TestDelete:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            await select_first_transaction(pilot, app)
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
             await pilot.press("escape")
@@ -205,7 +205,7 @@ class TestDelete:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            await select_first_transaction(pilot, app)
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
             delete_btn = app.screen.query_one("#btn-delete")

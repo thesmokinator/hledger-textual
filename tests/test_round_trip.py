@@ -15,7 +15,7 @@ import pytest
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.screens.transaction_form import TransactionFormScreen
 
-from tests.conftest import has_hledger, wait_until
+from tests.conftest import has_hledger, select_first_transaction, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -94,7 +94,7 @@ class TestRoundTrip:
         self, app: HledgerTuiApp, round_trip_journal: Path
     ) -> None:
         """Editing a transaction description should update the journal file."""
-        from textual.widgets import DataTable, Input
+        from textual.widgets import Input
 
         # Table is sorted newest-first → D3 (Office supplies) is at the top
         original_desc = "Office supplies"
@@ -103,12 +103,7 @@ class TestRoundTrip:
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-
-            # Wait for the transactions table to finish loading and take focus.
-            table = app.query_one("#transactions-table", DataTable)
-            await wait_until(
-                pilot, lambda: table.row_count > 0
-            )
+            await select_first_transaction(pilot, app)
 
             await pilot.press("e")
             # Wait for the form screen to appear.
@@ -139,15 +134,10 @@ class TestRoundTrip:
         # The first transaction (Salary) has no status marker
         assert f"{_D3.isoformat()} !" in before
 
-        from textual.widgets import DataTable
-
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            table = app.query_one("#transactions-table", DataTable)
-            await wait_until(
-                pilot, lambda: table.row_count > 0
-            )
+            await select_first_transaction(pilot, app)
             # Toggle cleared on the currently selected transaction
             await pilot.press("*")
             await wait_until(
@@ -169,15 +159,10 @@ class TestRoundTrip:
         # The table is sorted newest-first; "Office supplies" is at top (D3)
         assert "Office supplies" in before
 
-        from textual.widgets import DataTable
-
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            table = app.query_one("#transactions-table", DataTable)
-            await wait_until(
-                pilot, lambda: table.row_count > 0
-            )
+            await select_first_transaction(pilot, app)
             # Trigger delete → pushes DeleteConfirmModal
             await pilot.press("d")
             # Click the "Delete" confirm button
