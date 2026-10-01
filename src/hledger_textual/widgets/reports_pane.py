@@ -19,7 +19,7 @@ from hledger_textual.cache import HledgerCache
 from hledger_textual.config import (
     delete_custom_report,
     load_custom_reports,
-    load_default_commodity,
+    resolve_default_commodity,
     save_custom_report,
 )
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
@@ -392,7 +392,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         """Load built-in report data in a background thread."""
         begin, end = self._period_range()
         self._period_begin = date.fromisoformat(begin)
-        commodity = load_default_commodity()
+        commodity = resolve_default_commodity(self.journal_file)
 
         try:
             data = load_report(

@@ -19,7 +19,16 @@ from hledger_textual.widgets.summary_pane import (
     SummaryPane,
     _progress_bar,
 )
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
+
+
+def _cards_applied(app) -> bool:
+    """True once the summary cards show a numeric net (worker has finished)."""
+    try:
+        value = app.query_one(".net-value", Digits).value
+    except Exception:
+        return False
+    return value not in ("", "--")
 
 
 class _SummaryApp(App):
@@ -568,7 +577,7 @@ class TestSummaryPaneMulticurrency:
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _cards_applied(app))
             assert captured["commodity"] == "€"
             assert captured["net_called"] is True
             marquee = app.query_one(".summary-multicurrency", CurrencyMarquee)
@@ -605,7 +614,7 @@ class TestSummaryPaneMulticurrency:
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _cards_applied(app))
             assert captured["commodity"] is None
 
     async def test_net_by_commodity_error_falls_back_to_empty(
@@ -639,7 +648,7 @@ class TestSummaryPaneMulticurrency:
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _cards_applied(app))
             marquee = app.query_one(".summary-multicurrency", CurrencyMarquee)
             assert marquee.display is False
             marquee_text = marquee._text
@@ -681,7 +690,7 @@ class TestSummaryPaneMulticurrency:
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _cards_applied(app))
             from textual.css.query import NoMatches
             try:
                 inc = app.query_one(".income-multicurrency", CurrencyMarquee)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -54,11 +55,21 @@ class PeriodSummaryCards(Widget):
                 yield Static("", classes="saving-rate")
                 yield CurrencyMarquee("", classes="summary-multicurrency net-multicurrency")
 
-    def update_summary(self, summary: PeriodSummary | None) -> None:
+    def update_summary(
+        self,
+        summary: PeriodSummary | None,
+        *,
+        income_by_commodity: list[tuple[str, Decimal]] | None = None,
+        expenses_by_commodity: list[tuple[str, Decimal]] | None = None,
+        net_by_commodity: list[tuple[str, Decimal]] | None = None,
+    ) -> None:
         """Update all card values from a PeriodSummary.
 
         Args:
             summary: The period data to display, or None to reset to dashes.
+            income_by_commodity: Per-currency income totals for the marquee line.
+            expenses_by_commodity: Per-currency expense totals for the marquee line.
+            net_by_commodity: Per-currency net totals for the marquee line.
         """
         if summary is not None:
             com = summary.commodity
@@ -96,46 +107,24 @@ class PeriodSummaryCards(Widget):
             else:
                 rate_widget.update("")
 
-            net_marquee = self.query_one(".net-multicurrency", CurrencyMarquee)
-            if len(summary.net_by_commodity) > 1:
-                net_marquee.set_content(
-                    ", ".join(
-                        fmt_amount(net, cur)
-                        for cur, net in summary.net_by_commodity
-                    )
-                )
-                net_marquee.display = True
-            else:
-                net_marquee.set_content("")
-                net_marquee.display = False
-
-            income_marquee = self.query_one(".income-multicurrency", CurrencyMarquee)
-            if len(summary.income_by_commodity) > 1:
-                income_marquee.set_content(
-                    ", ".join(
-                        fmt_amount(amt, cur)
-                        for cur, amt in summary.income_by_commodity
-                    )
-                )
-                income_marquee.display = True
-            else:
-                income_marquee.set_content("")
-                income_marquee.display = False
-
-            expenses_marquee = self.query_one(
-                ".expenses-multicurrency", CurrencyMarquee
+            net_items = (
+                summary.net_by_commodity
+                if net_by_commodity is None
+                else net_by_commodity
             )
-            if len(summary.expenses_by_commodity) > 1:
-                expenses_marquee.set_content(
-                    ", ".join(
-                        fmt_amount(amt, cur)
-                        for cur, amt in summary.expenses_by_commodity
-                    )
-                )
-                expenses_marquee.display = True
-            else:
-                expenses_marquee.set_content("")
-                expenses_marquee.display = False
+            income_items = (
+                summary.income_by_commodity
+                if income_by_commodity is None
+                else income_by_commodity
+            )
+            expense_items = (
+                summary.expenses_by_commodity
+                if expenses_by_commodity is None
+                else expenses_by_commodity
+            )
+            self._update_marquee(".net-multicurrency", net_items)
+            self._update_marquee(".income-multicurrency", income_items)
+            self._update_marquee(".expenses-multicurrency", expense_items)
         else:
             for cls in (".income-value", ".expenses-value", ".net-value"):
                 self.query_one(cls, Digits).update("--")
@@ -147,6 +136,18 @@ class PeriodSummaryCards(Widget):
                 ".expenses-multicurrency",
                 ".net-multicurrency",
             ):
-                m = self.query_one(cls, CurrencyMarquee)
-                m.set_content("")
-                m.display = False
+                self._update_marquee(cls, [])
+
+    def _update_marquee(
+        self, selector: str, items: list[tuple[str, Decimal]]
+    ) -> None:
+        """Show a per-commodity marquee for ``selector``, hiding it below 2 items."""
+        marquee = self.query_one(selector, CurrencyMarquee)
+        if len(items) > 1:
+            marquee.set_content(
+                ", ".join(fmt_amount(amount, cur) for cur, amount in items)
+            )
+            marquee.display = True
+        else:
+            marquee.set_content("")
+            marquee.display = False

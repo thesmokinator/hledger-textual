@@ -223,7 +223,7 @@ class TestLoadConfiguredDefaultCommodity:
 
 
 class TestResolveDefaultCommodity:
-    """Tests for resolve_default_commodity (ledger-first, config fallback)."""
+    """Tests for resolve_default_commodity (config-first, ledger fallback)."""
 
     def _patch_config(self, tmp_path, monkeypatch, content: str | None):
         config_path = tmp_path / "config.toml"
@@ -231,8 +231,8 @@ class TestResolveDefaultCommodity:
             config_path.write_text(content)
         monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config_path)
 
-    def test_journal_directive_wins_over_config(self, tmp_path, monkeypatch):
-        """A `commodity` directive in the journal beats the config value."""
+    def test_config_wins_over_journal_directive(self, tmp_path, monkeypatch):
+        """An explicit config value beats a journal `commodity` directive."""
         self._patch_config(tmp_path, monkeypatch, 'default_commodity = "$"\n')
         journal = tmp_path / "test.journal"
         journal.write_text(
@@ -243,6 +243,13 @@ class TestResolveDefaultCommodity:
             "    assets:bank  €100.00\n"
             "    income:salary\n"
         )
+        assert resolve_default_commodity(journal) == "$"
+
+    def test_journal_directive_used_when_config_unset(self, tmp_path, monkeypatch):
+        """With no config value, the journal's first directive is used."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        journal = tmp_path / "test.journal"
+        journal.write_text("commodity €1,000.00\n")
         assert resolve_default_commodity(journal) == "€"
 
     def test_first_directive_wins(self, tmp_path, monkeypatch):
@@ -280,6 +287,28 @@ class TestResolveDefaultCommodity:
             "commodity €1,000.00\n"
         )
         assert resolve_default_commodity(journal) == "€"
+
+    def test_quoted_symbol_is_unwrapped(self, tmp_path, monkeypatch):
+        """A quoted symbol is returned without its quotes."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        journal = tmp_path / "test.journal"
+        journal.write_text('commodity "USD" 1,000.00\n')
+        assert resolve_default_commodity(journal) == "USD"
+
+    def test_trailing_comment_is_ignored(self, tmp_path, monkeypatch):
+        """A trailing comment after a directive does not hide the symbol."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        journal = tmp_path / "test.journal"
+        journal.write_text("commodity €1,000.00 ; euro\n")
+        assert resolve_default_commodity(journal) == "€"
+
+    def test_glob_include_is_expanded(self, tmp_path, monkeypatch):
+        """An `include *.journal` glob is expanded and followed."""
+        self._patch_config(tmp_path, monkeypatch, None)
+        (tmp_path / "prices.journal").write_text("commodity £1,000.00\n")
+        journal = tmp_path / "main.journal"
+        journal.write_text("include *.journal\n")
+        assert resolve_default_commodity(journal) == "£"
 
     def test_config_fallback_when_no_directive(self, tmp_path, monkeypatch):
         """With no journal directive, the configured default commodity is used."""

@@ -13,6 +13,7 @@ from textual.widgets import DataTable
 
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets.reports_pane import ReportsPane, _format_custom_output
+from tests.conftest import wait_until
 
 
 class _ReportsApp(App):
@@ -865,7 +866,7 @@ class TestFlatMultiCommodityMarker:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             pane._stacked_currency = False
@@ -891,7 +892,7 @@ class TestFlatMultiCommodityMarker:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             pane._stacked_currency = False
@@ -917,7 +918,7 @@ class TestFlatMultiCommodityMarker:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             pane._stacked_currency = False
@@ -943,7 +944,7 @@ class TestFlatMultiCommodityMarker:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             # _stacked_currency defaults to True
@@ -965,7 +966,7 @@ class TestFlatMultiCommodityMarker:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             pane._stacked_currency = False
@@ -1022,7 +1023,7 @@ class TestFlatMultiCommodityRowHeight:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             pane._stacked_currency = False
@@ -1045,7 +1046,7 @@ class TestFlatMultiCommodityRowHeight:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             pane._stacked_currency = False
@@ -1066,7 +1067,7 @@ class TestFlatMultiCommodityRowHeight:
         )
         app = _ReportsApp(reports_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=0.5)
+            await pilot.pause()
             pane = app.query_one(ReportsPane)
             pane._report_data = self._make_data()
             # _stacked_currency defaults to True
@@ -1080,3 +1081,55 @@ class TestFlatMultiCommodityRowHeight:
                 assert height == 1, (
                     f"stacked row {row_idx} height is {height}; expected 1"
                 )
+
+
+class TestReportsCommodityResolution:
+    """The reports pane must resolve the commodity like the other panes."""
+
+    async def test_load_report_receives_resolved_commodity(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """resolve_default_commodity's value is forwarded to load_report."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        seen: list[dict] = []
+
+        def spy_load_report(*args, **kwargs):
+            seen.append({"args": args, "kwargs": kwargs})
+            return ReportData(title="Test", period_headers=["Jan"], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report", spy_load_report
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: len(seen) >= 1)
+
+        assert seen, "load_report was not called"
+        assert seen[-1]["kwargs"].get("commodity") == "€"
+
+    async def test_load_report_none_when_unconfigured(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Unset config and no journal directive -> commodity=None (no -X)."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        seen: list[dict] = []
+
+        def spy_load_report(*args, **kwargs):
+            seen.append({"args": args, "kwargs": kwargs})
+            return ReportData(title="Test", period_headers=["Jan"], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report", spy_load_report
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: len(seen) >= 1)
+
+        assert seen, "load_report was not called"
+        assert seen[-1]["kwargs"].get("commodity") is None

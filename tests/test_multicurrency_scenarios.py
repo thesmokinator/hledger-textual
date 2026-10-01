@@ -29,7 +29,7 @@ from hledger_textual.widgets.reports_pane import (
     MULTI_COMMODITY_MARKER,
     ReportsPane,
 )
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -60,6 +60,26 @@ def _accounts_cell(app, account: str) -> str:
     raise AssertionError(f"account row {account!r} not found")
 
 
+def _accounts_loaded(app) -> bool:
+    """True once the accounts table has rendered at least one row."""
+    try:
+        table = app.screen.query_one("#accounts-table", DataTable)
+    except Exception:
+        return False
+    return table.row_count > 0
+
+
+def _summary_loaded(app) -> bool:
+    """True once the summary cards show a numeric net (not the '--' placeholder)."""
+    from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
+
+    try:
+        cards = app.screen.query_one("#summary-cards", PeriodSummaryCards)
+        return cards.query_one(".net-value").value not in ("", "--")
+    except Exception:
+        return False
+
+
 async def test_s1_accounts_flat_shows_all_currencies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -78,10 +98,10 @@ async def test_s1_accounts_flat_shows_all_currencies(
     directive_free = tmp_path / "mc.journal"
     base = (_REPO_ROOT / "examples" / "multicurrency.journal").read_text()
     include_free = [
-        l
-        for l in base.splitlines()
-        if not l.lstrip().startswith("include ")
-        and not l.startswith("commodity ")
+        line
+        for line in base.splitlines()
+        if not line.lstrip().startswith("include ")
+        and not line.startswith("commodity ")
     ]
     directive_free.write_text("\n".join(include_free) + "\n")
     # No stub — the resolver sees no directive and the config fixture (from
@@ -91,7 +111,7 @@ async def test_s1_accounts_flat_shows_all_currencies(
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("6")
-        await pilot.pause(delay=2.0)
+        await wait_until(pilot, lambda: _accounts_loaded(app))
 
         cell = _accounts_cell(app, "assets:bank:checking")
         table = app.screen.query_one("#accounts-table", DataTable)
@@ -128,7 +148,7 @@ async def test_s2_accounts_convert_to_configured_commodity(
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("6")
-        await pilot.pause(delay=2.0)
+        await wait_until(pilot, lambda: _accounts_loaded(app))
 
         cell = _accounts_cell(app, "assets:bank:checking")
         table = app.screen.query_one("#accounts-table", DataTable)
@@ -171,7 +191,7 @@ async def test_s3_reports_flat_marker(
 
     app = _ReportsApp(journal)
     async with app.run_test() as pilot:
-        await pilot.pause(delay=0.5)
+        await pilot.pause()
         pane = app.query_one(ReportsPane)
         pane._report_data = data
         pane._stacked_currency = False
@@ -224,7 +244,7 @@ async def test_s4_reports_flat_converted_no_marker(
 
     app = _ReportsApp(journal)
     async with app.run_test() as pilot:
-        await pilot.pause(delay=0.5)
+        await pilot.pause()
         pane = app.query_one(ReportsPane)
         pane._report_data = data
         pane._stacked_currency = False
@@ -270,7 +290,7 @@ async def test_s7_summary_net_converted_to_default_commodity(
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("1")
-        await pilot.pause(delay=3.0)
+        await wait_until(pilot, lambda: _summary_loaded(app))
 
         cards = app.screen.query_one("#summary-cards", PeriodSummaryCards)
         net_text = cards.query_one(".net-value").value
@@ -356,7 +376,7 @@ async def test_s9_single_currency_hides_marquee(
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         await pilot.press("1")
-        await pilot.pause(delay=2.0)
+        await wait_until(pilot, lambda: _summary_loaded(app))
 
         cards = app.screen.query_one("#summary-cards", PeriodSummaryCards)
         marquee = cards.query_one(".summary-multicurrency")
@@ -386,7 +406,7 @@ async def test_s11_journal_directive_drives_conversion_without_config(
     async with app.run_test() as pilot:
         await pilot.pause()
         await pilot.press("6")
-        await pilot.pause(delay=2.0)
+        await wait_until(pilot, lambda: _accounts_loaded(app))
 
         cell = _accounts_cell(app, "assets:bank:checking")
 
@@ -402,7 +422,7 @@ async def test_s11_journal_directive_drives_conversion_without_config(
     async with app2.run_test() as pilot:
         await pilot.pause()
         await pilot.press("6")
-        await pilot.pause(delay=2.0)
+        await wait_until(pilot, lambda: _accounts_loaded(app2))
 
         cell = _accounts_cell(app2, "assets:bank:checking")
 

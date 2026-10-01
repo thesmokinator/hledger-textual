@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
-from textual.widgets import Static
 
 from hledger_textual.widgets.currency_marquee import CurrencyMarquee
+from tests.conftest import wait_until
 
 
 class _MarqueeApp(App):
@@ -53,7 +53,7 @@ class TestCurrencyMarquee:
             await pilot.pause()
             m = app.query_one(CurrencyMarquee)
             start = m._offset
-            await pilot.pause(delay=0.15)
+            await wait_until(pilot, lambda: m._offset > start)
             assert m._offset > start
             assert len(m.current_window) == 10
 

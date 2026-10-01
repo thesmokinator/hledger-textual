@@ -11,6 +11,7 @@ from textual.widgets import Digits, Static
 from hledger_textual.models import PeriodSummary
 from hledger_textual.widgets.currency_marquee import CurrencyMarquee
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
+from tests.conftest import wait_until
 
 
 class _CardsApp(App):
@@ -296,7 +297,7 @@ class TestPeriodSummaryCardsMarquee:
                 f"width {marquee.size.width})"
             )
             start = marquee._offset
-            await pilot.pause(delay=0.3)
+            await wait_until(pilot, lambda: marquee._offset != start)
             assert marquee._offset != start
 
 
