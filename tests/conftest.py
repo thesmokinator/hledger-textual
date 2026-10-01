@@ -167,8 +167,16 @@ async def select_first_transaction(pilot, app):
                 f"transactions table never loaded (notifications={notes!r})"
             )
 
+    # Make the transactions section active and give the table focus so the
+    # subsequent keypress is delivered here: in headless CI a plain press("2")
+    # can be swallowed by whichever widget holds focus.
+    try:
+        app.action_switch_section("transactions")
+    except Exception:
+        pass
+    await pilot.pause()
     table = _table()
-    table.focus()
+    app.set_focus(table)
     table.move_cursor(row=0)
     await pilot.pause()
     return table
