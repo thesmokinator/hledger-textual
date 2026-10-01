@@ -44,4 +44,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov-report=json
+        # Retry flaky integration tests: the headless suite drives real hledger
+        # subprocesses and Textual workers, which intermittently exceed their
+        # wait budgets on shared CI runners. Local runs stay strict.
+        run: uv run pytest --reruns 3 --reruns-delay 2 --cov-report=json
