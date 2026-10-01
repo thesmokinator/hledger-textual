@@ -408,9 +408,10 @@ class TestTransactionsTableStatusToggle:
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
             await pilot.press("2")
-            await select_first_transaction(pilot, app)
-            # Move to row 1: Grocery shopping (cleared)
-            await pilot.press("down")
+            table = await select_first_transaction(pilot, app)
+            # Move to row 1: Grocery shopping (cleared). Set the cursor directly
+            # rather than relying on a keypress that may be swallowed in CI.
+            table.move_cursor(row=1)
             await pilot.pause()
             await pilot.press("*")
             # Grocery was the only cleared transaction; once unmarked there is
