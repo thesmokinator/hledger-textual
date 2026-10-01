@@ -440,8 +440,15 @@ class TransactionsTable(Widget):
         self.app.call_from_thread(self._set_transactions, txns)
 
     def _set_transactions(self, txns: list[Transaction]) -> None:
-        """Store loaded transactions and refresh the table."""
+        """Store loaded transactions and refresh the table.
+
+        The loader runs on a worker thread and may finish after the widget has
+        been unmounted (app teardown, fast view switch), in which case the
+        DataTable child is gone and refreshing would raise ``NoMatches``.
+        """
         self._all_transactions = txns
+        if not self.is_mounted or not self.query(DataTable):
+            return
         self._update_table(txns)
 
     def _set_empty_state_visible(self, visible: bool) -> None:

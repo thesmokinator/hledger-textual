@@ -15,7 +15,7 @@ import pytest
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.screens.transaction_form import TransactionFormScreen
 
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -68,9 +68,8 @@ class TestRoundTrip:
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
             await pilot.press("a")
-            await pilot.pause(delay=0.5)
+            await wait_until(pilot, lambda: isinstance(app.screen, TransactionFormScreen))
 
             form = app.screen
             assert isinstance(form, TransactionFormScreen)
@@ -82,7 +81,10 @@ class TestRoundTrip:
             rows[1].query_one("#account-1", Input).value = "assets:bank:checking"
 
             form._save()
-            await pilot.pause(delay=1.0)
+            await wait_until(
+                pilot,
+                lambda: "Round Trip Add" in round_trip_journal.read_text(encoding="utf-8"),
+            )
 
         content = round_trip_journal.read_text(encoding="utf-8")
         assert "Round Trip Add" in content
@@ -102,28 +104,28 @@ class TestRoundTrip:
             await pilot.pause()
             await pilot.press("2")
 
-            # Wait for the transactions table to finish loading.
+            # Wait for the transactions table to finish loading and take focus.
             table = app.query_one("#transactions-table", DataTable)
-            while table.row_count == 0:
-                await pilot.pause(delay=0.1)
+            await wait_until(
+                pilot, lambda: table.row_count > 0 and table.has_focus
+            )
 
             await pilot.press("e")
             # Wait for the form screen to appear.
             from hledger_textual.screens.transaction_form import TransactionFormScreen
-            for _ in range(200):
-                if isinstance(app.screen, TransactionFormScreen):
-                    break
-                await pilot.pause(delay=0.05)
-            else:
-                pytest.fail(
-                    f"Expected TransactionFormScreen, got {type(app.screen).__name__}"
-                )
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, TransactionFormScreen)
+            )
 
             desc_input = app.screen.query_one("#input-description", Input)
             desc_input.value = new_desc
 
             app.screen._save()
-            await pilot.pause(delay=1.0)
+            await wait_until(
+                pilot,
+                lambda: new_desc
+                in round_trip_journal.read_text(encoding="utf-8"),
+            )
 
         content = round_trip_journal.read_text(encoding="utf-8")
         assert new_desc in content
@@ -137,13 +139,22 @@ class TestRoundTrip:
         # The first transaction (Salary) has no status marker
         assert f"{_D3.isoformat()} !" in before
 
+        from textual.widgets import DataTable
+
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            table = app.query_one("#transactions-table", DataTable)
+            await wait_until(
+                pilot, lambda: table.row_count > 0 and table.has_focus
+            )
             # Toggle cleared on the currently selected transaction
             await pilot.press("*")
-            await pilot.pause(delay=1.0)
+            await wait_until(
+                pilot,
+                lambda: "* "
+                in round_trip_journal.read_text(encoding="utf-8"),
+            )
 
         content = round_trip_journal.read_text(encoding="utf-8")
         # At least one transaction should now have the cleared marker
@@ -158,18 +169,28 @@ class TestRoundTrip:
         # The table is sorted newest-first; "Office supplies" is at top (D3)
         assert "Office supplies" in before
 
+        from textual.widgets import DataTable
+
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            table = app.query_one("#transactions-table", DataTable)
+            await wait_until(
+                pilot, lambda: table.row_count > 0 and table.has_focus
+            )
             # Trigger delete → pushes DeleteConfirmModal
             await pilot.press("d")
-            await pilot.pause(delay=0.5)
             # Click the "Delete" confirm button
             from hledger_textual.screens.delete_confirm import DeleteConfirmModal
-            assert isinstance(app.screen, DeleteConfirmModal)
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, DeleteConfirmModal)
+            )
             await pilot.click("#btn-delete")
-            await pilot.pause(delay=1.0)
+            await wait_until(
+                pilot,
+                lambda: "Office supplies"
+                not in round_trip_journal.read_text(encoding="utf-8"),
+            )
 
         content = round_trip_journal.read_text(encoding="utf-8")
         assert "Office supplies" not in content
