@@ -7,11 +7,21 @@ from pathlib import Path
 
 import pytest
 
+from textual.widgets import DataTable
+
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.hledger import load_transactions
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+
+
+def _txn_rows(app) -> int:
+    """Row count of the transactions table, or -1 while it is not mounted yet."""
+    try:
+        return app.screen.query_one("#transactions-table", DataTable).row_count
+    except Exception:
+        return -1
 
 
 @pytest.fixture
@@ -70,7 +80,7 @@ class TestAppStartup:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _txn_rows(app) == 3)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
@@ -104,7 +114,7 @@ class TestFilter:
             search_input = app.screen.query_one("#txn-search-input")
             search_input.value = "desc:Grocery"
             await pilot.press("enter")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _txn_rows(app) == 1)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 1
 
@@ -118,9 +128,9 @@ class TestFilter:
             search_input = app.screen.query_one("#txn-search-input")
             search_input.value = "desc:Grocery"
             await pilot.press("enter")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _txn_rows(app) == 1)
             await pilot.press("escape")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _txn_rows(app) == 3)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
@@ -140,7 +150,7 @@ class TestFilter:
             search_input.focus()
             search_input.value = "acct:office"
             await pilot.press("enter")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _txn_rows(app) == 1)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 1
 
@@ -152,11 +162,11 @@ class TestRefresh:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            await wait_until(pilot, lambda: _txn_rows(app) == 3)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
             await pilot.press("r")
-            await pilot.pause()
+            await wait_until(pilot, lambda: _txn_rows(app) == 3)
             assert table.row_count == 3
 
 
@@ -167,11 +177,7 @@ class TestDelete:
         """Wait for the delete confirmation modal to become active."""
         from hledger_textual.screens.delete_confirm import DeleteConfirmModal
 
-        for _ in range(10):
-            if isinstance(app.screen, DeleteConfirmModal):
-                return app.screen
-            await pilot.pause(delay=0.1)
-
+        await wait_until(pilot, lambda: isinstance(app.screen, DeleteConfirmModal))
         assert isinstance(app.screen, DeleteConfirmModal)
         return app.screen
 
@@ -191,7 +197,7 @@ class TestDelete:
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
             await pilot.press("escape")
-            await pilot.pause(delay=0.5)
+            await wait_until(pilot, lambda: _txn_rows(app) == 3)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
 
@@ -204,7 +210,9 @@ class TestDelete:
             await self._wait_for_delete_modal(app, pilot)
             delete_btn = app.screen.query_one("#btn-delete")
             await pilot.click(delete_btn)
-            await pilot.pause(delay=1.0)
+            await wait_until(
+                pilot, lambda: len(load_transactions(app_journal)) == 2
+            )
             txns = load_transactions(app_journal)
             assert len(txns) == 2
 
@@ -222,7 +230,13 @@ class TestGitSync:
         async with app.run_test(notifications=True) as pilot:
             await pilot.pause()
             await pilot.press("s")
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot,
+                lambda: any(
+                    "Git is not available" in str(n.message)
+                    for n in app._notifications
+                ),
+            )
             assert any(
                 "Git is not available" in str(n.message)
                 for n in app._notifications
@@ -241,7 +255,7 @@ class TestGitSync:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("s")
-            await pilot.pause()
+            await wait_until(pilot, lambda: isinstance(app.screen, SyncConfirmModal))
             assert isinstance(app.screen, SyncConfirmModal)
 
     async def test_git_sync_cancel(self, app: HledgerTuiApp, monkeypatch):
@@ -286,7 +300,13 @@ class TestGitSync:
             await pilot.pause()
             sync_btn = app.screen.query_one("#btn-sync-sync")
             await pilot.click(sync_btn)
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot,
+                lambda: any(
+                    "Committed and pushed" in str(n.message)
+                    for n in app._notifications
+                ),
+            )
             assert any(
                 "Committed and pushed" in str(n.message)
                 for n in app._notifications
@@ -312,7 +332,13 @@ class TestGitSync:
             await pilot.pause()
             sync_btn = app.screen.query_one("#btn-sync-sync")
             await pilot.click(sync_btn)
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot,
+                lambda: any(
+                    "push failed" in str(n.message)
+                    for n in app._notifications
+                ),
+            )
             assert any(
                 "push failed" in str(n.message)
                 for n in app._notifications

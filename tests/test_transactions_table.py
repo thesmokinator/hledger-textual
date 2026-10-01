@@ -24,6 +24,26 @@ def _transactions_ready(app) -> bool:
     return table.row_count > 0 and table.has_focus
 
 
+def _rows(app) -> int:
+    """Transactions table row count, or -1 while it is not mounted yet."""
+    try:
+        return app.query_one("#transactions-table").row_count
+    except Exception:
+        return -1
+
+
+def _status_of(journal, match):
+    """Return the status of the first journal transaction whose description matches."""
+    from hledger_textual.hledger import load_transactions
+
+    try:
+        txns = load_transactions(journal)
+    except Exception:
+        return None
+    found = [t for t in txns if match(t.description)]
+    return found[0].status if found else None
+
+
 class _TableApp(App):
     """Minimal app wrapping TransactionsTable for isolated widget testing."""
 
@@ -123,7 +143,7 @@ class TestTransactionsTableMount:
         """Table loads current-month transactions on mount."""
         app = _TableApp(table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _rows(app) == 2)
             table = app.query_one("#transactions-table")
             assert table.row_count == 2
 
@@ -193,7 +213,7 @@ class TestTransactionsTableSearch:
             search_input.focus()
             search_input.value = "desc:Grocery"
             await pilot.press("enter")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _rows(app) == 1)
             table = app.query_one("#transactions-table")
             assert table.row_count == 1
 
@@ -209,7 +229,7 @@ class TestTransactionsTableSearch:
             search_input.focus()
             search_input.value = "acct:income"
             await pilot.press("enter")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _rows(app) == 1)
             table = app.query_one("#transactions-table")
             assert table.row_count == 1
 
@@ -224,10 +244,10 @@ class TestTransactionsTableSearch:
             search_input = txn_table.query_one("#txn-search-input", Input)
             search_input.value = "desc:Grocery"
             await pilot.press("enter")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _rows(app) == 1)
             result = txn_table.dismiss_filter()
             assert result is True
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _rows(app) == 2)
             table = app.query_one("#transactions-table")
             assert table.row_count == 2  # all current-month txns restored
 
@@ -252,7 +272,7 @@ class TestTransactionsTableNoSelection:
         """do_edit is a no-op when the table has no rows."""
         app = _TableApp(empty_table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await pilot.pause()
             txn_table = app.query_one(TransactionsTable)
             txn_table.do_edit()
             await pilot.pause()
@@ -265,7 +285,7 @@ class TestTransactionsTableNoSelection:
         """do_delete is a no-op when the table has no rows."""
         app = _TableApp(empty_table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await pilot.pause()
             txn_table = app.query_one(TransactionsTable)
             txn_table.do_delete()
             await pilot.pause()
@@ -372,12 +392,15 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")  # Switch to Transactions tab
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             # Row 0 is Salary (newest first, reverse order), which is unmarked
             await pilot.press("*")
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: _status_of(table_journal, lambda d: d == "Salary")
+                == TransactionStatus.CLEARED,
+            )
             txns = load_transactions(table_journal)
             salary = [t for t in txns if t.description == "Salary"][0]
             assert salary.status == TransactionStatus.CLEARED
@@ -389,14 +412,17 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             # Move to row 1: Grocery shopping (cleared)
             await pilot.press("down")
             await pilot.pause()
             await pilot.press("*")
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: _status_of(table_journal, lambda d: "Grocery" in d)
+                == TransactionStatus.UNMARKED,
+            )
             txns = load_transactions(table_journal)
             grocery = [t for t in txns if "Grocery" in t.description][0]
             assert grocery.status == TransactionStatus.UNMARKED
@@ -408,12 +434,15 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             # Row 0 is Salary (unmarked)
             await pilot.press("exclamation_mark")
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: _status_of(table_journal, lambda d: d == "Salary")
+                == TransactionStatus.PENDING,
+            )
             txns = load_transactions(table_journal)
             salary = [t for t in txns if t.description == "Salary"][0]
             assert salary.status == TransactionStatus.PENDING
@@ -425,15 +454,22 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             # Row 0 is Salary (unmarked) — set to pending first
             await pilot.press("exclamation_mark")
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: _status_of(table_journal, lambda d: d == "Salary")
+                == TransactionStatus.PENDING,
+            )
             # Then toggle to cleared
             await pilot.press("*")
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: _status_of(table_journal, lambda d: d == "Salary")
+                == TransactionStatus.CLEARED,
+            )
             txns = load_transactions(table_journal)
             salary = [t for t in txns if t.description == "Salary"][0]
             assert salary.status == TransactionStatus.CLEARED
@@ -444,7 +480,7 @@ class TestTransactionsTableStatusToggle:
 
         app = _TableApp(empty_table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await pilot.pause()
             txn_table = app.query_one(TransactionsTable)
             txn_table.do_toggle_status(TransactionStatus.CLEARED)
             await pilot.pause()
