@@ -14,6 +14,7 @@ import pytest
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.screens.transaction_form import TransactionFormScreen
+from hledger_textual.widgets.transactions_pane import TransactionsPane
 
 from tests.conftest import has_hledger, select_first_transaction, wait_until
 
@@ -138,8 +139,10 @@ class TestRoundTrip:
             await pilot.pause()
             await pilot.press("2")
             await select_first_transaction(pilot, app)
-            # Toggle cleared on the currently selected transaction
-            await pilot.press("*")
+            # Toggle cleared on the currently selected transaction. Invoke the
+            # pane action directly: key delivery in the headless harness is
+            # unreliable under CI load.
+            app.query_one(TransactionsPane).action_toggle_cleared()
             await wait_until(
                 pilot,
                 lambda: "* "

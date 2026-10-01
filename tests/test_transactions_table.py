@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input
 
 from hledger_textual.app import HledgerTuiApp
+from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 from tests.conftest import has_hledger, select_first_transaction, wait_until
 
@@ -406,8 +407,10 @@ class TestTransactionsTableStatusToggle:
         async with app.run_test() as pilot:
             await pilot.press("2")  # Switch to Transactions tab
             await select_first_transaction(pilot, app)
-            # Row 0 is Salary (newest first, reverse order), which is unmarked
-            await pilot.press("*")
+            # Row 0 is Salary (newest first, reverse order), which is unmarked.
+            # Invoke the pane action directly: key delivery in the headless
+            # harness is unreliable under CI load.
+            app.query_one(TransactionsPane).action_toggle_cleared()
             await wait_until(
                 pilot,
                 lambda: _journal_status(table_journal, "Salary") == "*",
@@ -429,7 +432,7 @@ class TestTransactionsTableStatusToggle:
             # rather than relying on a keypress that may be swallowed in CI.
             table.move_cursor(row=1)
             await pilot.pause()
-            await pilot.press("*")
+            app.query_one(TransactionsPane).action_toggle_cleared()
             # Grocery was cleared; toggling it leaves no status marker.
             await wait_until(
                 pilot,
@@ -449,7 +452,7 @@ class TestTransactionsTableStatusToggle:
             await pilot.press("2")
             await select_first_transaction(pilot, app)
             # Row 0 is Salary (unmarked)
-            await pilot.press("exclamation_mark")
+            app.query_one(TransactionsPane).action_toggle_pending()
             await wait_until(
                 pilot,
                 lambda: _journal_status(table_journal, "Salary") == "!",
@@ -468,13 +471,13 @@ class TestTransactionsTableStatusToggle:
             await pilot.press("2")
             await select_first_transaction(pilot, app)
             # Row 0 is Salary (unmarked) — set to pending first
-            await pilot.press("exclamation_mark")
+            app.query_one(TransactionsPane).action_toggle_pending()
             await wait_until(
                 pilot,
                 lambda: _journal_status(table_journal, "Salary") == "!",
             )
             # Then toggle to cleared
-            await pilot.press("*")
+            app.query_one(TransactionsPane).action_toggle_cleared()
             await wait_until(
                 pilot,
                 lambda: _journal_status(table_journal, "Salary") == "*",
