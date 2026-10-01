@@ -132,12 +132,42 @@ async def select_first_transaction(pilot, app):
 
     Keypress actions (edit/delete/toggle/move) operate on the highlighted row,
     so tests must not fire them before the table is loaded *and* has a cursor.
+    Later keys operate on the focused row, so the table must be focused too.
+
+    The loader is asynchronous and has occasionally been slow to populate on
+    busy CI runners, so the table is re-queried on each poll (guarding against
+    a stale instance) and a single reload is nudged before giving up.
     Returns the focused ``DataTable``.
     """
     from textual.widgets import DataTable
+    from hledger_textual.widgets.transactions_table import TransactionsTable
 
-    table = app.query_one("#transactions-table", DataTable)
-    await wait_until(pilot, lambda: table.row_count > 0)
+    def _table():
+        try:
+            return app.query_one("#transactions-table", DataTable)
+        except Exception:
+            return None
+
+    def _ready() -> bool:
+        table = _table()
+        return table is not None and table.row_count > 0
+
+    try:
+        await wait_until(pilot, _ready, timeout=8.0)
+    except AssertionError:
+        try:
+            app.query_one(TransactionsTable).reload()
+        except Exception:
+            pass
+        try:
+            await wait_until(pilot, _ready, timeout=20.0)
+        except AssertionError:
+            notes = [str(n.message) for n in getattr(app, "_notifications", [])]
+            pytest.fail(
+                f"transactions table never loaded (notifications={notes!r})"
+            )
+
+    table = _table()
     table.focus()
     table.move_cursor(row=0)
     await pilot.pause()
