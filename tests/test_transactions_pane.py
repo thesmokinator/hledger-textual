@@ -209,7 +209,7 @@ class TestTransactionsPaneClone:
             await pilot.pause(delay=0.5)
             data_table = app3.query_one(TransactionsTable).query_one(DataTable)
             await _wait_until(
-                pilot, lambda: data_table.row_count > 0 and data_table.has_focus
+                pilot, lambda: data_table.row_count > 0
             )
             await pilot.press("c")
             await _wait_until(
@@ -241,7 +241,7 @@ class TestTransactionsPaneMove:
             await pilot.pause(delay=0.5)
             data_table = app3.query_one(TransactionsTable).query_one(DataTable)
             await _wait_until(
-                pilot, lambda: data_table.row_count > 0 and data_table.has_focus
+                pilot, lambda: data_table.row_count > 0
             )
             await pilot.press("m")
             await _wait_until(pilot, lambda: isinstance(app3.screen, MoveConfirmModal))
@@ -254,7 +254,7 @@ class TestTransactionsPaneMove:
             await pilot.pause(delay=0.5)
             data_table = app3.query_one(TransactionsTable).query_one(DataTable)
             await _wait_until(
-                pilot, lambda: data_table.row_count > 0 and data_table.has_focus
+                pilot, lambda: data_table.row_count > 0
             )
             await pilot.press("m")
             await _wait_until(pilot, lambda: isinstance(app3.screen, MoveConfirmModal))

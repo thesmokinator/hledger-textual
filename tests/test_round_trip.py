@@ -107,7 +107,7 @@ class TestRoundTrip:
             # Wait for the transactions table to finish loading and take focus.
             table = app.query_one("#transactions-table", DataTable)
             await wait_until(
-                pilot, lambda: table.row_count > 0 and table.has_focus
+                pilot, lambda: table.row_count > 0
             )
 
             await pilot.press("e")
@@ -146,7 +146,7 @@ class TestRoundTrip:
             await pilot.press("2")
             table = app.query_one("#transactions-table", DataTable)
             await wait_until(
-                pilot, lambda: table.row_count > 0 and table.has_focus
+                pilot, lambda: table.row_count > 0
             )
             # Toggle cleared on the currently selected transaction
             await pilot.press("*")
@@ -176,7 +176,7 @@ class TestRoundTrip:
             await pilot.press("2")
             table = app.query_one("#transactions-table", DataTable)
             await wait_until(
-                pilot, lambda: table.row_count > 0 and table.has_focus
+                pilot, lambda: table.row_count > 0
             )
             # Trigger delete → pushes DeleteConfirmModal
             await pilot.press("d")

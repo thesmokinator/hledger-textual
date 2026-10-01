@@ -7,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from textual.widgets import DataTable
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.dateutil import validate_iso_date
@@ -22,7 +23,7 @@ from hledger_textual.widgets.amount_input import AmountInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
@@ -80,9 +81,12 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            table = app.query_one("#transactions-table", DataTable)
+            await wait_until(pilot, lambda: table.row_count > 0)
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, TransactionFormScreen)
+            )
             assert isinstance(app.screen, TransactionFormScreen)
 
     async def test_new_form_has_today_date(self, app: HledgerTuiApp):
@@ -114,9 +118,12 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            table = app.query_one("#transactions-table", DataTable)
+            await wait_until(pilot, lambda: table.row_count > 0)
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, TransactionFormScreen)
+            )
             form = app.screen
             assert form.query_one("#input-date", Input).value == _D3.isoformat()
             assert form.query_one("#input-description", Input).value == "Grocery shopping"
@@ -126,9 +133,15 @@ class TestFormOpens:
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            table = app.query_one("#transactions-table", DataTable)
+            await wait_until(pilot, lambda: table.row_count > 0)
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, TransactionFormScreen)
+            )
+            await wait_until(
+                pilot, lambda: len(app.screen.query(PostingRow)) == 2
+            )
             rows = app.screen.query(PostingRow)
             # Grocery shopping has 2 postings
             assert len(rows) == 2
@@ -466,16 +479,27 @@ class TestEuropeanStylePreservation:
         async with european_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
             await pilot.press("2")
-            await pilot.pause(delay=0.5)
+            table = european_app.query_one("#transactions-table", DataTable)
+            await wait_until(pilot, lambda: table.row_count > 0)
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
+            await wait_until(
+                pilot,
+                lambda: isinstance(european_app.screen, TransactionFormScreen),
+            )
             form = european_app.screen
             assert isinstance(form, TransactionFormScreen)
 
             # Change only the status — leave the amount field untouched.
             form.query_one("#select-status", Select).value = TransactionStatus.CLEARED
             form._save()
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: any(
+                    t.description == "café"
+                    and t.status == TransactionStatus.CLEARED
+                    for t in load_transactions(european_journal)
+                ),
+            )
             assert not isinstance(european_app.screen, TransactionFormScreen)
 
         reloaded = load_transactions(european_journal)

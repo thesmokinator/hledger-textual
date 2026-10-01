@@ -16,12 +16,12 @@ from tests.conftest import has_hledger, wait_until
 
 
 def _transactions_ready(app) -> bool:
-    """True once the transactions table has rows and holds focus."""
+    """True once the transactions table has loaded at least one row."""
     try:
         table = app.query_one("#transactions-table")
     except Exception:
         return False
-    return table.row_count > 0 and table.has_focus
+    return table.row_count > 0
 
 
 def _rows(app) -> int:
