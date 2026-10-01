@@ -13,6 +13,7 @@ import re
 from enum import Enum, auto
 from pathlib import Path
 
+from hledger_textual.fileutil import atomic_write_text as _atomic_write_text
 from hledger_textual.fileutil import backup as _backup
 from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
 from hledger_textual.fileutil import restore as _restore
@@ -276,7 +277,7 @@ def _append_to_file(
                 content += "\n\n"
 
         content += format_transaction(transaction) + "\n"
-        target_file.write_text(content, encoding="utf-8")
+        _atomic_write_text(target_file, content)
 
         _validate_and_finalize(main_journal, target_file, backup)
     except JournalError:
@@ -317,10 +318,10 @@ def _append_to_new_subjournal(
         # Insert the include directive in sorted order
         main_content = main_journal.read_text(encoding="utf-8")
         main_content = _insert_include_sorted(main_content, target_name)
-        main_journal.write_text(main_content, encoding="utf-8")
+        _atomic_write_text(main_journal, main_content)
 
         # Create the new sub-journal with the transaction
-        target_file.write_text(format_transaction(transaction) + "\n", encoding="utf-8")
+        _atomic_write_text(target_file, format_transaction(transaction) + "\n")
 
         _validate_and_finalize(main_journal, main_journal, main_backup)
     except JournalError:
@@ -356,7 +357,7 @@ def _append_to_new_glob_subjournal(
         JournalError: If validation fails (new file is removed).
     """
     try:
-        target_file.write_text(format_transaction(transaction) + "\n", encoding="utf-8")
+        _atomic_write_text(target_file, format_transaction(transaction) + "\n")
         check_journal(main_journal)
     except HledgerError as exc:
         if target_file.exists():
@@ -402,11 +403,11 @@ def _append_to_new_glob_year(
         main_content = main_journal.read_text(encoding="utf-8")
         new_include = f"{year}/*.journal"
         main_content = _insert_glob_include_sorted(main_content, new_include)
-        main_journal.write_text(main_content, encoding="utf-8")
+        _atomic_write_text(main_journal, main_content)
 
         # Create the year directory and month file
         year_dir.mkdir(exist_ok=True)
-        target_file.write_text(format_transaction(transaction) + "\n", encoding="utf-8")
+        _atomic_write_text(target_file, format_transaction(transaction) + "\n")
 
         _validate_and_finalize(main_journal, main_journal, main_backup)
     except JournalError:
@@ -516,7 +517,7 @@ def replace_transaction(
             new_lines = new_text.splitlines(keepends=True)
 
         lines[start_line:end_line] = new_lines
-        source_file.write_text("".join(lines), encoding="utf-8")
+        _atomic_write_text(source_file, "".join(lines))
 
         _validate_and_finalize(main_journal, source_file, backup)
     except JournalError:
@@ -561,7 +562,7 @@ def delete_transaction(
             start_line -= 1
 
         del lines[start_line:end_line]
-        source_file.write_text("".join(lines), encoding="utf-8")
+        _atomic_write_text(source_file, "".join(lines))
 
         _validate_and_finalize(main_journal, source_file, backup)
     except JournalError:

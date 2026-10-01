@@ -13,7 +13,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from hledger_textual.amountutil import parse_amount_string as _parse_amount_string_raw
-from hledger_textual.fileutil import safe_write_with_validation
+from hledger_textual.fileutil import (
+    atomic_write_text,
+    journal_include_lock,
+    safe_write_with_validation,
+)
 from hledger_textual.hledger import check_journal
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
 
@@ -48,12 +52,19 @@ def ensure_budget_file(journal_file: Path) -> Path:
     if not budget_file.exists():
         budget_file.write_text("", encoding="utf-8")
 
-    journal_text = journal_file.read_text(encoding="utf-8")
-    if not _INCLUDE_RE.search(journal_text):
-        include_line = f"include {BUDGET_FILENAME}\n"
-        if journal_text and not journal_text.startswith("\n"):
-            include_line += "\n"
-        journal_file.write_text(include_line + journal_text, encoding="utf-8")
+    # Concurrent pane loads (budget + recurring) each read-modify-write the main
+    # journal to insert their ``include`` line; serialise them and write
+    # atomically so a concurrent reader never sees a partially written file.
+    with journal_include_lock:
+        try:
+            journal_text = journal_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return budget_file
+        if not _INCLUDE_RE.search(journal_text):
+            include_line = f"include {BUDGET_FILENAME}\n"
+            if journal_text and not journal_text.startswith("\n"):
+                include_line += "\n"
+            atomic_write_text(journal_file, include_line + journal_text)
 
     return budget_file
 

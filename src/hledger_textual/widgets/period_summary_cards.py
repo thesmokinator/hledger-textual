@@ -71,6 +71,11 @@ class PeriodSummaryCards(Widget):
             expenses_by_commodity: Per-currency expense totals for the marquee line.
             net_by_commodity: Per-currency net totals for the marquee line.
         """
+        # A worker may call this after the card has been unmounted (app
+        # teardown); skip rather than raising NoMatches from the queries below.
+        if not self.is_mounted or not self.query(".income-value"):
+            return
+
         if summary is not None:
             com = summary.commodity
             net = summary.net

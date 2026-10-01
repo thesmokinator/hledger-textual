@@ -2,9 +2,46 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import tempfile
+import threading
 from pathlib import Path
 from typing import Callable
+
+# Serialise read-modify-write of the main journal's ``include`` directives so
+# concurrent pane loads (budget + recurring) cannot clobber each other.
+journal_include_lock = threading.Lock()
+
+
+def atomic_write_text(path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Write *content* to *path* atomically (temp file + ``os.replace``).
+
+    Readers see either the old or the new complete contents, never a partially
+    written file — a partial UTF-8 file raises ``UnicodeDecodeError`` in any
+    worker reading the journal concurrently.
+
+    Args:
+        path: Destination file path.
+        content: Full text to write.
+        encoding: Text encoding (default UTF-8).
+    """
+    path = Path(path)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_name, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def backup(file: Path) -> Path:
@@ -66,7 +103,7 @@ def safe_write_with_validation(
     bak = backup(target_file)
 
     try:
-        target_file.write_text(content, encoding="utf-8")
+        atomic_write_text(target_file, content)
 
         try:
             validate(journal_file)

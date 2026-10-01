@@ -164,10 +164,13 @@ class TestSafeWriteWithValidation:
             )
 
     def test_write_failure_restores_original(self, tmp_path: Path):
-        """If write_text raises, the original content is restored."""
+        """If the atomic write raises, the original content is restored."""
         target, journal = self._make_files(tmp_path)
 
-        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+        with patch(
+            "hledger_textual.fileutil.atomic_write_text",
+            side_effect=OSError("disk full"),
+        ):
             with pytest.raises(self._AppError, match="Failed to write"):
                 safe_write_with_validation(target, "new", journal, lambda p: None, self._AppError)
 
@@ -178,7 +181,10 @@ class TestSafeWriteWithValidation:
         target, journal = self._make_files(tmp_path)
         bak = target.with_suffix(".journal.bak")
 
-        with patch.object(Path, "write_text", side_effect=OSError("no space")):
+        with patch(
+            "hledger_textual.fileutil.atomic_write_text",
+            side_effect=OSError("no space"),
+        ):
             with pytest.raises(self._AppError):
                 safe_write_with_validation(target, "new", journal, lambda p: None, self._AppError)
 

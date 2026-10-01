@@ -170,6 +170,47 @@ class TestEnsureBudgetFile:
         content = journal.read_text()
         assert content.count("include budget.journal") == 1
 
+    def test_concurrent_includes_from_both_panes(self, tmp_path: Path):
+        """Concurrent include insertion by budget + recurring keeps the journal valid.
+
+        Both pane loads read-modify-write the main journal to add their include
+        line. Without a shared lock and an atomic write, one include could be
+        lost and a concurrent reader could observe a partially written (invalid
+        UTF-8) journal — the UnicodeDecodeError crash seen on CI.
+        """
+        import threading
+
+        from hledger_textual.recurring import ensure_recurring_file
+
+        journal = tmp_path / "main.journal"
+        journal.write_text(
+            "2026-01-01 * x\n    assets:bank  €1.00\n    income:salary\n",
+            encoding="utf-8",
+        )
+
+        errors: list[BaseException] = []
+
+        def run(fn):
+            try:
+                for _ in range(25):
+                    fn(journal)
+            except BaseException as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=run, args=(ensure_budget_file,)),
+            threading.Thread(target=run, args=(ensure_recurring_file,)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors, f"include insertion raised: {errors!r}"
+        text = journal.read_text(encoding="utf-8")
+        assert text.count("include budget.journal") == 1
+        assert text.count("include recurring.journal") == 1
+
 
 class TestFormatBudgetFile:
     """Tests for _format_budget_file."""

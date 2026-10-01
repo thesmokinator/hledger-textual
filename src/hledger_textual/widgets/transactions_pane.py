@@ -8,6 +8,7 @@ from pathlib import Path
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.widget import Widget
 
 from hledger_textual.cache import HledgerCache
@@ -248,9 +249,15 @@ class TransactionsPane(Widget):
         except HledgerError:
             summary = None
 
-        self.app.call_from_thread(
-            self.query_one(PeriodSummaryCards).update_summary, summary
-        )
+        def _apply_summary() -> None:
+            # Query on the UI thread and tolerate a pane torn down between the
+            # worker finishing and this callback running.
+            try:
+                self.query_one(PeriodSummaryCards).update_summary(summary)
+            except NoMatches:
+                return
+
+        self.app.call_from_thread(_apply_summary)
 
     # ------------------------------------------------------------------
     # Export

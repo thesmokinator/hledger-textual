@@ -17,7 +17,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from hledger_textual.amountutil import parse_amount_string as _parse_amount_string_raw
-from hledger_textual.fileutil import safe_write_with_validation
+from hledger_textual.fileutil import (
+    atomic_write_text,
+    journal_include_lock,
+    safe_write_with_validation,
+)
 from hledger_textual.hledger import HledgerError, check_journal, load_transactions, run_hledger
 from hledger_textual.journal import JournalError, append_transaction
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, Transaction
@@ -67,12 +71,18 @@ def ensure_recurring_file(journal_file: Path) -> Path:
     if not recurring_file.exists():
         recurring_file.write_text("", encoding="utf-8")
 
-    journal_text = journal_file.read_text(encoding="utf-8")
-    if not _INCLUDE_RE.search(journal_text):
-        include_line = f"include {RECURRING_FILENAME}\n"
-        if journal_text and not journal_text.startswith("\n"):
-            include_line += "\n"
-        journal_file.write_text(include_line + journal_text, encoding="utf-8")
+    # See ``budget.ensure_budget_file``: serialise and write atomically so a
+    # concurrent reader never sees a partially written journal.
+    with journal_include_lock:
+        try:
+            journal_text = journal_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return recurring_file
+        if not _INCLUDE_RE.search(journal_text):
+            include_line = f"include {RECURRING_FILENAME}\n"
+            if journal_text and not journal_text.startswith("\n"):
+                include_line += "\n"
+            atomic_write_text(journal_file, include_line + journal_text)
 
     return recurring_file
 

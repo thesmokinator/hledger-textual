@@ -451,7 +451,7 @@ class SummaryPane(Widget):
         post_msg: str,
     ) -> None:
         """Rebuild the investments table with actual Value (€) data from pricehist."""
-        if not self.is_attached:
+        if not self.is_attached or not self.query("#summary-portfolio-table"):
             return
         ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
         ptable.clear()
@@ -552,7 +552,9 @@ class SummaryPane(Widget):
         self, income_breakdown: list, breakdown: list
     ) -> None:
         """Apply loaded income and expense breakdowns to their tables."""
-        if not self.is_attached:
+        # Guard against teardown: is_attached can still be True for a moment
+        # while the child widgets have already been removed.
+        if not self.is_attached or not self.query("#summary-income-title"):
             return
 
         month_name = self._current_month.strftime("%B %Y")
