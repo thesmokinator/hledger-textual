@@ -337,7 +337,7 @@ class TestTransactionsTableEditFlow:
 
         monkeypatch.setattr("hledger_textual.journal.replace_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
-        async with app.run_test() as pilot:
+        async with app.run_test(notifications=True) as pilot:
             await pilot.press("2")
             await wait_until(pilot, lambda: _transactions_ready(app))
             await pilot.press("e")
@@ -352,7 +352,11 @@ class TestTransactionsTableEditFlow:
             )
             await pilot.click(app.screen.query_one("#btn-save"))
             await wait_until(
-                pilot, lambda: not isinstance(app.screen, TransactionFormScreen)
+                pilot,
+                lambda: any(
+                    "replace failed" in str(n.message)
+                    for n in app._notifications
+                ),
             )
             assert app.query_one("#transactions-table") is not None
 
@@ -367,7 +371,7 @@ class TestTransactionsTableEditFlow:
 
         monkeypatch.setattr("hledger_textual.journal.delete_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
-        async with app.run_test() as pilot:
+        async with app.run_test(notifications=True) as pilot:
             await pilot.press("2")
             await wait_until(pilot, lambda: _transactions_ready(app))
             await pilot.press("d")
@@ -376,7 +380,11 @@ class TestTransactionsTableEditFlow:
             assert isinstance(app.screen, DeleteConfirmModal)
             await pilot.click(app.screen.query_one("#btn-delete"))
             await wait_until(
-                pilot, lambda: not isinstance(app.screen, DeleteConfirmModal)
+                pilot,
+                lambda: any(
+                    "delete failed" in str(n.message)
+                    for n in app._notifications
+                ),
             )
             assert app.query_one("#transactions-table") is not None
 

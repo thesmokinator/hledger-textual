@@ -208,7 +208,10 @@ def _first_commodity_directive(path: Path, *, _seen: frozenset[Path] = frozenset
 
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
+        # Missing file, or a journal being rewritten by another writer: the
+        # commodity guess is best-effort, so fall through rather than crash a
+        # caller (often a background worker).
         return None
 
     include_paths: list[Path] = []

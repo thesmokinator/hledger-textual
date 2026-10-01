@@ -340,6 +340,13 @@ class TestResolveDefaultCommodity:
         journal.write_text("; commodity €1,000.00\n")
         assert resolve_default_commodity(journal) == "$"
 
+    def test_undecodable_journal_falls_back_to_config(self, tmp_path, monkeypatch):
+        """A journal with invalid UTF-8 does not crash the resolver."""
+        self._patch_config(tmp_path, monkeypatch, 'default_commodity = "€"\n')
+        journal = tmp_path / "bad.journal"
+        journal.write_bytes(b"\xac\xff not utf-8\n")
+        assert resolve_default_commodity(journal) == "€"
+
 
 class TestLoadPriceTickers:
     """Tests for load_price_tickers configuration helper."""
