@@ -17,15 +17,69 @@ from pathlib import Path
 
 _CONFIG_PATH = Path.home() / ".config" / "hledger-textual" / "config.toml"
 
-# Matches a hledger `commodity` directive, e.g.:
-#   commodity €1,000.00      -> captures "€"
-#   commodity 0.0000 XEON    -> captures "XEON"
-_COMMODITY_DIRECTIVE_RE = re.compile(
-    r"^commodity\s+(?:([^\d\s.,;-]+)[\d\s.,]*|[-\d\s.,]*([^\d\s.,;]+))\s*$"
-)
+# Matches a hledger `commodity` directive, capturing everything after the
+# keyword so the symbol can be parsed from either side (and from quotes).
+#   commodity €1,000.00        -> "€"
+#   commodity 0.0000 XEON      -> "XEON"
+#   commodity "USD" 1,000.00   -> "USD"
+_COMMODITY_DIRECTIVE_RE = re.compile(r"^commodity\s+(?P<body>.+?)\s*$")
 
 # Matches an `include` directive, capturing the included path.
 _INCLUDE_RE = re.compile(r'^include\s+([^;]+?)\s*(?:;.*)?$')
+
+# Characters that make up an unquoted numeric amount (as opposed to a symbol).
+_AMOUNT_CHARS = frozenset("0123456789.,+-")
+
+
+def _tokenize_directive_body(body: str) -> list[tuple[str, bool]]:
+    """Split a directive body into ``(value, quoted)`` tokens, honouring quotes.
+
+    An unquoted ``;`` starts a comment and ends the body.  Returns an empty
+    list when the body carries no symbol tokens.
+    """
+    tokens: list[tuple[str, bool]] = []
+    i = 0
+    length = len(body)
+    while i < length:
+        ch = body[i]
+        if ch.isspace():
+            i += 1
+            continue
+        if ch == ";":
+            break
+        if ch == '"':
+            end = body.find('"', i + 1)
+            if end == -1:
+                tokens.append((body[i + 1:], True))
+                break
+            tokens.append((body[i + 1:end], True))
+            i = end + 1
+        else:
+            end = i
+            while end < length and not body[end].isspace():
+                end += 1
+            tokens.append((body[i:end], False))
+            i = end
+    return tokens
+
+
+def _parse_commodity_directive(line: str) -> str | None:
+    """Return the commodity symbol from a hledger ``commodity`` directive line.
+
+    Handles the symbol on the left or right of the amount, quoted symbols with
+    embedded spaces, and a trailing ``;`` comment.  Returns ``None`` when the
+    line is not a commodity directive or declares no symbol.
+    """
+    m = _COMMODITY_DIRECTIVE_RE.match(line)
+    if not m:
+        return None
+    for value, quoted in _tokenize_directive_body(m.group("body")):
+        if quoted:
+            return value
+        symbol = "".join(ch for ch in value if ch not in _AMOUNT_CHARS)
+        if symbol:
+            return symbol
+    return None
 
 
 def _load_config_dict() -> dict:
@@ -109,10 +163,11 @@ def load_configured_default_commodity() -> str | None:
     """Return the explicitly configured default commodity, or ``None`` if unset.
 
     Unlike :func:`load_default_commodity`, this returns ``None`` when the
-    ``default_commodity`` key is absent from config.toml.  Callers that
-    should only convert currencies on explicit opt-in (e.g. the Accounts
-    pane) use this; callers with established ``"$"``-default behaviour
-    (e.g. the Reports pane) use :func:`load_default_commodity`.
+    ``default_commodity`` key is absent from config.toml, so callers can tell
+    "configured" apart from "unset".  :func:`resolve_default_commodity` uses
+    this to honour an explicit config value ahead of the journal's own
+    ``commodity`` directive; callers with established ``"$"``-default
+    behaviour (e.g. the Reports pane) use :func:`load_default_commodity`.
 
     Returns:
         Commodity string (e.g. ``"€"``), or ``None`` when not configured.
@@ -120,32 +175,50 @@ def load_configured_default_commodity() -> str | None:
     return _load_config_dict().get("default_commodity")
 
 
+def _expand_include(path: Path, pattern: str) -> list[Path]:
+    """Resolve an ``include`` target, expanding globs relative to ``path``.
+
+    A non-glob target is returned as a single path (which need not exist yet).
+    Glob patterns are expanded against their parent directory and sorted for a
+    deterministic resolution order.
+    """
+    candidate = Path(pattern)
+    if not candidate.is_absolute():
+        candidate = path.parent / pattern
+    if any(ch in candidate.name for ch in "*?["):
+        try:
+            return sorted(candidate.parent.glob(candidate.name))
+        except (OSError, ValueError):
+            return []
+    return [candidate]
+
+
 def _first_commodity_directive(path: Path, *, _seen: frozenset[Path] = frozenset()) -> str | None:
     """Return the first ``commodity`` directive's unit in a journal, following includes.
 
     Reads the journal's text directly (no hledger invocation), scans lines in
     order, and follows ``include`` directives breadth-first when the main file
-    declares nothing.  Cycles are guarded by the ``_seen`` set.  Comment lines
-    (``;`` / ``#``) are ignored because the directive regex anchors at column 0
-    on the word ``commodity``.
+    declares nothing.  Globs in include paths are expanded.  Cycles are guarded
+    by the ``_seen`` set.  Comment lines (``;`` / ``#``) are ignored because the
+    directive parser anchors at column 0 on the word ``commodity``.
     """
+    if path in _seen:
+        return None
+    _seen = _seen | {path}
+
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return None
 
-    if path in _seen:
-        return None
-    _seen = _seen | {path}
-
     include_paths: list[Path] = []
     for line in text.splitlines():
-        m = _COMMODITY_DIRECTIVE_RE.match(line)
-        if m:
-            return m.group(1) or m.group(2)
+        symbol = _parse_commodity_directive(line)
+        if symbol:
+            return symbol
         inc = _INCLUDE_RE.match(line)
         if inc:
-            include_paths.append(path.parent / inc.group(1))
+            include_paths.extend(_expand_include(path, inc.group(1).strip()))
 
     for included in include_paths:
         found = _first_commodity_directive(included, _seen=_seen)
@@ -155,12 +228,14 @@ def _first_commodity_directive(path: Path, *, _seen: frozenset[Path] = frozenset
 
 
 def resolve_default_commodity(journal_file: str | Path) -> str | None:
-    """Resolve the default commodity, ledger-first then config.
+    """Resolve the default commodity, config-first then ledger.
 
-    Uses the first ``commodity`` directive declared in the journal (following
-    ``include`` directives).  Falls back to the ``default_commodity`` key in
-    config.toml.  Returns ``None`` when neither is set — in which case callers
-    should not convert (raw multi-currency display).
+    An explicitly configured ``default_commodity`` wins, so users can always
+    override the journal's declaration.  When no config value is set, falls
+    back to the first ``commodity`` directive declared in the journal
+    (following ``include`` directives) — so no config is required when the
+    journal already declares one.  Returns ``None`` when neither is set, in
+    which case callers should not convert (raw multi-currency display).
 
     Args:
         journal_file: Path to the top-level journal file.
@@ -169,10 +244,10 @@ def resolve_default_commodity(journal_file: str | Path) -> str | None:
         Commodity string (e.g. ``"€"``, ``"XEON"``), or ``None`` when
         undeclared and unconfigured.
     """
-    declared = _first_commodity_directive(Path(journal_file))
-    if declared:
-        return declared
-    return load_configured_default_commodity()
+    configured = load_configured_default_commodity()
+    if configured:
+        return configured
+    return _first_commodity_directive(Path(journal_file))
 
 
 def load_price_tickers() -> dict[str, str]:

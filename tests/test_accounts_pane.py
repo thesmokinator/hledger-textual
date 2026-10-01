@@ -10,9 +10,17 @@ import pytest
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.models import AccountNode
 from hledger_textual.widgets.accounts_pane import AccountsPane
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+
+
+def _accounts_rows(app) -> int:
+    """Row count of the accounts table, or 0 while it is not mounted yet."""
+    try:
+        return app.screen.query_one("#accounts-table").row_count
+    except Exception:
+        return 0
 
 
 @pytest.fixture
@@ -213,6 +221,38 @@ class TestAccountsToggleView:
             assert pane._tree_mode == initial
 
 
+class TestAccountsTreeExport:
+    """Export must work in tree mode, where only ``_tree_roots`` is loaded."""
+
+    @pytest.fixture(autouse=True)
+    def _default_flat_view(self, monkeypatch: pytest.MonkeyPatch):
+        """Start in flat mode so the toggle to tree is explicit."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.load_accounts_view",
+            lambda: "flat",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.accounts_pane.save_accounts_view",
+            lambda _mode: None,
+        )
+
+    async def test_export_has_rows_in_tree_mode(self, accounts_app: HledgerTuiApp):
+        """Regression: tree mode loaded only the tree, so export was empty."""
+        async with accounts_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("6")
+            await wait_until(pilot, lambda: _accounts_rows(accounts_app) > 0)
+            pane = accounts_app.screen.query_one(AccountsPane)
+            await pilot.press("t")
+            await wait_until(pilot, lambda: pane._tree_mode and bool(pane._tree_roots))
+            data = pane.get_export_data()
+
+        assert data.headers == ["Account", "Balance"]
+        assert data.rows, "tree-mode export should not be empty"
+        accounts = {row[0] for row in data.rows}
+        assert "assets:bank:checking" in accounts
+
+
 class TestAccountsLazyLoading:
     """Only the loader matching the current view mode should be called."""
 
@@ -252,7 +292,7 @@ class TestAccountsLazyLoading:
         )
 
         async with accounts_app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: len(flat_calls) >= 1)
             assert len(flat_calls) >= 1
             assert len(tree_calls) == 0
 
@@ -280,13 +320,13 @@ class TestAccountsLazyLoading:
         )
 
         async with accounts_app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: len(flat_calls) >= 1)
             flat_before = len(flat_calls)
             tree_before = len(tree_calls)
             await pilot.press("6")
-            await pilot.pause(delay=0.3)
+            await pilot.pause()
             await pilot.press("t")
-            await pilot.pause(delay=0.3)
+            await wait_until(pilot, lambda: len(tree_calls) == tree_before + 1)
             assert len(tree_calls) == tree_before + 1
             assert len(flat_calls) == flat_before
 
@@ -321,17 +361,17 @@ class TestAccountsLazyLoading:
         )
 
         async with accounts_app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: len(flat_calls) >= 1)
             flat_after_mount = len(flat_calls)
             await pilot.press("6")
-            await pilot.pause(delay=0.3)
+            await pilot.pause()
             pane = accounts_app.screen.query_one(AccountsPane)
             await pilot.press("t")
-            await pilot.pause(delay=0.3)
+            await wait_until(pilot, lambda: pane._tree_mode)
             assert pane._tree_mode, "expected tree mode after first toggle"
             tree_after_first_toggle = len(tree_calls)
             await pilot.press("t")
-            await pilot.pause(delay=0.3)
+            await wait_until(pilot, lambda: not pane._tree_mode)
             assert not pane._tree_mode, "expected flat mode after second toggle"
             assert len(tree_calls) == tree_after_first_toggle, (
                 f"tree reloaded unexpectedly: {tree_calls}"
@@ -373,7 +413,7 @@ class TestAccountsCommodityConversion:
         )
 
         async with accounts_app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: len(seen) >= 1)
             assert len(seen) >= 1
             assert seen[-1]["kwargs"].get("commodity") == "€"
 
@@ -396,7 +436,7 @@ class TestAccountsCommodityConversion:
         )
 
         async with accounts_app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: len(seen) >= 1)
             assert len(seen) >= 1
             assert seen[-1]["kwargs"].get("commodity") is None
 
@@ -425,7 +465,7 @@ class TestAccountsCommodityConversion:
 
         app = HledgerTuiApp(journal_file=accounts_app_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: len(seen) >= 1)
             assert len(seen) >= 1
             assert seen[-1]["kwargs"].get("commodity") == "€"
 
@@ -452,7 +492,7 @@ class TestAccountsCommodityConversion:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause(delay=2.0)
+            await wait_until(pilot, lambda: _accounts_rows(app) > 0)
             table = app.screen.query_one("#accounts-table")
             target_row = None
             for i in range(table.row_count):
@@ -525,7 +565,7 @@ class TestAccountsRowHeight:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _accounts_rows(app) > 0)
             table = app.screen.query_one("#accounts-table")
             keys = {rk.value: rk for rk in table.rows.keys() if rk.value}
             target = keys.get("assets:bank:checking")
@@ -557,7 +597,7 @@ class TestAccountsRowHeight:
         async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("6")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _accounts_rows(app) > 0)
             table = app.screen.query_one("#accounts-table")
             keys = {rk.value: rk for rk in table.rows.keys() if rk.value}
             target = keys.get("assets:bank:savings")

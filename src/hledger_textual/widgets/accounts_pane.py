@@ -222,17 +222,43 @@ class AccountsPane(DataTablePaneMixin, Widget):
         return []
 
     def _filtered_balances(self) -> list[tuple[str, str]]:
-        """Return flat balances filtered by the current filter text."""
+        """Return balances for the active view, filtered by the filter text.
+
+        In tree mode only ``_tree_roots`` is loaded, so the tree is flattened
+        into ``(full_path, balance)`` rows here; this keeps export and any
+        other flat consumer working regardless of the active view.
+        """
+        balances = self._flatten_tree() if self._tree_mode else self._balances
         if not self.filter_text:
-            return self._balances
+            return balances
         term = self.filter_text.lower()
         return [
             (account, balance)
-            for account, balance in self._balances
+            for account, balance in balances
             if term in account.lower()
         ]
 
     # --- Tree helpers ---
+
+    def _flatten_tree(self) -> list[tuple[str, str]]:
+        """Flatten the loaded tree into ``(full_path, balance)`` rows in render order."""
+        rows: list[tuple[str, str]] = []
+        for root in self._tree_roots:
+            self._collect_subtree_rows(root, rows)
+        return rows
+
+    def _collect_subtree_rows(
+        self, node: AccountNode, rows: list[tuple[str, str]]
+    ) -> None:
+        """Append ``node`` and its descendants to ``rows`` depth-first.
+
+        Args:
+            node: The node to append.
+            rows: Accumulator for ``(full_path, balance)`` rows.
+        """
+        rows.append((node.full_path, node.balance))
+        for child in node.children:
+            self._collect_subtree_rows(child, rows)
 
     def _find_node(self, full_path: str) -> AccountNode | None:
         """Find a node by its full path in the tree.

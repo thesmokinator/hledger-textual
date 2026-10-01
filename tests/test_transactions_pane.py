@@ -296,3 +296,41 @@ class TestTransactionsPaneFilter:
             await pilot.press("escape")
             await pilot.pause(delay=0.3)
             assert search.disabled
+
+
+class TestTransactionsSummaryCommodity:
+    """The summary cards must use the same resolved commodity as the other panes."""
+
+    async def test_summary_uses_resolved_commodity(
+        self, txn_app: HledgerTuiApp, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """resolve_default_commodity's value reaches load_period_summary."""
+        from decimal import Decimal
+
+        from hledger_textual.models import PeriodSummary
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.transactions_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        seen: list[dict] = []
+
+        def spy(*args, **kwargs):
+            seen.append({"args": args, "kwargs": kwargs})
+            return PeriodSummary(
+                income=Decimal("0"),
+                expenses=Decimal("0"),
+                commodity="€",
+            )
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.transactions_pane.load_period_summary", spy
+        )
+
+        async with txn_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await _wait_until(pilot, lambda: len(seen) >= 1)
+
+        assert seen, "load_period_summary was not called"
+        assert seen[-1]["kwargs"].get("commodity") == "€"

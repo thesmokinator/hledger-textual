@@ -105,6 +105,28 @@ def has_hledger() -> bool:
     return shutil.which("hledger") is not None
 
 
+async def wait_until(pilot, condition, *, timeout: float = 10.0, interval: float = 0.05) -> None:
+    """Poll ``condition`` until it is true, instead of a fixed ``pause(delay=...)``.
+
+    Waiting on the actual condition keeps tests robust under load and avoids
+    paying the full delay when the work is already done.  Fails the test if the
+    condition is still false after ``timeout`` seconds.
+
+    Args:
+        pilot: The Textual ``Pilot`` used to pump the event loop.
+        condition: A zero-argument callable returning truthy when ready.
+        timeout: Maximum seconds to wait before failing.
+        interval: Seconds to pause between polls.
+    """
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not condition():
+        if time.monotonic() >= deadline:
+            pytest.fail(f"condition not met within {timeout}s: {condition!r}")
+        await pilot.pause(delay=interval)
+
+
 @pytest.fixture
 def european_journal_path() -> Path:
     """Path to the European-format journal fixture (€1.000,00)."""

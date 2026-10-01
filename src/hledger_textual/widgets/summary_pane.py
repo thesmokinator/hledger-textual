@@ -252,26 +252,31 @@ class SummaryPane(Widget):
         except HledgerError:
             summary = None
 
-        # Per-currency values for the marquee lines under each card.
+        # Per-currency values for the marquee lines under each card.  These are
+        # passed alongside the summary rather than attached to it: the summary
+        # comes from a cache and must not be mutated.
+        income_by_commodity: list[tuple[str, Decimal]] = []
+        expenses_by_commodity: list[tuple[str, Decimal]] = []
+        net_by_commodity: list[tuple[str, Decimal]] = []
         if summary is not None:
             try:
-                summary.net_by_commodity = load_period_net_by_commodity(
+                net_by_commodity = load_period_net_by_commodity(
                     self.journal_file, cache=self._cache
                 )
             except HledgerError:
-                summary.net_by_commodity = []
+                net_by_commodity = []
             try:
-                summary.income_by_commodity = load_period_income_by_commodity(
+                income_by_commodity = load_period_income_by_commodity(
                     self.journal_file, cache=self._cache
                 )
             except HledgerError:
-                summary.income_by_commodity = []
+                income_by_commodity = []
             try:
-                summary.expenses_by_commodity = load_period_expenses_by_commodity(
+                expenses_by_commodity = load_period_expenses_by_commodity(
                     self.journal_file, cache=self._cache
                 )
             except HledgerError:
-                summary.expenses_by_commodity = []
+                expenses_by_commodity = []
 
         # --- Liabilities: total outstanding balance ---
         try:
@@ -317,6 +322,9 @@ class SummaryPane(Widget):
             positions, cost_by_account,
             tickers, loading_msg,
             liabilities,
+            income_by_commodity,
+            expenses_by_commodity,
+            net_by_commodity,
         )
 
         if not will_fetch:
@@ -359,6 +367,9 @@ class SummaryPane(Widget):
         tickers: dict[str, str],
         loading_msg: str,
         liabilities: list[tuple[str, Decimal, str]] | None = None,
+        income_by_commodity: list[tuple[str, Decimal]] | None = None,
+        expenses_by_commodity: list[tuple[str, Decimal]] | None = None,
+        net_by_commodity: list[tuple[str, Decimal]] | None = None,
     ) -> None:
         """Apply card values, basic investments, and liabilities."""
         if not self.is_attached:
@@ -372,7 +383,12 @@ class SummaryPane(Widget):
             return
 
         # Income / Expenses / Net cards — delegated to PeriodSummaryCards
-        self.query_one(PeriodSummaryCards).update_summary(summary)
+        self.query_one(PeriodSummaryCards).update_summary(
+            summary,
+            income_by_commodity=income_by_commodity,
+            expenses_by_commodity=expenses_by_commodity,
+            net_by_commodity=net_by_commodity,
+        )
         self._static_loaded = True
         self._has_static_sections = bool(
             (

@@ -11,6 +11,7 @@ from textual.binding import Binding
 from textual.widget import Widget
 
 from hledger_textual.cache import HledgerCache
+from hledger_textual.config import resolve_default_commodity
 from hledger_textual.hledger import HledgerError, load_period_summary
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
@@ -238,7 +239,12 @@ class TransactionsPane(Widget):
         else:
             period = month.strftime("%Y-%m")
         try:
-            summary = load_period_summary(self.journal_file, period, cache=self._cache)
+            summary = load_period_summary(
+                self.journal_file,
+                period,
+                cache=self._cache,
+                commodity=resolve_default_commodity(self.journal_file),
+            )
         except HledgerError:
             summary = None
 
