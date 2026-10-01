@@ -13,16 +13,14 @@ from hledger_textual.app import HledgerTuiApp
 from hledger_textual.screens.move_confirm import MoveConfirmModal
 from hledger_textual.screens.transaction_form import TransactionFormScreen
 from hledger_textual.widgets.transactions_table import TransactionsTable
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 
 
 async def _wait_until(pilot, condition) -> None:
-    for _ in range(10):
-        if condition():
-            return
-        await pilot.pause(delay=0.1)
+    """Poll ``condition`` with a generous budget (see :func:`tests.conftest.wait_until`)."""
+    await wait_until(pilot, condition)
 
 
 @pytest.fixture

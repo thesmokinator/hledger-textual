@@ -12,7 +12,16 @@ from textual.widgets import Input
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.widgets.transactions_table import TransactionsTable
-from tests.conftest import has_hledger
+from tests.conftest import has_hledger, wait_until
+
+
+def _transactions_ready(app) -> bool:
+    """True once the transactions table has rows and holds focus."""
+    try:
+        table = app.query_one("#transactions-table")
+    except Exception:
+        return False
+    return table.row_count > 0 and table.has_focus
 
 
 class _TableApp(App):
@@ -274,19 +283,26 @@ class TestTransactionsTableEditFlow:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
             from hledger_textual.screens.transaction_form import TransactionFormScreen
             from hledger_textual.widgets.autocomplete_input import AutocompleteInput
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, TransactionFormScreen)
+            )
             assert isinstance(app.screen, TransactionFormScreen)
             app.screen.query_one("#input-description", AutocompleteInput).value = (
                 "Updated grocery"
             )
             await pilot.click(app.screen.query_one("#btn-save"))
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot,
+                lambda: any(
+                    t.description == "Updated grocery"
+                    for t in load_transactions(table_journal)
+                ),
+            )
             txns = load_transactions(table_journal)
             assert any(t.description == "Updated grocery" for t in txns)
 
@@ -302,19 +318,22 @@ class TestTransactionsTableEditFlow:
         monkeypatch.setattr("hledger_textual.journal.replace_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             await pilot.press("e")
-            await pilot.pause(delay=0.5)
             from hledger_textual.screens.transaction_form import TransactionFormScreen
             from hledger_textual.widgets.autocomplete_input import AutocompleteInput
+            await wait_until(
+                pilot, lambda: isinstance(app.screen, TransactionFormScreen)
+            )
             assert isinstance(app.screen, TransactionFormScreen)
             app.screen.query_one("#input-description", AutocompleteInput).value = (
                 "Updated grocery"
             )
             await pilot.click(app.screen.query_one("#btn-save"))
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot, lambda: not isinstance(app.screen, TransactionFormScreen)
+            )
             assert app.query_one("#transactions-table") is not None
 
     async def test_do_delete_journal_error_does_not_crash(
@@ -329,15 +348,16 @@ class TestTransactionsTableEditFlow:
         monkeypatch.setattr("hledger_textual.journal.delete_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.pause(delay=1.0)
             await pilot.press("2")
-            await pilot.pause(delay=1.0)
+            await wait_until(pilot, lambda: _transactions_ready(app))
             await pilot.press("d")
-            await pilot.pause()
             from hledger_textual.screens.delete_confirm import DeleteConfirmModal
+            await wait_until(pilot, lambda: isinstance(app.screen, DeleteConfirmModal))
             assert isinstance(app.screen, DeleteConfirmModal)
             await pilot.click(app.screen.query_one("#btn-delete"))
-            await pilot.pause(delay=1.5)
+            await wait_until(
+                pilot, lambda: not isinstance(app.screen, DeleteConfirmModal)
+            )
             assert app.query_one("#transactions-table") is not None
 
 
