@@ -32,18 +32,6 @@ def _rows(app) -> int:
         return -1
 
 
-def _status_of(journal, match):
-    """Return the status of the first journal transaction whose description matches."""
-    from hledger_textual.hledger import load_transactions
-
-    try:
-        txns = load_transactions(journal)
-    except Exception:
-        return None
-    found = [t for t in txns if match(t.description)]
-    return found[0].status if found else None
-
-
 class _TableApp(App):
     """Minimal app wrapping TransactionsTable for isolated widget testing."""
 
@@ -406,8 +394,7 @@ class TestTransactionsTableStatusToggle:
             await pilot.press("*")
             await wait_until(
                 pilot,
-                lambda: _status_of(table_journal, lambda d: d == "Salary")
-                == TransactionStatus.CLEARED,
+                lambda: "* " in table_journal.read_text(encoding="utf-8"),
             )
             txns = load_transactions(table_journal)
             salary = [t for t in txns if t.description == "Salary"][0]
@@ -426,10 +413,11 @@ class TestTransactionsTableStatusToggle:
             await pilot.press("down")
             await pilot.pause()
             await pilot.press("*")
+            # Grocery was the only cleared transaction; once unmarked there is
+            # no "* " marker left in the journal.
             await wait_until(
                 pilot,
-                lambda: _status_of(table_journal, lambda d: "Grocery" in d)
-                == TransactionStatus.UNMARKED,
+                lambda: "* " not in table_journal.read_text(encoding="utf-8"),
             )
             txns = load_transactions(table_journal)
             grocery = [t for t in txns if "Grocery" in t.description][0]
@@ -448,8 +436,7 @@ class TestTransactionsTableStatusToggle:
             await pilot.press("exclamation_mark")
             await wait_until(
                 pilot,
-                lambda: _status_of(table_journal, lambda d: d == "Salary")
-                == TransactionStatus.PENDING,
+                lambda: "! " in table_journal.read_text(encoding="utf-8"),
             )
             txns = load_transactions(table_journal)
             salary = [t for t in txns if t.description == "Salary"][0]
@@ -468,15 +455,14 @@ class TestTransactionsTableStatusToggle:
             await pilot.press("exclamation_mark")
             await wait_until(
                 pilot,
-                lambda: _status_of(table_journal, lambda d: d == "Salary")
-                == TransactionStatus.PENDING,
+                lambda: "! " in table_journal.read_text(encoding="utf-8"),
             )
             # Then toggle to cleared
             await pilot.press("*")
             await wait_until(
                 pilot,
-                lambda: _status_of(table_journal, lambda d: d == "Salary")
-                == TransactionStatus.CLEARED,
+                lambda: "* " in table_journal.read_text(encoding="utf-8")
+                and "! " not in table_journal.read_text(encoding="utf-8"),
             )
             txns = load_transactions(table_journal)
             salary = [t for t in txns if t.description == "Salary"][0]

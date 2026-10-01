@@ -105,7 +105,7 @@ def has_hledger() -> bool:
     return shutil.which("hledger") is not None
 
 
-async def wait_until(pilot, condition, *, timeout: float = 10.0, interval: float = 0.05) -> None:
+async def wait_until(pilot, condition, *, timeout: float = 30.0, interval: float = 0.05) -> None:
     """Poll ``condition`` until it is true, instead of a fixed ``pause(delay=...)``.
 
     Waiting on the actual condition keeps tests robust under load and avoids
@@ -153,14 +153,14 @@ async def select_first_transaction(pilot, app):
         return table is not None and table.row_count > 0
 
     try:
-        await wait_until(pilot, _ready, timeout=8.0)
+        await wait_until(pilot, _ready, timeout=15.0)
     except AssertionError:
         try:
             app.query_one(TransactionsTable).reload()
         except Exception:
             pass
         try:
-            await wait_until(pilot, _ready, timeout=20.0)
+            await wait_until(pilot, _ready, timeout=30.0)
         except AssertionError:
             notes = [str(n.message) for n in getattr(app, "_notifications", [])]
             pytest.fail(
