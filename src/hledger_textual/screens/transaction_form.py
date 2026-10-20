@@ -20,7 +20,7 @@ from hledger_textual.amountutil import (
     normalize_number_string_for_style,
 )
 from hledger_textual.config import load_default_commodity
-from hledger_textual.dateutil import validate_iso_date
+from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.hledger import (
     HledgerError,
     load_descriptions,
@@ -763,11 +763,12 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
             self.notify("Date is required", severity="error", timeout=3)
             return
 
-        if not validate_iso_date(date_str):
+        date_error = describe_iso_date_error(date_str)
+        if date_error:
             self.notify(
-                "Invalid date. Use ISO format: YYYY-MM-DD",
+                f"Invalid date: {date_error}",
                 severity="error",
-                timeout=3,
+                timeout=4,
             )
             return
 

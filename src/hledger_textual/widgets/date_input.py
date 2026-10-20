@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from textual import events
 from textual.widgets import Input
 
+from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.widgets.constants import PASSTHROUGH_KEYS
 
 
@@ -13,6 +15,10 @@ class DateInput(Input):
     Digit keys are intercepted and formatted; non-digit characters (except
     navigation keys) are rejected.  The dashes at positions 4 and 7 are
     inserted automatically so the user only types the 8 digits.
+
+    The value is validated when the field loses focus: an invalid date gets
+    the ``date-error`` class (red border) and a tooltip explaining which part
+    is wrong.
     """
 
     _PASSTHROUGH_KEYS = PASSTHROUGH_KEYS
@@ -22,6 +28,15 @@ class DateInput(Input):
         kwargs.setdefault("max_length", 10)
         kwargs.setdefault("placeholder", "YYYY-MM-DD")
         super().__init__(**kwargs)
+
+    def _on_blur(self, event: events.Blur) -> None:
+        """Validate the date and flag the field when it is invalid."""
+        super()._on_blur(event)
+        # Stay quiet while the field is still empty: the forms have their own
+        # required-field message.
+        error = describe_iso_date_error(self.value) if self.value else None
+        self.set_class(error is not None, "date-error")
+        self.tooltip = error
 
     @staticmethod
     def _format_date(raw_digits: str) -> str:

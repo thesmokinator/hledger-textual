@@ -2,7 +2,12 @@
 
 from datetime import date
 
-from hledger_textual.dateutil import next_month, prev_month, validate_iso_date
+from hledger_textual.dateutil import (
+    describe_iso_date_error,
+    next_month,
+    prev_month,
+    validate_iso_date,
+)
 
 
 class TestPrevMonth:
@@ -98,3 +103,31 @@ class TestValidateIsoDate:
     def test_rejects_impossible_month(self):
         """Impossible months return False."""
         assert validate_iso_date("2024-13-01") is False
+
+
+class TestDescribeIsoDateError:
+    """Tests for describe_iso_date_error."""
+
+    def test_valid_date_returns_none(self):
+        """A real calendar date has no error."""
+        assert describe_iso_date_error("2026-01-31") is None
+
+    def test_empty_value_is_reported_as_missing(self):
+        """Empty input is a required-field problem, not a format problem."""
+        assert describe_iso_date_error("") == "Date is required"
+
+    def test_bad_format(self):
+        """Non-ISO text gets a format hint."""
+        assert "YYYY-MM-DD" in describe_iso_date_error("31/01/2026")
+
+    def test_year_out_of_range(self):
+        """Implausible years name the year."""
+        assert "Year" in describe_iso_date_error("1700-01-01")
+
+    def test_month_out_of_range(self):
+        """Months outside 01-12 name the month."""
+        assert describe_iso_date_error("2026-13-01") == "Month must be between 01 and 12"
+
+    def test_impossible_day(self):
+        """February 30 names the day."""
+        assert describe_iso_date_error("2026-02-30") == "That day does not exist in that month"
