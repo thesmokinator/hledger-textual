@@ -598,7 +598,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
                     for p_idx in range(n_periods):
                         raw = p_map.get(p_idx, "")
-                        row_cells.append(fmt_single_amount_str(raw) if raw else "")
+                        row_cells.append(fmt_single_amount_str(raw, accounting=True) if raw else "")
 
                     while len(row_cells) < n_periods + 1:
                         row_cells.append("")
@@ -611,7 +611,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
             # --- Single-currency or non-stacked path ---
             cells: list[str | Text] = [account_text]
             for amt in row.amounts:
-                formatted = fmt_amount_str(amt)
+                formatted = fmt_amount_str(amt, accounting=True)
                 if row.is_total:
                     cells.append(f"[bold]{formatted}[/bold]")
                 else:

@@ -25,7 +25,7 @@ def _number_locale() -> str:
 _MULTI_COMMODITY_SEP = ", "
 
 
-def fmt_amount_str(s: str) -> str:
+def fmt_amount_str(s: str, *, accounting: bool = False) -> str:
     """Format a hledger amount string for display, supporting multi-commodity cells.
 
     hledger CSV output combines per-account amounts for different commodities
@@ -44,6 +44,9 @@ def fmt_amount_str(s: str) -> str:
 
     Args:
         s: Raw amount string, e.g. from hledger CSV output or ``Amount.format()``.
+        accounting: When True apply display conventions (parentheses and a red
+            style for negatives, a muted style for zero).  Leave False for
+            file writes and copy/paste, which need a plain minus sign.
 
     Returns:
         Locale-formatted amount string, with multi-commodity sub-amounts
@@ -60,10 +63,10 @@ def fmt_amount_str(s: str) -> str:
             part = part.strip()
             if not part:
                 continue
-            formatted_parts.append(fmt_single_amount_str(part))
+            formatted_parts.append(fmt_single_amount_str(part, accounting=accounting))
         return "\n".join(formatted_parts)
 
-    return fmt_single_amount_str(s)
+    return fmt_single_amount_str(s, accounting=accounting)
 
 
 def split_multi_commodity_amounts(s: str) -> list[str]:
@@ -137,7 +140,7 @@ def split_raw_commodities(s: str) -> list[str]:
     return [s]
 
 
-def fmt_single_amount_str(s: str) -> str:
+def fmt_single_amount_str(s: str, *, accounting: bool = False) -> str:
     """Format a single-commodity hledger amount string.
 
     Applies locale formatting to amounts with a left-side currency symbol
@@ -146,20 +149,60 @@ def fmt_single_amount_str(s: str) -> str:
 
     Args:
         s: A single-commodity amount string (no ``", "`` separator).
+        accounting: When True apply display conventions (see
+            :func:`fmt_amount_str`).
 
     Returns:
         Locale-formatted amount string, or the original if not matched.
     """
     m = _FMT_STR_RE.match(s)
     if not m:
-        return s
+        return _accounting_plain(s) if accounting else s
     minus1, sym, minus2, numpart = m.groups()
     try:
         qty = Decimal(numpart.replace(",", "")).quantize(Decimal("0.01"))
         sign = Decimal(-1) if (minus1 or minus2) else Decimal(1)
-        return fmt_amount(qty * sign, sym)
+        value = qty * sign
+        if accounting:
+            return fmt_amount_pretty(value, sym)
+        return fmt_amount(value, sym)
     except InvalidOperation:
         return s
+
+
+def fmt_amount_pretty(qty: Decimal, commodity: str) -> str:
+    """Format an amount with accounting conventions for display.
+
+    Negative amounts lose the minus sign and are wrapped in parentheses with
+    a red style; zero amounts are muted.  The result is Rich markup, which the
+    DataTable and Static widgets render.
+
+    Args:
+        qty: The numeric quantity.
+        commodity: The commodity symbol or code.
+
+    Returns:
+        Markup string, e.g. ``[red](€50.00)[/red]`` or ``[dim]€0.00[/dim]``.
+    """
+    if qty == 0:
+        return f"[dim]{fmt_amount(qty, commodity)}[/dim]"
+    if qty < 0:
+        return f"[red]({fmt_amount(-qty, commodity)})[/red]"
+    return fmt_amount(qty, commodity)
+
+
+def _accounting_plain(s: str) -> str:
+    """Apply accounting conventions to amounts without a locale-formatted symbol."""
+    text = s.strip()
+    if not text:
+        return s
+    if text.startswith("-"):
+        return f"[red]({text[1:]})[/red]"
+    if len(text) > 1 and text[1] == "-":
+        return f"[red]({text[0]}{text[2:]})[/red]"
+    if re.fullmatch(r"0+(?:[.,]0+)?", text):
+        return f"[dim]{text}[/dim]"
+    return text
 
 
 def fmt_amount(qty: Decimal, commodity: str) -> str:

@@ -134,7 +134,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
             if prev_group and group != prev_group:
                 table.add_row("", "", key=f"{self._SEP_KEY_PREFIX}{sep_idx}")
             prev_group = group
-            table.add_row(Text(account), fmt_amount_str(balance), height=None, key=account)
+            table.add_row(Text(account), fmt_amount_str(balance, accounting=True), height=None, key=account)
         self._set_empty_state_visible(table.row_count == 0)
 
     def _update_table_tree(self) -> None:
@@ -172,7 +172,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
         if node.children:
             label.stylize("bold")
 
-        table.add_row(label, fmt_amount_str(node.balance), height=None, key=node.full_path)
+        table.add_row(label, fmt_amount_str(node.balance, accounting=True), height=None, key=node.full_path)
 
         if node.expanded:
             for child in node.children:
@@ -191,7 +191,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
             label = Text(f"{indent}{icon}{full_path.rsplit(':', 1)[-1]}")
             if has_children:
                 label.stylize("bold")
-            table.add_row(label, fmt_amount_str(balance), height=None, key=full_path)
+            table.add_row(label, fmt_amount_str(balance, accounting=True), height=None, key=full_path)
 
     def _collect_filtered_rows(
         self, node: AccountNode, depth: int, term: str
