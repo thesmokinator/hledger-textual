@@ -17,7 +17,11 @@ from hledger_textual.widgets.formatting import (
 )
 from hledger_textual.widgets.summary_pane import (
     SummaryPane,
+    _conversion_note,
     _progress_bar,
+    _share_cell,
+    _share_pct,
+    _totals_by_commodity,
 )
 from tests.conftest import has_hledger, wait_until
 
@@ -114,6 +118,70 @@ class TestProgressBar:
         bar = _progress_bar(50.0, width=4)
         assert len(bar) == 4
         assert bar == "██░░"
+
+
+class TestShareHelpers:
+    """Tests for the percentage-share helpers used by the breakdowns."""
+
+    def test_totals_by_commodity(self):
+        """Amounts are summed per commodity."""
+        rows = [
+            ("income:salary", Decimal("3500"), "€"),
+            ("income:freelance", Decimal("1740"), "€"),
+            ("income:gifts", Decimal("0.01"), "BTC"),
+        ]
+        assert _totals_by_commodity(rows) == {
+            "€": Decimal("5240"),
+            "BTC": Decimal("0.01"),
+        }
+
+    def test_share_in_target_commodity(self):
+        """Rows in the target commodity are divided by the target total."""
+        totals = {"€": Decimal("5240"), "BTC": Decimal("0.01")}
+        assert _share_pct(Decimal("3500"), "€", totals, "€") == pytest.approx(
+            66.7939, rel=1e-3
+        )
+
+    def test_share_of_unconverted_row_is_none(self):
+        """A row left in another commodity has no comparable denominator."""
+        totals = {"€": Decimal("5240"), "BTC": Decimal("0.01")}
+        assert _share_pct(Decimal("0.01"), "BTC", totals, "€") is None
+
+    def test_single_currency_without_target(self):
+        """Single-currency journals keep their percentages without -X."""
+        totals = {"€": Decimal("1000")}
+        assert _share_pct(Decimal("250"), "€", totals, None) == pytest.approx(25.0)
+
+    def test_mixed_currencies_without_target_is_none(self):
+        """Mixing currencies without a target must not produce a fake share."""
+        totals = {"€": Decimal("1000"), "£": Decimal("500")}
+        assert _share_pct(Decimal("500"), "£", totals, None) is None
+
+    def test_zero_total_is_none(self):
+        """A zero denominator yields no percentage."""
+        assert _share_pct(Decimal("0"), "€", {"€": Decimal("0")}, "€") is None
+
+    def test_share_cell_without_share(self):
+        """Unknown shares render as an em dash."""
+        assert _share_cell(None) == "\u2014"
+
+    def test_share_cell_with_share(self):
+        """Known shares render a bar plus a rounded percentage."""
+        assert _share_cell(50.0, width=4) == "██░░ 50%"
+
+    def test_note_for_unconverted_commodity(self):
+        """The note names the commodities excluded from percentages."""
+        note = _conversion_note({"€": Decimal("1000"), "BTC": Decimal("0.01")}, "€")
+        assert "BTC" in note
+
+    def test_no_note_when_everything_converted(self):
+        """No note when all rows share the target commodity."""
+        assert _conversion_note({"€": Decimal("1000")}, "€") == ""
+
+    def test_note_for_mixed_currencies_without_target(self):
+        """Without a default commodity the note suggests setting one."""
+        note = _conversion_note({"€": Decimal("1000"), "£": Decimal("500")}, None)
+        assert "default_commodity" in note
 
 
 class TestComputeSavingRate:
@@ -704,6 +772,197 @@ class TestSummaryPaneMulticurrency:
 
 
 
+
+def _table_row_count(app, selector: str) -> int:
+    """Return a table's row count, or 0 while it is not mounted/loaded yet."""
+    try:
+        return app.query_one(selector, DataTable).row_count
+    except Exception:
+        return 0
+
+
+def _table_rows(app, selector: str) -> list[tuple[str, ...]]:
+    """Return a table's cells as plain strings, one tuple per row."""
+    table = app.query_one(selector, DataTable)
+    rows: list[tuple[str, ...]] = []
+    for index in range(table.row_count):
+        rows.append(
+            tuple(
+                cell.plain if hasattr(cell, "plain") else str(cell)
+                for cell in table.get_row_at(index)
+            )
+        )
+    return rows
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSummaryPaneMulticurrencyBreakdowns:
+    """Breakdown percentages must use converted amounts (issue #217)."""
+
+    @pytest.fixture
+    def fx_journal(self, tmp_path: Path) -> Path:
+        """A three-currency journal with explicit price directives."""
+        today = date.today()
+        d1 = today.replace(day=1).isoformat()
+        d2 = today.replace(day=2).isoformat()
+        d3 = today.replace(day=3).isoformat()
+        journal = tmp_path / "fx.journal"
+        journal.write_text(
+            "commodity €1,000.00\n"
+            "commodity £1,000.00\n"
+            "commodity $1,000.00\n"
+            "\n"
+            f"P {d1} € £0.50\n"
+            f"P {d1} € $2.00\n"
+            "\n"
+            f"{d1} * Salary\n"
+            "    assets:bank:checking   €3500.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d2} * Freelance\n"
+            "    assets:bank:checking   £1500.00\n"
+            "    income:freelance\n"
+            "\n"
+            f"{d2} * Subscriptions\n"
+            "    expenses:subscriptions   €14.99\n"
+            "    expenses:subscriptions    £8.99\n"
+            "    assets:bank:checking\n"
+            "\n"
+            f"{d3} * Credit card\n"
+            "    liabilities:credit-card   $-200.00\n"
+            "    assets:bank:savings        $200.00\n"
+            "    liabilities:credit-card    €-50.00\n"
+            "    assets:bank:checking       €50.00\n"
+        )
+        return journal
+
+    async def test_income_percentages_use_converted_totals(
+        self, fx_journal: Path, monkeypatch
+    ):
+        """£1500 becomes €3000, so the shares are 54% / 46%, not 70% / 30%."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        app = _SummaryApp(fx_journal)
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot, lambda: _table_row_count(app, "#summary-income-table") >= 2
+            )
+            rows = {row[0]: row for row in _table_rows(app, "#summary-income-table")}
+            assert rows["income:salary"][1] == "€3,500.00"
+            assert rows["income:freelance"][1] == "€3,000.00"
+            assert rows["income:salary"][2].endswith("54%")
+            assert rows["income:freelance"][2].endswith("46%")
+            note = app.query_one("#summary-income-note", Static)
+            assert note.display is False
+
+    async def test_multi_commodity_expense_row_is_shown(
+        self, fx_journal: Path, monkeypatch
+    ):
+        """The ``£8.99, €14.99`` cell is converted, not silently dropped."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        app = _SummaryApp(fx_journal)
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot, lambda: _table_row_count(app, "#summary-breakdown-table") >= 1
+            )
+            rows = _table_rows(app, "#summary-breakdown-table")
+            assert rows == [
+                ("expenses:subscriptions", "€32.97", "████████████ 100%")
+            ]
+
+    async def test_multi_currency_liability_row_is_shown(
+        self, fx_journal: Path, monkeypatch
+    ):
+        """The ``$-200.00, €-50.00`` liability row is converted and visible."""
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        app = _SummaryApp(fx_journal)
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot, lambda: _table_row_count(app, "#summary-liabilities-table") >= 1
+            )
+            assert _table_rows(app, "#summary-liabilities-table") == [
+                ("liabilities:credit-card", "€150.00", "████████████ 100%")
+            ]
+
+    async def test_unconverted_commodity_shows_dash_and_note(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """A commodity without a price keeps its amount and gets no percentage."""
+        today = date.today()
+        d1 = today.replace(day=1).isoformat()
+        journal = tmp_path / "btc.journal"
+        journal.write_text(
+            "commodity €1,000.00\n"
+            "commodity 0.00000000 BTC\n"
+            "\n"
+            f"{d1} * Salary\n"
+            "    assets:bank:checking   €1000.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d1} * Gift\n"
+            "    assets:crypto:wallet   0.01000000 BTC\n"
+            "    income:gifts\n"
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        app = _SummaryApp(journal)
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot, lambda: _table_row_count(app, "#summary-income-table") >= 2
+            )
+            rows = {row[0]: row for row in _table_rows(app, "#summary-income-table")}
+            assert rows["income:salary"][2].endswith("100%")
+            assert rows["income:gifts"][2] == "\u2014"
+            note = app.query_one("#summary-income-note", Static)
+            assert note.display is True
+            assert "BTC" in str(note.renderable)
+
+    async def test_mixed_currencies_without_default_hide_percentages(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """No resolvable default commodity means no comparable denominator."""
+        today = date.today()
+        d1 = today.replace(day=1).isoformat()
+        journal = tmp_path / "mixed.journal"
+        journal.write_text(
+            f"{d1} * Salary\n"
+            "    assets:bank:checking   €1000.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d1} * Freelance\n"
+            "    assets:bank:savings    £500.00\n"
+            "    income:freelance\n"
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: None,
+        )
+        app = _SummaryApp(journal)
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot, lambda: _table_row_count(app, "#summary-income-table") >= 2
+            )
+            rows = _table_rows(app, "#summary-income-table")
+            assert {row[2] for row in rows} == {"\u2014"}
+            note = app.query_one("#summary-income-note", Static)
+            assert note.display is True
+            assert "default_commodity" in str(note.renderable)
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSummaryPaneCardTotals:
+    """Card totals only cover the converted commodity (issue #218)."""
+
     async def test_cards_exclude_unconverted_commodities(
         self, tmp_path: Path, monkeypatch
     ):
@@ -712,7 +971,7 @@ class TestSummaryPaneMulticurrency:
 
         today = date.today()
         d1 = today.replace(day=1).isoformat()
-        journal = tmp_path / "btc.journal"
+        journal = tmp_path / "btc_card.journal"
         journal.write_text(
             "commodity €1,000.00\n"
             "commodity 0.00000000 BTC\n"

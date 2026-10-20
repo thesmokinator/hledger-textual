@@ -1114,8 +1114,57 @@ def load_period_net_by_commodity(
     )
 
 
+def _parse_breakdown_csv(
+    output: str, commodity: str | None
+) -> list[tuple[str, Decimal, str]]:
+    """Parse a flat ``balance`` CSV into ``(account, amount, commodity)`` rows.
+
+    Multi-commodity cells (``"£8.99, €14.99"``) are split into one row per
+    commodity instead of being dropped, and amounts are summed per
+    ``(account, commodity)`` pair.
+
+    Args:
+        output: Raw CSV output of an hledger ``balance --flat --no-total`` call.
+        commodity: The conversion target (``-X``) the query used, if any.
+            Rows already in this commodity are sorted first.
+
+    Returns:
+        A list of ``(account, quantity, commodity)`` tuples.  Rows in the
+        target commodity come first, sorted by amount descending; rows in
+        other commodities follow (values across commodities are not
+        comparable), also sorted by amount descending.
+    """
+    from hledger_textual.widgets.formatting import split_raw_commodities
+
+    sums: dict[tuple[str, str], Decimal] = {}
+    reader = csv.reader(io.StringIO(output))
+    next(reader, None)  # skip header
+    for row in reader:
+        if len(row) < 2 or not row[0]:
+            continue
+        account = row[0].strip()
+        for sub in split_raw_commodities(row[1].strip()):
+            qty, com = _parse_budget_amount(sub)
+            if not qty:
+                continue
+            key = (account, com)
+            sums[key] = sums.get(key, Decimal("0")) + abs(qty)
+
+    def _sort_key(item: tuple[tuple[str, str], Decimal]) -> tuple[bool, Decimal, str]:
+        (account, com), amount = item
+        return (com != commodity, -amount, account)
+
+    return [
+        (account, amount, com)
+        for (account, com), amount in sorted(sums.items(), key=_sort_key)
+    ]
+
+
 def _load_account_breakdown(
-    file: str | Path, account_type: str, period: str
+    file: str | Path,
+    account_type: str,
+    period: str,
+    commodity: str | None = None,
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account breakdown for a single period.
 
@@ -1124,6 +1173,10 @@ def _load_account_breakdown(
         account_type: The account type query (e.g. ``"type:X"`` for expenses
             or ``"type:R"`` for revenue/income).
         period: A period string like ``'2026-02'``.
+        commodity: Optional target commodity for conversion (``-X``) with
+            ``--infer-market-prices``, so amounts in different commodities
+            become comparable.  Commodities without a price stay unchanged
+            (hledger's ``-X`` semantics).
 
     Returns:
         A list of ``(account, quantity, commodity)`` tuples sorted by amount
@@ -1132,35 +1185,26 @@ def _load_account_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    output = run_hledger(
+    args = [
         "balance", account_type,
         "-p", period, "--flat", "--no-total", "-O", "csv",
-        file=file,
-    )
+    ]
+    if commodity:
+        args.extend(["-X", commodity, "--infer-market-prices"])
+    output = run_hledger(*args, file=file)
 
-    results: list[tuple[str, Decimal, str]] = []
-    reader = csv.reader(io.StringIO(output))
-    next(reader, None)  # skip header
-    for row in reader:
-        if len(row) < 2 or not row[0]:
-            continue
-        account = row[0].strip()
-        qty, com = _parse_budget_amount(row[1].strip())
-        if qty:
-            results.append((account, abs(qty), com))
-
-    results.sort(key=lambda x: x[1], reverse=True)
-    return results
+    return _parse_breakdown_csv(output, commodity)
 
 
 def load_expense_breakdown(
-    file: str | Path, period: str
+    file: str | Path, period: str, commodity: str | None = None
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account expense breakdown for a single period.
 
     Args:
         file: Path to the journal file.
         period: A period string like ``'2026-02'``.
+        commodity: Optional target commodity for ``-X`` conversion.
 
     Returns:
         A list of ``(account, quantity, commodity)`` tuples sorted by amount
@@ -1169,17 +1213,18 @@ def load_expense_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return _load_account_breakdown(file, "type:X", period)
+    return _load_account_breakdown(file, "type:X", period, commodity)
 
 
 def load_income_breakdown(
-    file: str | Path, period: str
+    file: str | Path, period: str, commodity: str | None = None
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account income breakdown for a single period.
 
     Args:
         file: Path to the journal file.
         period: A period string like ``'2026-02'``.
+        commodity: Optional target commodity for ``-X`` conversion.
 
     Returns:
         A list of ``(account, quantity, commodity)`` tuples sorted by amount
@@ -1188,11 +1233,12 @@ def load_income_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return _load_account_breakdown(file, "type:R", period)
+    return _load_account_breakdown(file, "type:R", period, commodity)
 
 
 def load_liabilities_breakdown(
     file: str | Path,
+    commodity: str | None = None,
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account liabilities breakdown (total outstanding balance).
 
@@ -1201,6 +1247,8 @@ def load_liabilities_breakdown(
 
     Args:
         file: Path to the journal file.
+        commodity: Optional target commodity for ``-X`` conversion, so
+            liabilities held in different commodities can be compared.
 
     Returns:
         A list of ``(account, quantity, commodity)`` tuples sorted by
@@ -1209,25 +1257,12 @@ def load_liabilities_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    output = run_hledger(
-        "balance", "type:L",
-        "--flat", "--no-total", "-O", "csv",
-        file=file,
-    )
+    args = ["balance", "type:L", "--flat", "--no-total", "-O", "csv"]
+    if commodity:
+        args.extend(["-X", commodity, "--infer-market-prices"])
+    output = run_hledger(*args, file=file)
 
-    results: list[tuple[str, Decimal, str]] = []
-    reader = csv.reader(io.StringIO(output))
-    next(reader, None)  # skip header
-    for row in reader:
-        if len(row) < 2 or not row[0]:
-            continue
-        account = row[0].strip()
-        qty, com = _parse_budget_amount(row[1].strip())
-        if qty:
-            results.append((account, abs(qty), com))
-
-    results.sort(key=lambda x: x[1], reverse=True)
-    return results
+    return _parse_breakdown_csv(output, commodity)
 
 
 def load_investment_positions(

@@ -58,14 +58,20 @@ For multi-currency journals, the default currency is resolved in this order:
 When resolved, the Accounts and Summary views convert balances to that
 currency using `hledger -X --infer-market-prices`, so `P` price directives in
 the journal are honored (see `examples/multicurrency-prices.journal`).
-Commodities without a price are shown in their original currency.
+Commodities without a price are shown in their original currency, and the
+Summary's Income / Expenses / Liabilities breakdowns show `—` instead of a
+percentage for them (a note names the excluded commodities). Percentages are
+always computed on converted amounts, so rows in different currencies are
+never compared one-to-one.
 
 When nothing is resolved, the Accounts view shows each account's balances in
 their original currencies (stacked within the cell), the Reports view's flat
 multi-period mode marks multi-currency accounts with a `◆` prefix, and the
 Summary overview shows a per-currency balance line under each card (marquee
 scrolling when it overflows). The Reports view's stacked mode (`M`) always
-expands each currency into its own row.
+expands each currency into its own row. Summary breakdown percentages stay
+hidden (`—`) for journals that mix currencies in that case, since there is no
+common denominator; single-currency journals are unaffected.
 
 To pin a currency via config instead:
 
