@@ -93,3 +93,12 @@ class PostingRow(Widget):
     def commodity(self) -> str:
         """Get the default commodity (static label value)."""
         return self.initial_commodity
+
+    def copy_values(self) -> tuple[str, str]:
+        """Return ``(account, amount)`` for the posting clipboard."""
+        return self.account, self.amount
+
+    def set_values(self, account: str, amount: str) -> None:
+        """Replace the account and amount inputs (used by paste)."""
+        self.query_one(f"#account-{self.row_index}", Input).value = account
+        self.query_one(f"#amount-{self.row_index}", AmountInput).value = amount
