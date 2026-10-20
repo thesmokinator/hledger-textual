@@ -94,6 +94,11 @@ class PostingRow(Widget):
         """Get the default commodity (static label value)."""
         return self.initial_commodity
 
+    @property
+    def is_ready(self) -> bool:
+        """Whether the row's inputs are mounted (False just after ``mount``)."""
+        return len(self.query(f"#account-{self.row_index}")) > 0
+
     def copy_values(self) -> tuple[str, str]:
         """Return ``(account, amount)`` for the posting clipboard."""
         return self.account, self.amount

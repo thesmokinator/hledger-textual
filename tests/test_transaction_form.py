@@ -1295,3 +1295,57 @@ class TestPostingClipboard:
 
             assert rows[0].account == ""
             assert form._posting_clipboard is None
+
+
+class TestRunningBalance:
+    """The Sum line under the posting rows updates live (issue #142)."""
+
+    async def test_sum_tracks_balanced_and_unbalanced(self, app: HledgerTuiApp):
+        """Green check when balanced, red cross with the remainder otherwise."""
+        from textual.widgets import Input, Static
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:food"
+            rows[0].query_one(".amount-input", AmountInput).value = "50.00"
+            rows[1].query_one(".account-input", Input).value = "assets:bank"
+            rows[1].query_one(".amount-input", AmountInput).value = "-50.00"
+            await pilot.pause()
+
+            summary = form.query_one("#postings-sum", Static)
+            assert "\u2713" in str(summary.renderable)
+
+            rows[1].query_one(".amount-input", AmountInput).value = "-40.00"
+            await pilot.pause()
+            text = str(summary.renderable)
+            assert "\u2717" in text
+            assert "10.00" in text
+
+    async def test_unparsable_amount_marks_incomplete(self, app: HledgerTuiApp):
+        """A bad amount shows 'incomplete' instead of a wrong total."""
+        from textual.widgets import Input, Static
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:food"
+            rows[0].query_one(".amount-input", AmountInput).value = "abc"
+            await pilot.pause()
+
+            summary = form.query_one("#postings-sum", Static)
+            assert "incomplete" in str(summary.renderable)

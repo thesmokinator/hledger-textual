@@ -202,3 +202,35 @@ class TestRecurringPaneClone:
             assert description.strip() != ""
             title = form.query_one("#form-title", Static)
             assert "Clone" in str(title.renderable)
+
+
+class TestRecurringFormRunningBalance:
+    """The recurring form shows the same running-balance line (issue #142)."""
+
+    async def test_sum_updates_as_amounts_are_typed(self, empty_app: HledgerTuiApp) -> None:
+        from textual.widgets import Input, Static
+
+        from hledger_textual.widgets.posting_row import PostingRow
+
+        async with empty_app.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+
+            form = empty_app.screen
+            assert isinstance(form, RecurringFormScreen)
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:rent"
+            rows[0].query_one(".amount-input", Input).value = "50"
+            rows[1].query_one(".account-input", Input).value = "assets:bank"
+            rows[1].query_one(".amount-input", Input).value = "-50"
+            await pilot.pause()
+
+            summary = form.query_one("#postings-sum", Static)
+            assert "\u2713" in str(summary.renderable)
+
+            rows[1].query_one(".amount-input", Input).value = "abc"
+            await pilot.pause()
+            assert "incomplete" in str(summary.renderable)

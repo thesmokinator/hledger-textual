@@ -39,6 +39,10 @@ from hledger_textual.screens._form_account_suggestions import FormAccountSuggest
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
+from hledger_textual.widgets.posting_sum import (
+    collect_posting_totals,
+    format_posting_sum,
+)
 
 # ---------------------------------------------------------------------------
 # Hledger amount string parser
@@ -489,6 +493,7 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
                     id="default-commodity-hint",
                 )
                 yield Vertical(id="postings-container")
+                yield Static("", id="postings-sum")
                 yield Static("", id="cost-basis-hint")
 
                 with Horizontal(id="posting-buttons"):
@@ -541,6 +546,8 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
             self._add_posting_row(label="#1:", commodity=default_commodity)
             self._add_posting_row(label="#2:", commodity=default_commodity)
 
+        self.call_after_refresh(self._update_posting_sum)
+
     def _add_posting_row(
         self,
         label: str = "",
@@ -566,6 +573,7 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
         )
         container.mount(row)
         self.posting_count += 1
+        self.call_after_refresh(self._update_posting_sum)
 
     def _remove_last_posting_row(self) -> None:
         """Remove the last posting row from the form."""
@@ -574,6 +582,7 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
         if len(rows) > 0:
             rows.last().remove()
             self.posting_count -= 1
+            self.call_after_refresh(self._update_posting_sum)
 
     @work(thread=True, exclusive=True)
     def _load_commodity_data(self) -> None:
@@ -650,14 +659,39 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
 
         return hint
 
+    def _parse_posting_amount(
+        self, text: str, commodity: str
+    ) -> tuple[Decimal, str] | None:
+        """Parse a posting amount for the running sum, or None if invalid."""
+        amount = parse_amount_str(
+            text,
+            commodity or self.default_commodity,
+            self.commodity_styles,
+        )
+        if amount is None:
+            return None
+        return amount.quantity, amount.commodity
+
+    def _update_posting_sum(self) -> None:
+        """Recompute the running balance shown under the posting rows."""
+        if not self.is_attached or not self.query("#postings-sum"):
+            return
+        widget = self.query_one("#postings-sum", Static)
+        rows = list(self.query_one("#postings-container", Vertical).query(PostingRow))
+        totals, incomplete = collect_posting_totals(rows, self._parse_posting_amount)
+        widget.update(
+            format_posting_sum(totals, incomplete, self.default_commodity)
+        )
+
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Update cost basis hint when an amount field changes.
+        """Update the running balance and cost basis hint on amount changes.
 
         Args:
             event: The Input.Changed event from any input in the form.
         """
         if not event.input.id or not event.input.id.startswith("amount-"):
             return
+        self._update_posting_sum()
         hint_widget = self.query_one("#cost-basis-hint", Static)
         parsed = _extract_commodity_and_qty(event.value, self.commodity_styles)
         if parsed:
