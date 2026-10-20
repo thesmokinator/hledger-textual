@@ -13,6 +13,7 @@ from textual.widget import Widget
 
 from hledger_textual.cache import HledgerCache
 from hledger_textual.config import resolve_default_commodity
+from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import HledgerError, load_period_summary
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
@@ -340,8 +341,9 @@ class TransactionsPane(Widget):
                 self._table.post_message, TransactionsTable.JournalChanged()
             )
         except JournalError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
 
     # ------------------------------------------------------------------
@@ -453,11 +455,13 @@ class TransactionsPane(Widget):
                 append_transaction(self.journal_file, txn)
                 count += 1
             except JournalError as exc:
+                title, body = humanize_error(exc)
                 self.app.call_from_thread(
                     self.notify,
-                    f"Import failed at transaction {count + 1}: {exc}",
+                    f"Import failed at transaction {count + 1}: {body}",
+                    title=title,
                     severity="error",
-                    timeout=8,
+                    timeout=10,
                 )
                 break
 

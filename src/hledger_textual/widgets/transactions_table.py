@@ -16,6 +16,7 @@ from textual.widgets import DataTable, Input, Static
 from hledger_textual.dateutil import next_month as _next_month
 from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.cache import HledgerCache
+from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
@@ -333,8 +334,9 @@ class TransactionsTable(Widget):
             self.app.call_from_thread(self.notify, "Transaction updated", timeout=3)
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
 
     def do_toggle_status(self, target: TransactionStatus) -> None:
@@ -380,8 +382,9 @@ class TransactionsTable(Widget):
             )
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
 
     @work(thread=True)
@@ -399,8 +402,9 @@ class TransactionsTable(Widget):
             )
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
 
     @work(thread=True)
@@ -413,8 +417,9 @@ class TransactionsTable(Widget):
             self.app.call_from_thread(self.notify, "Transaction deleted", timeout=3)
             self.app.call_from_thread(self.post_message, self.JournalChanged())
         except JournalError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
 
     # ------------------------------------------------------------------

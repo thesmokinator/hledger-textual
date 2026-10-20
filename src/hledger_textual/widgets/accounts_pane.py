@@ -19,6 +19,7 @@ from hledger_textual.config import (
     resolve_default_commodity,
     save_accounts_view,
 )
+from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import (
     HledgerError,
     load_account_balances,
@@ -102,15 +103,18 @@ class AccountsPane(DataTablePaneMixin, Widget):
                 self._tree_roots = load_account_tree_balances(
                     self.journal_file, commodity=self._commodity
                 )
-            except HledgerError:
+            except HledgerError as exc:
                 self._tree_roots = []
+                title, body = humanize_error(exc)
+                self.notify(body, title=title, severity="error", timeout=10)
         else:
             try:
                 self._balances = load_account_balances(
                     self.journal_file, cache=self._cache, commodity=self._commodity
                 )
             except HledgerError as exc:
-                self.notify(str(exc), severity="error", timeout=8)
+                title, body = humanize_error(exc)
+                self.notify(body, title=title, severity="error", timeout=10)
                 self._balances = []
 
         self._update_table()
