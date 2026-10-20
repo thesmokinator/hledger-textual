@@ -15,6 +15,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
+from hledger_textual.amountutil import describe_amount_error
 from hledger_textual.config import load_default_commodity
 from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
@@ -339,7 +340,11 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
                 try:
                     quantity = Decimal(amount_str)
                 except InvalidOperation:
-                    self.notify(f"Invalid amount: {amount_str}", severity="error", timeout=3)
+                    self.notify(
+                        f"Invalid amount: {describe_amount_error(amount_str)}",
+                        severity="error",
+                        timeout=4,
+                    )
                     return
 
                 style = AmountStyle(

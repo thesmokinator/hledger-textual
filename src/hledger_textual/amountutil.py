@@ -160,3 +160,62 @@ def parse_amount_string(s: str) -> tuple[Decimal, str]:
         return quantity, commodity
 
     raise ValueError(f"Cannot parse amount: {s}")
+
+
+def describe_amount_error(value: str) -> str:
+    """Explain why an amount string cannot be parsed.
+
+    Called only after parsing failed, so the goal is a short, plain-language
+    reason rather than a full grammar.  Distinct categories help users fix the
+    input without re-reading the whole format hint.
+
+    Args:
+        value: The raw amount string entered by the user.
+
+    Returns:
+        A one-line, user-facing description of the problem.
+    """
+    s = value.strip()
+    if not s:
+        return "an amount is required"
+
+    if "@" in s:
+        base, _, cost = s.partition("@")
+        if cost.startswith("@"):
+            cost = cost[1:]
+        if not base.strip():
+            return "the quantity before @ is missing"
+        if not cost.strip():
+            return "the cost after @ is missing"
+
+    if not re.search(r"\d", s):
+        return "the amount must include a number"
+
+    for index, char in enumerate(s):
+        if char == "-" and (index + 1 == len(s) or not s[index + 1].isdigit()):
+            return "a negative amount needs the minus sign right before the number (e.g. -50.00)"
+
+    # A number uses one decimal separator at most; repeated separators of the
+    # same kind ("1.2.3", "1,2,3") are the usual typo.  Three-digit groups
+    # ("1.000.000") are thousands separators and parse fine.
+    dots = s.count(".")
+    commas = s.count(",")
+    if dots > 1 and not commas:
+        if not all(len(group) == 3 for group in s.split(".")[1:]):
+            return "the amount has too many decimal points"
+    if commas > 1 and not dots:
+        if not all(len(group) == 3 for group in s.split(",")[1:]):
+            return "the amount has too many decimal points"
+
+    currency_symbols = re.findall(r"[€$£¥₿₹]", s)
+    if len(currency_symbols) > 1:
+        return "only one currency or commodity is allowed"
+
+    symbols = re.findall(r"[^\d\s.,@+\-]+", s)
+    if len(symbols) > 1:
+        return "only one currency or commodity is allowed"
+
+    return (
+        "the amount is not a recognised number with an optional currency "
+        "(e.g. 50.00, €50.00, -5 XEON @ €40.00)"
+    )

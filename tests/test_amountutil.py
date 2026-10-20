@@ -6,7 +6,11 @@ from decimal import Decimal
 
 import pytest
 
-from hledger_textual.amountutil import _normalize_number_string, parse_amount_string
+from hledger_textual.amountutil import (
+    _normalize_number_string,
+    describe_amount_error,
+    parse_amount_string,
+)
 
 
 class TestParseAmountString:
@@ -223,3 +227,51 @@ class TestDecimalArithmeticInvariants:
         delta = actual - budget
         assert delta == Decimal("-300.00")
         assert delta < 0
+
+
+class TestDescribeAmountError:
+    """Tests for describe_amount_error (issue #140)."""
+
+    def test_empty(self):
+        """An empty amount is reported as missing."""
+        assert describe_amount_error("") == "an amount is required"
+
+    def test_no_digits(self):
+        """Text without a number is reported as such."""
+        assert "include a number" in describe_amount_error("ten euros")
+
+    def test_too_many_decimal_points(self):
+        """Repeated decimal separators are called out."""
+        assert "decimal points" in describe_amount_error("12.34.56")
+        assert "decimal points" in describe_amount_error("12,34,56")
+
+    def test_thousands_grouping_is_not_an_error(self):
+        """Three-digit groups are not mistaken for extra decimals."""
+        assert "decimal points" not in describe_amount_error("1.000.000")
+
+    def test_misplaced_minus(self):
+        """A minus not attached to the number is explained."""
+        assert "minus sign" in describe_amount_error("50-")
+        assert "minus sign" in describe_amount_error("- 50")
+
+    def test_minus_after_currency_is_fine(self):
+        """€-50 is a valid negative amount, not a misplaced minus."""
+        assert "minus sign" not in describe_amount_error("€-50.00")
+
+    def test_missing_quantity_before_cost(self):
+        """A cost annotation without a quantity is explained."""
+        assert "quantity before @" in describe_amount_error("@ €40.00")
+
+    def test_missing_cost(self):
+        """A cost annotation without a cost is explained."""
+        assert "cost after @" in describe_amount_error("-5 XEON @")
+
+    def test_two_currencies(self):
+        """Two commodity symbols are rejected with a dedicated message."""
+        assert "only one currency" in describe_amount_error("€$50.00")
+
+    def test_fallback_is_a_format_hint(self):
+        """Unclassified failures still point at the accepted formats."""
+        message = describe_amount_error("50 ??")
+        assert "not a recognised number" in message
+        assert "50.00" in message
