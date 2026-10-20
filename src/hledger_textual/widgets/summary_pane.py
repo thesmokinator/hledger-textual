@@ -61,6 +61,85 @@ def _progress_bar(pct: float, width: int = 8) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+def _totals_by_commodity(
+    rows: list[tuple[str, Decimal, str]],
+) -> dict[str, Decimal]:
+    """Sum breakdown amounts per commodity.
+
+    Args:
+        rows: ``(account, amount, commodity)`` breakdown rows.
+
+    Returns:
+        A dict mapping commodity to the sum of its row amounts.
+    """
+    totals: dict[str, Decimal] = {}
+    for _, amount, com in rows:
+        totals[com] = totals.get(com, Decimal("0")) + amount
+    return totals
+
+
+def _share_pct(
+    amount: Decimal,
+    commodity: str,
+    totals: dict[str, Decimal],
+    target: str | None,
+) -> float | None:
+    """Return a row's percentage share of the comparable report total.
+
+    Amounts in different commodities are not comparable, so a share is only
+    computed when there is a common denominator:
+
+    - with a resolved default commodity, only rows already in it are counted
+      (hledger leaves commodities without a price unconverted);
+    - without one, the journal must be single-currency.
+
+    Args:
+        amount: The row amount.
+        commodity: The row commodity.
+        totals: Per-commodity totals for the whole report.
+        target: The resolved default commodity, or None.
+
+    Returns:
+        The percentage share, or None when the share is not comparable.
+    """
+    if target is None:
+        if len(totals) != 1:
+            return None
+        total = next(iter(totals.values()))
+    elif commodity == target:
+        total = totals.get(target, Decimal("0"))
+    else:
+        return None
+    if not total:
+        return None
+    return float(amount / total * 100)
+
+
+def _share_cell(pct: float | None, width: int = 12) -> str:
+    """Render a percentage cell as a progress bar, or an em dash if unknown."""
+    if pct is None:
+        return "\u2014"
+    return f"{_progress_bar(pct, width=width)} {pct:.0f}%"
+
+
+def _conversion_note(totals: dict[str, Decimal], target: str | None) -> str:
+    """Explain why some percentages are hidden, or return an empty string."""
+    if target is None:
+        if len(totals) > 1:
+            return (
+                "[yellow]\u26a0 Multiple currencies: set default_commodity "
+                "in config.toml to compare amounts.[/yellow]"
+            )
+        return ""
+    missing = sorted(com for com in totals if com and com != target and totals[com])
+    if not missing:
+        return ""
+    return (
+        f"[yellow]\u26a0 No price for {', '.join(missing)}: "
+        "excluded from percentages.[/yellow]"
+    )
+
+
 class SummaryPane(Widget):
     """Widget showing journal statistics and a monthly financial overview.
 
@@ -121,6 +200,7 @@ class SummaryPane(Widget):
                     classes="summary-section-title",
                 )
                 yield _DisplayTable(id="summary-liabilities-table", show_cursor=False)
+                yield Static("", id="summary-liabilities-note", classes="summary-note")
 
             # Investments section
             with Vertical(id="summary-portfolio"):
@@ -140,6 +220,7 @@ class SummaryPane(Widget):
                     classes="summary-section-title",
                 )
                 yield DataTable(id="summary-income-table")
+                yield Static("", id="summary-income-note", classes="summary-note")
 
             # Expense breakdown — current month only
             with Vertical(id="summary-breakdown"):
@@ -149,6 +230,7 @@ class SummaryPane(Widget):
                     classes="summary-section-title",
                 )
                 yield DataTable(id="summary-breakdown-table")
+                yield Static("", id="summary-breakdown-note", classes="summary-note")
 
     # Column index → fixed width for portfolio table (col 0 = flex)
     _PORTFOLIO_FIXED = {1: 12, 2: 18, 3: 18}
@@ -183,6 +265,15 @@ class SummaryPane(Widget):
         breakdown_table.add_column("Account", width=20)
         breakdown_table.add_column("Amount", width=self._BREAKDOWN_FIXED[1])
         breakdown_table.add_column("% of total", width=self._BREAKDOWN_FIXED[2])
+
+        # Conversion notes stay hidden until a breakdown reports mixed
+        # currencies or commodities without a price.
+        for selector in (
+            "#summary-liabilities-note",
+            "#summary-income-note",
+            "#summary-breakdown-note",
+        ):
+            self._set_note(selector, "")
 
         self._set_empty_state_visible(False)
         self._load_static_data()
@@ -280,7 +371,9 @@ class SummaryPane(Widget):
 
         # --- Liabilities: total outstanding balance ---
         try:
-            liabilities = load_liabilities_breakdown(self.journal_file)
+            liabilities = load_liabilities_breakdown(
+                self.journal_file, commodity=commodity
+            )
         except HledgerError:
             liabilities = []
 
@@ -325,6 +418,7 @@ class SummaryPane(Widget):
             income_by_commodity,
             expenses_by_commodity,
             net_by_commodity,
+            commodity,
         )
 
         if not will_fetch:
@@ -370,6 +464,7 @@ class SummaryPane(Widget):
         income_by_commodity: list[tuple[str, Decimal]] | None = None,
         expenses_by_commodity: list[tuple[str, Decimal]] | None = None,
         net_by_commodity: list[tuple[str, Decimal]] | None = None,
+        commodity: str | None = None,
     ) -> None:
         """Apply card values, basic investments, and liabilities."""
         if not self.is_attached:
@@ -426,17 +521,21 @@ class SummaryPane(Widget):
 
             if not liabilities:
                 liabilities_section.display = False
+                self._set_note("#summary-liabilities-note", "")
             else:
                 liabilities_section.display = True
-                total_liab = sum(qty for _, qty, _ in liabilities)
-                for account, qty, commodity in liabilities:
-                    pct = float(qty / total_liab * 100) if total_liab else 0.0
-                    bar = _progress_bar(pct, width=12)
+                totals = _totals_by_commodity(liabilities)
+                for account, qty, com in liabilities:
+                    share = _share_pct(qty, com, totals, commodity)
                     ltable.add_row(
                         Text(account),
-                        fmt_amount(qty, commodity),
-                        f"{bar} {pct:.0f}%",
+                        fmt_amount(qty, com),
+                        _share_cell(share),
                     )
+                self._set_note(
+                    "#summary-liabilities-note",
+                    _conversion_note(totals, commodity),
+                )
                 self.call_after_refresh(
                     distribute_column_widths, ltable, self._BREAKDOWN_FIXED
                 )
@@ -533,23 +632,33 @@ class SummaryPane(Widget):
     def _load_breakdown_data(self) -> None:
         """Load income and expense breakdowns for the selected month."""
         period = self._period_str()
+        # Convert both sides to the default commodity so that percentages are
+        # computed on comparable amounts (mirrors the cards and Accounts view).
+        commodity = resolve_default_commodity(self.journal_file)
 
         try:
-            income_breakdown = load_income_breakdown(self.journal_file, period)
+            income_breakdown = load_income_breakdown(
+                self.journal_file, period, commodity=commodity
+            )
         except HledgerError:
             income_breakdown = []
 
         try:
-            breakdown = load_expense_breakdown(self.journal_file, period)
+            breakdown = load_expense_breakdown(
+                self.journal_file, period, commodity=commodity
+            )
         except HledgerError:
             breakdown = []
 
         self.app.call_from_thread(
-            self._apply_breakdown_data, income_breakdown, breakdown
+            self._apply_breakdown_data, income_breakdown, breakdown, commodity
         )
 
     def _apply_breakdown_data(
-        self, income_breakdown: list, breakdown: list
+        self,
+        income_breakdown: list,
+        breakdown: list,
+        commodity: str | None = None,
     ) -> None:
         """Apply loaded income and expense breakdowns to their tables."""
         # Guard against teardown: is_attached can still be True for a moment
@@ -570,17 +679,20 @@ class SummaryPane(Widget):
 
         if not income_breakdown:
             income_section.display = False
+            self._set_note("#summary-income-note", "")
         else:
             income_section.display = True
-            total_inc = sum(qty for _, qty, _ in income_breakdown)
-            for account, qty, commodity in income_breakdown:
-                pct = float(qty / total_inc * 100) if total_inc else 0.0
-                bar = _progress_bar(pct, width=12)
+            totals = _totals_by_commodity(income_breakdown)
+            for account, qty, com in income_breakdown:
+                share = _share_pct(qty, com, totals, commodity)
                 itable.add_row(
                     Text(account),
-                    fmt_amount(qty, commodity),
-                    f"{bar} {pct:.0f}%",
+                    fmt_amount(qty, com),
+                    _share_cell(share),
                 )
+            self._set_note(
+                "#summary-income-note", _conversion_note(totals, commodity)
+            )
             self.call_after_refresh(
                 distribute_column_widths, itable, self._BREAKDOWN_FIXED
             )
@@ -599,24 +711,31 @@ class SummaryPane(Widget):
 
         if not breakdown:
             expense_section.display = False
+            self._set_note("#summary-breakdown-note", "")
             self._sync_empty_state()
             return
 
         expense_section.display = True
-        total_exp = sum(qty for _, qty, _ in breakdown)
-        for account, qty, commodity in breakdown:
-            pct = float(qty / total_exp * 100) if total_exp else 0.0
-            bar = _progress_bar(pct, width=12)
+        totals = _totals_by_commodity(breakdown)
+        for account, qty, com in breakdown:
+            share = _share_pct(qty, com, totals, commodity)
             table.add_row(
                 Text(account),
-                fmt_amount(qty, commodity),
-                f"{bar} {pct:.0f}%",
+                fmt_amount(qty, com),
+                _share_cell(share),
             )
+        self._set_note("#summary-breakdown-note", _conversion_note(totals, commodity))
 
         self.call_after_refresh(
             distribute_column_widths, table, self._BREAKDOWN_FIXED
         )
         self._sync_empty_state()
+
+    def _set_note(self, selector: str, text: str) -> None:
+        """Update a conversion note below a breakdown table."""
+        note = self.query_one(selector, Static)
+        note.update(text)
+        note.display = bool(text)
 
     def _sync_empty_state(self) -> None:
         """Show the summary empty state once all summary sections have loaded."""
