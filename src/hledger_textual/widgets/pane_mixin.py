@@ -5,6 +5,7 @@ from __future__ import annotations
 from textual import work
 from textual.widgets import DataTable
 
+from hledger_textual.error_messages import humanize_error
 from hledger_textual.widgets import distribute_column_widths
 
 
@@ -110,6 +111,11 @@ class DataTablePaneMixin:
                 self.notify, f"Exported to {path}", timeout=5
             )
         except Exception as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, f"Export failed: {exc}", severity="error", timeout=8
+                self.notify,
+                f"Export failed: {body}",
+                title=title,
+                severity="error",
+                timeout=10,
             )

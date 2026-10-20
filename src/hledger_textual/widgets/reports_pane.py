@@ -16,6 +16,7 @@ from rich.text import Text
 from textual.widgets import DataTable, Select, Static
 
 from hledger_textual.cache import HledgerCache
+from hledger_textual.error_messages import humanize_error
 from hledger_textual.config import (
     delete_custom_report,
     load_custom_reports,
@@ -406,8 +407,9 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 mode="tree" if self._tree_mode else "flat",
             )
         except HledgerError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
             data = ReportData(title="", period_headers=[], rows=[])
 
@@ -441,10 +443,11 @@ class ReportsPane(DataTablePaneMixin, Widget):
         try:
             output = run_custom_report(self.journal_file, command)
         except HledgerError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
-            output = f"Error: {exc}"
+            output = f"Error: {body}"
 
         self.app.call_from_thread(self._apply_custom_output, output, command)
 
