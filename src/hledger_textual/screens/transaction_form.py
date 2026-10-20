@@ -36,6 +36,7 @@ from hledger_textual.models import (
     TransactionStatus,
 )
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
+from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
@@ -369,7 +370,9 @@ STATUS_OPTIONS = [
 ]
 
 
-class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction | None]):
+class TransactionFormScreen(
+    FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[Transaction | None]
+):
     """Centered modal form for creating or editing a transaction."""
 
     BINDINGS = [
@@ -546,6 +549,7 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
             self._add_posting_row(label="#1:", commodity=default_commodity)
             self._add_posting_row(label="#2:", commodity=default_commodity)
 
+        self.call_after_refresh(self.capture_initial_state)
         self.call_after_refresh(self._update_posting_sum)
 
     def _add_posting_row(
@@ -714,11 +718,7 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
             case "btn-save":
                 self._save()
             case "btn-form-cancel":
-                self.dismiss(None)
-
-    def action_cancel(self) -> None:
-        """Cancel the form."""
-        self.dismiss(None)
+                self.action_cancel()
 
     def _focused_posting_row(self) -> PostingRow | None:
         """Return the posting row that contains the focused widget, if any."""

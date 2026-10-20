@@ -1349,3 +1349,66 @@ class TestRunningBalance:
 
             summary = form.query_one("#postings-sum", Static)
             assert "incomplete" in str(summary.renderable)
+
+
+class TestUnsavedChangesGuard:
+    """Escape asks before discarding typed data (issue #149)."""
+
+    async def test_clean_form_closes_on_first_escape(self, app: HledgerTuiApp):
+        """An untouched form closes immediately."""
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            assert isinstance(app.screen, TransactionFormScreen)
+
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert not isinstance(app.screen, TransactionFormScreen)
+
+    async def test_modified_form_warns_then_discards(self, app: HledgerTuiApp):
+        """The first Escape warns, the second one discards."""
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            form.query_one("#input-description", Input).value = "coffee"
+            await pilot.pause()
+
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert isinstance(app.screen, TransactionFormScreen)
+            assert form._discard_armed is True
+
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert not isinstance(app.screen, TransactionFormScreen)
+
+    async def test_cancel_button_uses_the_same_guard(self, app: HledgerTuiApp):
+        """Clicking Cancel with changes warns instead of closing."""
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            form.query_one("#input-description", Input).value = "coffee"
+            await pilot.pause()
+
+            await pilot.click(form.query_one("#btn-form-cancel"))
+            await pilot.pause(delay=0.3)
+            assert isinstance(app.screen, TransactionFormScreen)

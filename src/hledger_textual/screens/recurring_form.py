@@ -21,6 +21,7 @@ from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
 from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
+from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 from hledger_textual.widgets.posting_sum import (
@@ -47,7 +48,9 @@ def _slugify(text: str) -> str:
     return slug or "rule"
 
 
-class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule | None]):
+class RecurringFormScreen(
+    FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[RecurringRule | None]
+):
     """Centered modal form for creating or editing a recurring rule."""
 
     BINDINGS = [
@@ -200,6 +203,7 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
             self._add_posting_row(label="Debit:", commodity=default_commodity)
             self._add_posting_row(label="Credit:", commodity="")
 
+        self.call_after_refresh(self.capture_initial_state)
         self.call_after_refresh(self._update_posting_sum)
 
     def _add_posting_row(
@@ -318,11 +322,7 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
             case "btn-save":
                 self._save()
             case "btn-form-cancel":
-                self.dismiss(None)
-
-    def action_cancel(self) -> None:
-        """Cancel the form."""
-        self.dismiss(None)
+                self.action_cancel()
 
     def _save(self) -> None:
         """Validate inputs and dismiss with a RecurringRule (or None on cancel)."""
