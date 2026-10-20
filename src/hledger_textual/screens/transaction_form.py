@@ -17,6 +17,7 @@ from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.amountutil import (
     decimal_places_for_number_string,
+    describe_amount_error,
     normalize_number_string_for_style,
 )
 from hledger_textual.config import load_default_commodity
@@ -799,10 +800,9 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
                     amount = parse_amount_str(row.amount, default_commodity, self.commodity_styles)
                     if amount is None:
                         self.notify(
-                            f"Invalid amount: \"{row.amount}\". "
-                            "Use: 50.00 | €50.00 | -5 STCK @@ €200.00 | -5 STCK @ €40.00",
+                            f"Invalid amount: {describe_amount_error(row.amount)}",
                             severity="error",
-                            timeout=6,
+                            timeout=5,
                         )
                         return
                     amounts.append(amount)
