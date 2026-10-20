@@ -93,3 +93,8 @@ class PostingRow(Widget):
     def commodity(self) -> str:
         """Get the default commodity (static label value)."""
         return self.initial_commodity
+
+    @property
+    def is_ready(self) -> bool:
+        """Whether the row's inputs are mounted (False just after ``mount``)."""
+        return len(self.query(f"#account-{self.row_index}")) > 0

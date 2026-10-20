@@ -508,6 +508,11 @@ TransactionFormScreen {
     height: auto;
 }
 
+#postings-sum {
+    padding: 0 1;
+    color: $text-muted;
+}
+
 PostingRow {
     height: auto;
 }

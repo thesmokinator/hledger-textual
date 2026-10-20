@@ -22,6 +22,10 @@ from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
+from hledger_textual.widgets.posting_sum import (
+    collect_posting_totals,
+    format_posting_sum,
+)
 
 _PERIOD_OPTIONS = [(p.capitalize(), p) for p in SUPPORTED_PERIODS] + [("Custom", "custom")]
 
@@ -149,6 +153,7 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
 
                 yield Static("Postings*", id="postings-header")
                 yield Vertical(id="postings-container")
+                yield Static("", id="postings-sum")
 
                 with Horizontal(id="posting-buttons"):
                     yield Button("\\[+] Add posting", id="btn-add-posting")
@@ -188,6 +193,8 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
             self._add_posting_row(label="Debit:", commodity=default_commodity)
             self._add_posting_row(label="Credit:", commodity="")
 
+        self.call_after_refresh(self._update_posting_sum)
+
     def _add_posting_row(
         self,
         label: str = "",
@@ -209,6 +216,7 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
         )
         container.mount(row)
         self.posting_count += 1
+        self.call_after_refresh(self._update_posting_sum)
 
     def _remove_last_posting_row(self) -> None:
         """Remove the last posting row from the form."""
@@ -217,6 +225,32 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
         if len(rows) > 0:
             rows.last().remove()
             self.posting_count -= 1
+            self.call_after_refresh(self._update_posting_sum)
+
+    def _parse_posting_amount(
+        self, text: str, commodity: str
+    ) -> tuple[Decimal, str] | None:
+        """Parse a plain-decimal posting amount for the running sum."""
+        try:
+            return Decimal(text), commodity or load_default_commodity()
+        except InvalidOperation:
+            return None
+
+    def _update_posting_sum(self) -> None:
+        """Recompute the running balance shown under the posting rows."""
+        if not self.is_attached or not self.query("#postings-sum"):
+            return
+        widget = self.query_one("#postings-sum", Static)
+        rows = list(self.query_one("#postings-container", Vertical).query(PostingRow))
+        totals, incomplete = collect_posting_totals(rows, self._parse_posting_amount)
+        widget.update(
+            format_posting_sum(totals, incomplete, load_default_commodity())
+        )
+
+    @on(Input.Changed, ".amount-input")
+    def on_amount_changed(self, event: Input.Changed) -> None:
+        """Refresh the running balance as the user types an amount."""
+        self._update_posting_sum()
 
     @on(Select.Changed, "#recurring-select-period")
     def on_recurring_select_period_changed(self, event: Select.Changed) -> None:
