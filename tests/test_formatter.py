@@ -11,6 +11,7 @@ from hledger_textual.models import (
     TransactionStatus,
 )
 from hledger_textual.widgets.formatting import (
+    fmt_amount_pretty,
     fmt_amount_str,
     fmt_single_amount_str,
     get_commodity_name,
@@ -277,3 +278,54 @@ class TestGetCommodityName:
         """Unparseable amounts return empty string."""
         assert get_commodity_name("") == ""
         assert get_commodity_name("not an amount") == ""
+
+
+class TestAccountingRendering:
+    """Accounting conventions for display tables (issue #146)."""
+
+    def test_negative_currency_uses_parentheses(self):
+        """A negative amount becomes (€50.00) in red."""
+        assert fmt_amount_str("€-50.00", accounting=True) == "[red](€50.00)[/red]"
+
+    def test_negative_before_symbol(self):
+        """-€1.73 is normalised to parentheses without a minus."""
+        assert fmt_amount_str("-€1.73", accounting=True) == "[red](€1.73)[/red]"
+
+    def test_positive_is_unchanged(self):
+        """Positive amounts keep their normal rendering."""
+        assert fmt_amount_str("€50.00", accounting=True) == "€50.00"
+
+    def test_zero_is_muted(self):
+        """Zero amounts are de-emphasised."""
+        assert fmt_amount_str("€0.00", accounting=True) == "[dim]€0.00[/dim]"
+
+    def test_named_commodity_negative(self):
+        """Negative named-commodity amounts also use parentheses."""
+        assert fmt_amount_str("-5 XEON", accounting=True) == "[red](5 XEON)[/red]"
+
+    def test_multi_commodity_applies_per_line(self):
+        """Each sub-amount of a multi-commodity cell is styled on its own."""
+        assert fmt_amount_str("£-8.99, €14.99", accounting=True) == (
+            "[red](£8.99)[/red]\n€14.99"
+        )
+
+    def test_plain_zero(self):
+        """A bare zero is muted as well."""
+        assert fmt_amount_str("0", accounting=True) == "[dim]0[/dim]"
+
+    def test_accounting_is_opt_in(self):
+        """Without the flag the old minus-sign rendering is kept."""
+        assert fmt_amount_str("€-50.00") == "€-50.00"
+        assert fmt_single_amount_str("€-50.00") == "€-50.00"
+
+    def test_fmt_amount_pretty_negative(self):
+        """fmt_amount_pretty wraps numeric negatives."""
+        assert fmt_amount_pretty(Decimal("-1234.56"), "€") == "[red](€1,234.56)[/red]"
+
+    def test_fmt_amount_pretty_zero(self):
+        """fmt_amount_pretty mutes numeric zeros."""
+        assert fmt_amount_pretty(Decimal("0"), "€") == "[dim]€0.00[/dim]"
+
+    def test_fmt_amount_pretty_positive(self):
+        """fmt_amount_pretty leaves positives alone."""
+        assert fmt_amount_pretty(Decimal("12.50"), "€") == "€12.50"

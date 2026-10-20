@@ -398,3 +398,34 @@ class TestBudgetFormUnknownAccountWarning:
             warning = form.query_one("#budget-account-warning", Static)
 
             assert warning.parent is account_group
+
+
+class TestBudgetFormUnsavedChangesGuard:
+    """Escape asks before discarding typed data (issue #149)."""
+
+    async def test_clean_form_closes_immediately(self, tmp_path: Path):
+        """An untouched form closes on the first Escape."""
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert isinstance(app.screen, BudgetFormScreen)
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert not isinstance(app.screen, BudgetFormScreen)
+
+    async def test_modified_form_warns_then_discards(self, tmp_path: Path):
+        """A changed field requires a second Escape."""
+        app = _FormApp(tmp_path / "test.journal")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            form = app.screen
+            form.query_one("#budget-input-account", Input).value = "Expenses:Food"
+            await pilot.pause()
+
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert isinstance(app.screen, BudgetFormScreen)
+
+            await pilot.press("escape")
+            await pilot.pause(delay=0.3)
+            assert not isinstance(app.screen, BudgetFormScreen)

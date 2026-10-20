@@ -16,6 +16,7 @@ from rich.text import Text
 from textual.widgets import DataTable, Select, Static
 
 from hledger_textual.cache import HledgerCache
+from hledger_textual.error_messages import humanize_error
 from hledger_textual.config import (
     delete_custom_report,
     load_custom_reports,
@@ -406,8 +407,9 @@ class ReportsPane(DataTablePaneMixin, Widget):
                 mode="tree" if self._tree_mode else "flat",
             )
         except HledgerError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
             data = ReportData(title="", period_headers=[], rows=[])
 
@@ -441,10 +443,11 @@ class ReportsPane(DataTablePaneMixin, Widget):
         try:
             output = run_custom_report(self.journal_file, command)
         except HledgerError as exc:
+            title, body = humanize_error(exc)
             self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+                self.notify, body, title=title, severity="error", timeout=10
             )
-            output = f"Error: {exc}"
+            output = f"Error: {body}"
 
         self.app.call_from_thread(self._apply_custom_output, output, command)
 
@@ -598,7 +601,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
                     for p_idx in range(n_periods):
                         raw = p_map.get(p_idx, "")
-                        row_cells.append(fmt_single_amount_str(raw) if raw else "")
+                        row_cells.append(fmt_single_amount_str(raw, accounting=True) if raw else "")
 
                     while len(row_cells) < n_periods + 1:
                         row_cells.append("")
@@ -611,7 +614,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
             # --- Single-currency or non-stacked path ---
             cells: list[str | Text] = [account_text]
             for amt in row.amounts:
-                formatted = fmt_amount_str(amt)
+                formatted = fmt_amount_str(amt, accounting=True)
                 if row.is_total:
                     cells.append(f"[bold]{formatted}[/bold]")
                 else:

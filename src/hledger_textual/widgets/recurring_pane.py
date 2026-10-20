@@ -37,6 +37,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
         Binding("a", "add", "Add", show=True, priority=True),
         Binding("e", "edit", "Edit", show=True, priority=True),
         Binding("enter", "edit", "Edit", show=False),
+        Binding("c", "clone", "Clone", show=True, priority=True),
         Binding("d", "delete", "Delete", show=True, priority=True),
         Binding("g", "generate", "Generate", show=True, priority=True),
         Binding("r", "refresh", "Refresh", show=True, priority=True),
@@ -174,6 +175,25 @@ class RecurringPane(DataTablePaneMixin, Widget):
 
         self.app.push_screen(
             RecurringFormScreen(journal_file=self.journal_file, rule=rule),
+            callback=on_save,
+        )
+
+    def action_clone(self) -> None:
+        """Open the form pre-filled from the selected rule, saving as new."""
+        rule = self._get_selected_rule()
+        if not rule:
+            return
+
+        from hledger_textual.screens.recurring_form import RecurringFormScreen
+
+        def on_save(result: RecurringRule | None) -> None:
+            if result is not None:
+                self._do_add(result)
+
+        self.app.push_screen(
+            RecurringFormScreen(
+                journal_file=self.journal_file, rule=rule, clone=True
+            ),
             callback=on_save,
         )
 

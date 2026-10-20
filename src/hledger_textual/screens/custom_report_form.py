@@ -11,6 +11,7 @@ from textual.widgets import Button, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 from hledger_textual.models import CustomReport
+from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 
 _EXAMPLES: list[tuple[str, str]] = [
     ("balance --tree", "Full balance tree"),
@@ -25,7 +26,7 @@ _EXAMPLES: list[tuple[str, str]] = [
 ]
 
 
-class CustomReportFormScreen(ModalScreen[CustomReport | None]):
+class CustomReportFormScreen(DirtyGuardMixin, ModalScreen[CustomReport | None]):
     """Centered modal form for creating or editing a custom report."""
 
     BINDINGS = [
@@ -87,16 +88,16 @@ class CustomReportFormScreen(ModalScreen[CustomReport | None]):
         if event.option.id:
             self.query_one("#custom-report-input-command", Input).value = event.option.id
 
+    def on_mount(self) -> None:
+        """Snapshot the initial field values for the unsaved-changes guard."""
+        self.call_after_refresh(self.capture_initial_state)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id == "btn-custom-report-save":
             self._save()
         elif event.button.id == "btn-custom-report-cancel":
-            self.dismiss(None)
-
-    def action_cancel(self) -> None:
-        """Cancel the form."""
-        self.dismiss(None)
+            self.action_cancel()
 
     def _save(self) -> None:
         """Validate and save the custom report."""
