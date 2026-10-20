@@ -1658,6 +1658,129 @@ class TestLoadLiabilitiesBreakdown:
         assert breakdown == []
 
 
+# ------------------------------------------------------------------
+# Multi-currency breakdowns (issue #217)
+# ------------------------------------------------------------------
+
+
+class TestMulticurrencyBreakdowns:
+    """Breakdowns must convert to the default commodity before comparing amounts.
+
+    Without ``-X`` each row keeps its own commodity, so percentages computed
+    by the summary pane compared ``$15`` with ``£10`` one-to-one.
+    """
+
+    @pytest.fixture
+    def fx_journal(self, tmp_path: Path) -> Path:
+        """Journal mixing EUR, GBP and USD with explicit price directives."""
+        today = date.today()
+        d1 = today.replace(day=1).isoformat()
+        d2 = today.replace(day=2).isoformat()
+        d3 = today.replace(day=3).isoformat()
+        journal = tmp_path / "fx.journal"
+        journal.write_text(
+            "commodity €1,000.00\n"
+            "commodity £1,000.00\n"
+            "commodity $1,000.00\n"
+            "\n"
+            f"P {d1} € £0.50\n"
+            f"P {d1} € $2.00\n"
+            "\n"
+            f"{d1} * Salary\n"
+            "    assets:bank:checking   €3500.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d2} * Freelance\n"
+            "    assets:bank:checking   £1500.00\n"
+            "    income:freelance\n"
+            "\n"
+            f"{d2} * Subscriptions\n"
+            "    expenses:subscriptions   €14.99\n"
+            "    expenses:subscriptions    £8.99\n"
+            "    assets:bank:checking\n"
+            "\n"
+            f"{d3} * Credit card\n"
+            "    liabilities:credit-card   $-200.00\n"
+            "    assets:bank:savings        $200.00\n"
+            "    liabilities:credit-card    €-50.00\n"
+            "    assets:bank:checking       €50.00\n"
+        )
+        return journal
+
+    @pytest.fixture
+    def period(self) -> str:
+        """The current month, as the summary pane queries it."""
+        return date.today().strftime("%Y-%m")
+
+    def test_income_converted_to_default(self, fx_journal: Path, period: str):
+        """Every income row is converted with -X, so shares become comparable."""
+        rows = load_income_breakdown(fx_journal, period, commodity="€")
+        assert rows == [
+            ("income:salary", Decimal("3500.00"), "€"),
+            ("income:freelance", Decimal("3000.00"), "€"),
+        ]
+
+    def test_income_without_commodity_keeps_original(
+        self, fx_journal: Path, period: str
+    ):
+        """Without a default commodity the raw per-commodity rows are returned."""
+        rows = load_income_breakdown(fx_journal, period)
+        assert ("income:salary", Decimal("3500.00"), "€") in rows
+        assert ("income:freelance", Decimal("1500.00"), "£") in rows
+
+    def test_expense_multi_commodity_cell_is_split(
+        self, fx_journal: Path, period: str
+    ):
+        """A ``"£8.99, €14.99"`` cell yields one row per commodity, not zero."""
+        rows = load_expense_breakdown(fx_journal, period)
+        assert ("expenses:subscriptions", Decimal("14.99"), "€") in rows
+        assert ("expenses:subscriptions", Decimal("8.99"), "£") in rows
+
+    def test_expense_multi_commodity_cell_is_converted(
+        self, fx_journal: Path, period: str
+    ):
+        """With -X the multi-commodity cell collapses into one converted row."""
+        rows = load_expense_breakdown(fx_journal, period, commodity="€")
+        assert rows == [("expenses:subscriptions", Decimal("32.97"), "€")]
+
+    def test_liabilities_multi_commodity_cell_is_split(self, fx_journal: Path):
+        """Mixed-currency liability balances are no longer dropped."""
+        rows = load_liabilities_breakdown(fx_journal)
+        assert ("liabilities:credit-card", Decimal("200.00"), "$") in rows
+        assert ("liabilities:credit-card", Decimal("50.00"), "€") in rows
+
+    def test_liabilities_converted_to_default(self, fx_journal: Path):
+        """Converted liabilities are comparable and sorted by amount."""
+        rows = load_liabilities_breakdown(fx_journal, commodity="€")
+        assert rows == [("liabilities:credit-card", Decimal("150.00"), "€")]
+
+    def test_unconvertible_commodity_is_kept(self, tmp_path: Path):
+        """A commodity without a price stays native and sorts after the target."""
+        today = date.today()
+        d1 = today.replace(day=1).isoformat()
+        journal = tmp_path / "btc.journal"
+        journal.write_text(
+            "commodity €1,000.00\n"
+            "commodity 0.00000000 BTC\n"
+            f"P {d1} € $2.00\n"
+            "\n"
+            f"{d1} * Salary\n"
+            "    assets:bank:checking   €1000.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d1} * Gift\n"
+            "    assets:crypto:wallet   0.01000000 BTC\n"
+            "    income:gifts\n"
+        )
+        rows = load_income_breakdown(
+            journal, today.strftime("%Y-%m"), commodity="€"
+        )
+        assert rows == [
+            ("income:salary", Decimal("1000.00"), "€"),
+            ("income:gifts", Decimal("0.01000000"), "BTC"),
+        ]
+
+
 # ---------------------------------------------------------------------------
 # _parse_amount cost-annotation tests (#127)
 # ---------------------------------------------------------------------------
