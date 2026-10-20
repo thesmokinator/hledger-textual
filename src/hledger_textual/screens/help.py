@@ -24,87 +24,87 @@ def _info_row(label: str, value: str) -> str:
     return f"  [dim]{label:<14}[/dim]{value}"
 
 
+_KEY_LABELS = {
+    "slash": "/",
+    "question_mark": "?",
+    "exclamation_mark": "!",
+    "enter": "Enter",
+    "escape": "Esc",
+    "space": "Space",
+    "left": "Left",
+    "right": "Right",
+    "up": "Up",
+    "down": "Down",
+    "home": "Home",
+    "end": "End",
+    "tab": "Tab",
+    "backspace": "Backspace",
+}
+
+
+def _format_key(key: str) -> str:
+    """Render a Textual binding key for humans (``slash`` -> ``/``)."""
+    return " / ".join(
+        _KEY_LABELS.get(part, part) for part in key.split(",") if part.strip()
+    )
+
+
+def _binding_rows(bindings) -> list[tuple[str, str]]:
+    """Turn a BINDINGS list into ``(keys, description)`` rows.
+
+    Bindings that share a description (``e`` and ``Enter`` for Edit) are
+    merged into one row, in the order they are declared.
+    """
+    merged: dict[str, list[str]] = {}
+    for binding in bindings:
+        if not binding.description:
+            continue
+        merged.setdefault(binding.description, []).append(_format_key(binding.key))
+    return [(" / ".join(keys), description) for description, keys in merged.items()]
+
+
+def help_sections() -> list[tuple[str, list[tuple[str, str]]]]:
+    """Build the shortcut sections from the live BINDINGS declarations.
+
+    Importing the panes here (rather than at module level) keeps this module
+    out of the app's import cycle.
+
+    Returns:
+        A list of ``(section title, [(keys, description), ...])`` pairs.
+    """
+    from hledger_textual.app import HledgerTuiApp
+    from hledger_textual.screens.recurring_form import RecurringFormScreen
+    from hledger_textual.screens.transaction_form import TransactionFormScreen
+    from hledger_textual.widgets.accounts_pane import AccountsPane
+    from hledger_textual.widgets.budget_pane import BudgetPane
+    from hledger_textual.widgets.recurring_pane import RecurringPane
+    from hledger_textual.widgets.reports_pane import ReportsPane
+    from hledger_textual.widgets.summary_pane import SummaryPane
+    from hledger_textual.widgets.transactions_pane import TransactionsPane
+
+    groups = [
+        ("Global", HledgerTuiApp.BINDINGS),
+        ("Summary", SummaryPane.BINDINGS),
+        ("Transactions", TransactionsPane.BINDINGS),
+        ("Recurring", RecurringPane.BINDINGS),
+        ("Budget", BudgetPane.BINDINGS),
+        ("Reports", ReportsPane.BINDINGS),
+        ("Accounts", AccountsPane.BINDINGS),
+        ("Transaction form", TransactionFormScreen.BINDINGS),
+        ("Recurring form", RecurringFormScreen.BINDINGS),
+    ]
+    return [(title, _binding_rows(bindings)) for title, bindings in groups]
+
+
 def _build_help_text() -> str:
     """Build the full help text with aligned columns."""
-    sections = [
-        (
-            "Global",
-            [
-                ("1-6", "Switch tab"),
-                ("x", "Export (CSV/PDF)"),
-                ("s", "Sync (if enabled)"),
-                ("?", "This help"),
-                ("q", "Quit"),
-            ],
-        ),
-        (
-            "Transactions",
-            [
-                ("a", "Add transaction"),
-                ("e / Enter", "Edit transaction"),
-                ("d", "Delete transaction"),
-                ("c", "Clone transaction"),
-                ("m", "Move to another date"),
-                ("i", "Import from CSV"),
-                ("*", "Toggle cleared"),
-                ("!", "Toggle pending"),
-                ("Left / Right", "Navigate months"),
-                ("t", "Jump to today"),
-                ("/", "Search"),
-                ("f", "Saved filters"),
-                ("ctrl+s", "Save current filter"),
-                ("r", "Refresh"),
-            ],
-        ),
-        (
-            "Recurring",
-            [
-                ("a", "Add rule"),
-                ("e / Enter", "Edit rule"),
-                ("d", "Delete rule"),
-                ("g", "Generate transactions"),
-                ("r", "Reload"),
-            ],
-        ),
-        (
-            "Budget",
-            [
-                ("a", "Add rule"),
-                ("e", "Edit rule"),
-                ("d", "Delete rule"),
-                ("Left / Right", "Navigate months"),
-                ("t", "Jump to today"),
-                ("/", "Search"),
-            ],
-        ),
-        (
-            "Accounts",
-            [
-                ("Enter", "Drill down"),
-                ("/", "Search"),
-                ("r", "Reload"),
-            ],
-        ),
-        (
-            "Reports",
-            [
-                ("c", "Toggle chart"),
-                ("i", "Investment view"),
-                ("S", "Sort by amount"),
-                ("r", "Reload"),
-            ],
-        ),
-    ]
     parts: list[str] = []
-    for title, shortcuts in sections:
+    for title, rows in help_sections():
         parts.append(f"[b]{title}[/b]")
-        for key, desc in shortcuts:
-            parts.append(_row(key, desc))
+        for key, description in rows:
+            parts.append(_row(key, description))
         parts.append("")
     return "\n".join(parts).rstrip()
-
-
-_HELP_TEXT = _build_help_text()
 
 
 def _short_path(p: Path) -> str:
@@ -148,7 +148,7 @@ class HelpScreen(ModalScreen[None]):
             with TabbedContent(id="help-tabs"):
                 with TabPane("Shortcuts", id="help-tab-shortcuts"):
                     with VerticalScroll(id="help-shortcuts-scroll"):
-                        yield Static(_HELP_TEXT, id="help-content")
+                        yield Static(_build_help_text(), id="help-content")
                 with TabPane("About", id="help-tab-about"):
                     with VerticalScroll(id="help-about-scroll"):
                         yield Static(
