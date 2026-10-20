@@ -17,10 +17,11 @@ from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.amountutil import (
     decimal_places_for_number_string,
+    describe_amount_error,
     normalize_number_string_for_style,
 )
 from hledger_textual.config import load_default_commodity
-from hledger_textual.dateutil import validate_iso_date
+from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.hledger import (
     HledgerError,
     load_descriptions,
@@ -373,6 +374,8 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+c", "copy_posting", "Copy posting", show=False, priority=True),
+        Binding("ctrl+v", "paste_posting", "Paste posting", show=False, priority=True),
     ]
 
     def __init__(
@@ -396,6 +399,8 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
         self.accounts: list[str] = []
         self.commodity_data: dict[str, tuple[Decimal, Decimal, str]] = {}
         self.commodity_styles: dict[str, AmountStyle] = load_journal_commodity_styles(self.journal_file)
+        # In-process clipboard for posting rows (Ctrl+C / Ctrl+V).
+        self._posting_clipboard: tuple[str, str] | None = None
 
     @property
     def default_commodity(self) -> str:
@@ -715,6 +720,37 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
         """Cancel the form."""
         self.dismiss(None)
 
+    def _focused_posting_row(self) -> PostingRow | None:
+        """Return the posting row that contains the focused widget, if any."""
+        node = self.focused
+        while node is not None:
+            if isinstance(node, PostingRow):
+                return node
+            node = node.parent
+        return None
+
+    def action_copy_posting(self) -> None:
+        """Copy the focused posting row into the in-process clipboard."""
+        row = self._focused_posting_row()
+        if row is None or not row.account:
+            self.notify("Focus a posting row to copy it", severity="warning", timeout=3)
+            return
+        self._posting_clipboard = row.copy_values()
+        self.notify("Posting copied", timeout=2)
+
+    def action_paste_posting(self) -> None:
+        """Paste the copied posting into the focused row, or into a new row."""
+        if self._posting_clipboard is None:
+            self.notify("Nothing to paste", severity="warning", timeout=3)
+            return
+        account, amount = self._posting_clipboard
+        row = self._focused_posting_row()
+        if row is None:
+            self._add_posting_row(account=account, amount=amount)
+        else:
+            row.set_values(account, amount)
+        self.notify("Posting pasted", timeout=2)
+
     @staticmethod
     def _reuse_initial_amounts(row: PostingRow) -> list[Amount] | None:
         """Return the original amounts if *row*'s input is semantically unchanged.
@@ -797,11 +833,12 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
             self.notify("Date is required", severity="error", timeout=3)
             return
 
-        if not validate_iso_date(date_str):
+        date_error = describe_iso_date_error(date_str)
+        if date_error:
             self.notify(
-                "Invalid date. Use ISO format: YYYY-MM-DD",
+                f"Invalid date: {date_error}",
                 severity="error",
-                timeout=3,
+                timeout=4,
             )
             return
 
@@ -833,10 +870,9 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
                     amount = parse_amount_str(row.amount, default_commodity, self.commodity_styles)
                     if amount is None:
                         self.notify(
-                            f"Invalid amount: \"{row.amount}\". "
-                            "Use: 50.00 | €50.00 | -5 STCK @@ €200.00 | -5 STCK @ €40.00",
+                            f"Invalid amount: {describe_amount_error(row.amount)}",
                             severity="error",
-                            timeout=6,
+                            timeout=5,
                         )
                         return
                     amounts.append(amount)

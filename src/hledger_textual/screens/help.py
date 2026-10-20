@@ -57,10 +57,17 @@ def _build_help_text() -> str:
             ],
         ),
         (
+            "Transaction form",
+            [
+                ("ctrl+c/v", "Copy / paste posting row"),
+            ],
+        ),
+        (
             "Recurring",
             [
                 ("a", "Add rule"),
                 ("e / Enter", "Edit rule"),
+                ("c", "Clone rule"),
                 ("d", "Delete rule"),
                 ("g", "Generate transactions"),
                 ("r", "Reload"),

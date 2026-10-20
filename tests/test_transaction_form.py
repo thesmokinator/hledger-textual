@@ -1240,6 +1240,63 @@ class TestBuildCommodityData:
         assert "XEON" not in result
 
 
+class TestPostingClipboard:
+    """Ctrl+C / Ctrl+V copy a posting row inside the form (issue #151)."""
+
+    async def test_copy_and_paste_into_another_row(self, app: HledgerTuiApp):
+        """The focused row is copied and pasted into the next row."""
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:food"
+            rows[0].query_one(".amount-input", AmountInput).value = "12.50"
+            rows[0].query_one(".account-input", Input).focus()
+            await pilot.pause()
+
+            await pilot.press("ctrl+c")
+            await pilot.pause()
+            assert form._posting_clipboard == ("expenses:food", "12.50")
+
+            rows[1].query_one(".account-input", Input).focus()
+            await pilot.pause()
+            await pilot.press("ctrl+v")
+            await pilot.pause()
+
+            assert rows[1].account == "expenses:food"
+            assert rows[1].amount == "12.50"
+
+    async def test_paste_without_copy_is_a_no_op(self, app: HledgerTuiApp):
+        """Pasting with an empty clipboard leaves the form untouched."""
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).focus()
+            await pilot.pause()
+            await pilot.press("ctrl+v")
+            await pilot.pause()
+
+            assert rows[0].account == ""
+            assert form._posting_clipboard is None
+
+
 class TestRunningBalance:
     """The Sum line under the posting rows updates live (issue #142)."""
 

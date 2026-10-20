@@ -10,7 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static
 
-from hledger_textual.dateutil import shift_date_months
+from hledger_textual.dateutil import describe_iso_date_error, shift_date_months
 from hledger_textual.models import Transaction
 from hledger_textual.widgets.date_input import DateInput
 
@@ -97,6 +97,10 @@ class MoveConfirmModal(ModalScreen[str | None]):
             new_date = self.query_one("#move-date-input", DateInput).value.strip()
             if not new_date:
                 self.notify("Date is required", severity="error", timeout=3)
+                return
+            date_error = describe_iso_date_error(new_date)
+            if date_error:
+                self.notify(f"Invalid date: {date_error}", severity="error", timeout=4)
                 return
             self.dismiss(new_date)
         else:

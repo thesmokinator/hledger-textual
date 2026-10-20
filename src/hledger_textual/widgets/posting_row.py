@@ -98,3 +98,12 @@ class PostingRow(Widget):
     def is_ready(self) -> bool:
         """Whether the row's inputs are mounted (False just after ``mount``)."""
         return len(self.query(f"#account-{self.row_index}")) > 0
+
+    def copy_values(self) -> tuple[str, str]:
+        """Return ``(account, amount)`` for the posting clipboard."""
+        return self.account, self.amount
+
+    def set_values(self, account: str, amount: str) -> None:
+        """Replace the account and amount inputs (used by paste)."""
+        self.query_one(f"#account-{self.row_index}", Input).value = account
+        self.query_one(f"#amount-{self.row_index}", AmountInput).value = amount

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
+from textual.widgets import Input
 
 from hledger_textual.widgets.date_input import DateInput
 
@@ -11,8 +12,9 @@ class _DateApp(App):
     """Minimal app with a single DateInput for isolated widget testing."""
 
     def compose(self) -> ComposeResult:
-        """Compose a single DateInput."""
+        """Compose a DateInput plus a second focusable input for blur tests."""
         yield DateInput(id="date")
+        yield Input(id="other")
 
 
 class TestDateInputOnKey:
@@ -107,3 +109,65 @@ class TestDateInputOnKey:
             await pilot.pause()
             await pilot.press("2", "0", "2", "6", "0")
             assert inp.value == "2026-0"
+
+
+class TestDateInputBlurValidation:
+    """Tests for the invalid-date flag applied when the field loses focus."""
+
+    async def test_invalid_month_marks_field(self):
+        """A month outside 01-12 flags the field with a specific reason."""
+        app = _DateApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#date", DateInput)
+            inp.focus()
+            await pilot.pause()
+            inp.value = "2026-13-01"
+            app.query_one("#other", Input).focus()
+            await pilot.pause()
+            assert inp.has_class("date-error")
+            assert inp.tooltip == "Month must be between 01 and 12"
+
+    async def test_impossible_day_marks_field(self):
+        """A day that does not exist flags the field."""
+        app = _DateApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#date", DateInput)
+            inp.focus()
+            await pilot.pause()
+            inp.value = "2026-02-30"
+            app.query_one("#other", Input).focus()
+            await pilot.pause()
+            assert inp.has_class("date-error")
+            assert inp.tooltip == "That day does not exist in that month"
+
+    async def test_valid_date_clears_flag(self):
+        """Blurring a valid date clears the flag and the tooltip."""
+        app = _DateApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#date", DateInput)
+            inp.focus()
+            await pilot.pause()
+            inp.value = "2026-13-01"
+            app.query_one("#other", Input).focus()
+            await pilot.pause()
+            assert inp.has_class("date-error")
+
+            inp.value = "2026-12-01"
+            inp.focus()
+            await pilot.pause()
+            app.query_one("#other", Input).focus()
+            await pilot.pause()
+            assert not inp.has_class("date-error")
+            assert inp.tooltip is None
+
+    async def test_empty_value_is_not_flagged(self):
+        """An untouched empty field is left to the form's required check."""
+        app = _DateApp()
+        async with app.run_test() as pilot:
+            inp = app.query_one("#date", DateInput)
+            inp.focus()
+            await pilot.pause()
+            app.query_one("#other", Input).focus()
+            await pilot.pause()
+            assert not inp.has_class("date-error")
+            assert inp.tooltip is None
