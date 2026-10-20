@@ -97,6 +97,12 @@ SummaryPane {
     color: $text-muted;
 }
 
+/* Conversion hint under a breakdown table (missing prices, mixed currencies) */
+.summary-note {
+    padding: 0 1;
+    color: $text-muted;
+}
+
 /* Divider between all-time sections and monthly sections */
 #summary-income-breakdown {
     height: auto;
@@ -200,6 +206,15 @@ PaneToolbar {
 
 .filter-bar Input {
     width: 100%;
+}
+
+/* DateInput flags impossible dates when the field loses focus. */
+DateInput.date-error {
+    border: tall $error;
+}
+
+DateInput.date-error:focus {
+    border: tall $error;
 }
 
 /* Period navigation (shared by Transactions + Budget) */
@@ -506,6 +521,11 @@ TransactionFormScreen {
 
 #postings-container {
     height: auto;
+}
+
+#postings-sum {
+    padding: 0 1;
+    color: $text-muted;
 }
 
 PostingRow {

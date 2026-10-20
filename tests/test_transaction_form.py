@@ -1240,6 +1240,117 @@ class TestBuildCommodityData:
         assert "XEON" not in result
 
 
+class TestPostingClipboard:
+    """Ctrl+C / Ctrl+V copy a posting row inside the form (issue #151)."""
+
+    async def test_copy_and_paste_into_another_row(self, app: HledgerTuiApp):
+        """The focused row is copied and pasted into the next row."""
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:food"
+            rows[0].query_one(".amount-input", AmountInput).value = "12.50"
+            rows[0].query_one(".account-input", Input).focus()
+            await pilot.pause()
+
+            await pilot.press("ctrl+c")
+            await pilot.pause()
+            assert form._posting_clipboard == ("expenses:food", "12.50")
+
+            rows[1].query_one(".account-input", Input).focus()
+            await pilot.pause()
+            await pilot.press("ctrl+v")
+            await pilot.pause()
+
+            assert rows[1].account == "expenses:food"
+            assert rows[1].amount == "12.50"
+
+    async def test_paste_without_copy_is_a_no_op(self, app: HledgerTuiApp):
+        """Pasting with an empty clipboard leaves the form untouched."""
+        from textual.widgets import Input
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).focus()
+            await pilot.pause()
+            await pilot.press("ctrl+v")
+            await pilot.pause()
+
+            assert rows[0].account == ""
+            assert form._posting_clipboard is None
+
+
+class TestRunningBalance:
+    """The Sum line under the posting rows updates live (issue #142)."""
+
+    async def test_sum_tracks_balanced_and_unbalanced(self, app: HledgerTuiApp):
+        """Green check when balanced, red cross with the remainder otherwise."""
+        from textual.widgets import Input, Static
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:food"
+            rows[0].query_one(".amount-input", AmountInput).value = "50.00"
+            rows[1].query_one(".account-input", Input).value = "assets:bank"
+            rows[1].query_one(".amount-input", AmountInput).value = "-50.00"
+            await pilot.pause()
+
+            summary = form.query_one("#postings-sum", Static)
+            assert "\u2713" in str(summary.renderable)
+
+            rows[1].query_one(".amount-input", AmountInput).value = "-40.00"
+            await pilot.pause()
+            text = str(summary.renderable)
+            assert "\u2717" in text
+            assert "10.00" in text
+
+    async def test_unparsable_amount_marks_incomplete(self, app: HledgerTuiApp):
+        """A bad amount shows 'incomplete' instead of a wrong total."""
+        from textual.widgets import Input, Static
+
+        async with app.run_test(size=(100, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            rows = list(form.query(PostingRow))
+            rows[0].query_one(".account-input", Input).value = "expenses:food"
+            rows[0].query_one(".amount-input", AmountInput).value = "abc"
+            await pilot.pause()
+
+            summary = form.query_one("#postings-sum", Static)
+            assert "incomplete" in str(summary.renderable)
+
+
 class TestUnsavedChangesGuard:
     """Escape asks before discarding typed data (issue #149)."""
 

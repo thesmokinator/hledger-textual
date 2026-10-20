@@ -17,10 +17,11 @@ from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.amountutil import (
     decimal_places_for_number_string,
+    describe_amount_error,
     normalize_number_string_for_style,
 )
 from hledger_textual.config import load_default_commodity
-from hledger_textual.dateutil import validate_iso_date
+from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.hledger import (
     HledgerError,
     load_descriptions,
@@ -39,6 +40,10 @@ from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
+from hledger_textual.widgets.posting_sum import (
+    collect_posting_totals,
+    format_posting_sum,
+)
 
 # ---------------------------------------------------------------------------
 # Hledger amount string parser
@@ -372,6 +377,8 @@ class TransactionFormScreen(
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+c", "copy_posting", "Copy posting", show=False, priority=True),
+        Binding("ctrl+v", "paste_posting", "Paste posting", show=False, priority=True),
     ]
 
     def __init__(
@@ -395,6 +402,8 @@ class TransactionFormScreen(
         self.accounts: list[str] = []
         self.commodity_data: dict[str, tuple[Decimal, Decimal, str]] = {}
         self.commodity_styles: dict[str, AmountStyle] = load_journal_commodity_styles(self.journal_file)
+        # In-process clipboard for posting rows (Ctrl+C / Ctrl+V).
+        self._posting_clipboard: tuple[str, str] | None = None
 
     @property
     def default_commodity(self) -> str:
@@ -487,6 +496,7 @@ class TransactionFormScreen(
                     id="default-commodity-hint",
                 )
                 yield Vertical(id="postings-container")
+                yield Static("", id="postings-sum")
                 yield Static("", id="cost-basis-hint")
 
                 with Horizontal(id="posting-buttons"):
@@ -540,6 +550,7 @@ class TransactionFormScreen(
             self._add_posting_row(label="#2:", commodity=default_commodity)
 
         self.call_after_refresh(self.capture_initial_state)
+        self.call_after_refresh(self._update_posting_sum)
 
     def _add_posting_row(
         self,
@@ -566,6 +577,7 @@ class TransactionFormScreen(
         )
         container.mount(row)
         self.posting_count += 1
+        self.call_after_refresh(self._update_posting_sum)
 
     def _remove_last_posting_row(self) -> None:
         """Remove the last posting row from the form."""
@@ -574,6 +586,7 @@ class TransactionFormScreen(
         if len(rows) > 0:
             rows.last().remove()
             self.posting_count -= 1
+            self.call_after_refresh(self._update_posting_sum)
 
     @work(thread=True, exclusive=True)
     def _load_commodity_data(self) -> None:
@@ -650,14 +663,39 @@ class TransactionFormScreen(
 
         return hint
 
+    def _parse_posting_amount(
+        self, text: str, commodity: str
+    ) -> tuple[Decimal, str] | None:
+        """Parse a posting amount for the running sum, or None if invalid."""
+        amount = parse_amount_str(
+            text,
+            commodity or self.default_commodity,
+            self.commodity_styles,
+        )
+        if amount is None:
+            return None
+        return amount.quantity, amount.commodity
+
+    def _update_posting_sum(self) -> None:
+        """Recompute the running balance shown under the posting rows."""
+        if not self.is_attached or not self.query("#postings-sum"):
+            return
+        widget = self.query_one("#postings-sum", Static)
+        rows = list(self.query_one("#postings-container", Vertical).query(PostingRow))
+        totals, incomplete = collect_posting_totals(rows, self._parse_posting_amount)
+        widget.update(
+            format_posting_sum(totals, incomplete, self.default_commodity)
+        )
+
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Update cost basis hint when an amount field changes.
+        """Update the running balance and cost basis hint on amount changes.
 
         Args:
             event: The Input.Changed event from any input in the form.
         """
         if not event.input.id or not event.input.id.startswith("amount-"):
             return
+        self._update_posting_sum()
         hint_widget = self.query_one("#cost-basis-hint", Static)
         parsed = _extract_commodity_and_qty(event.value, self.commodity_styles)
         if parsed:
@@ -681,6 +719,37 @@ class TransactionFormScreen(
                 self._save()
             case "btn-form-cancel":
                 self.action_cancel()
+
+    def _focused_posting_row(self) -> PostingRow | None:
+        """Return the posting row that contains the focused widget, if any."""
+        node = self.focused
+        while node is not None:
+            if isinstance(node, PostingRow):
+                return node
+            node = node.parent
+        return None
+
+    def action_copy_posting(self) -> None:
+        """Copy the focused posting row into the in-process clipboard."""
+        row = self._focused_posting_row()
+        if row is None or not row.account:
+            self.notify("Focus a posting row to copy it", severity="warning", timeout=3)
+            return
+        self._posting_clipboard = row.copy_values()
+        self.notify("Posting copied", timeout=2)
+
+    def action_paste_posting(self) -> None:
+        """Paste the copied posting into the focused row, or into a new row."""
+        if self._posting_clipboard is None:
+            self.notify("Nothing to paste", severity="warning", timeout=3)
+            return
+        account, amount = self._posting_clipboard
+        row = self._focused_posting_row()
+        if row is None:
+            self._add_posting_row(account=account, amount=amount)
+        else:
+            row.set_values(account, amount)
+        self.notify("Posting pasted", timeout=2)
 
     @staticmethod
     def _reuse_initial_amounts(row: PostingRow) -> list[Amount] | None:
@@ -764,11 +833,12 @@ class TransactionFormScreen(
             self.notify("Date is required", severity="error", timeout=3)
             return
 
-        if not validate_iso_date(date_str):
+        date_error = describe_iso_date_error(date_str)
+        if date_error:
             self.notify(
-                "Invalid date. Use ISO format: YYYY-MM-DD",
+                f"Invalid date: {date_error}",
                 severity="error",
-                timeout=3,
+                timeout=4,
             )
             return
 
@@ -800,10 +870,9 @@ class TransactionFormScreen(
                     amount = parse_amount_str(row.amount, default_commodity, self.commodity_styles)
                     if amount is None:
                         self.notify(
-                            f"Invalid amount: \"{row.amount}\". "
-                            "Use: 50.00 | €50.00 | -5 STCK @@ €200.00 | -5 STCK @ €40.00",
+                            f"Invalid amount: {describe_amount_error(row.amount)}",
                             severity="error",
-                            timeout=6,
+                            timeout=5,
                         )
                         return
                     amounts.append(amount)

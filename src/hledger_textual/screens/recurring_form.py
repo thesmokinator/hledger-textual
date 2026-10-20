@@ -15,14 +15,19 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
+from hledger_textual.amountutil import describe_amount_error
 from hledger_textual.config import load_default_commodity
-from hledger_textual.dateutil import validate_iso_date
+from hledger_textual.dateutil import describe_iso_date_error
 from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, TransactionStatus
 from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
+from hledger_textual.widgets.posting_sum import (
+    collect_posting_totals,
+    format_posting_sum,
+)
 
 _PERIOD_OPTIONS = [(p.capitalize(), p) for p in SUPPORTED_PERIODS] + [("Custom", "custom")]
 
@@ -56,27 +61,33 @@ class RecurringFormScreen(
         self,
         journal_file: Path,
         rule: RecurringRule | None = None,
+        clone: bool = False,
     ) -> None:
         """Initialize the form modal.
 
         Args:
             journal_file: Path to the journal file.
             rule: Existing recurring rule to edit, or None for new.
+            clone: If True, pre-fill from *rule* but treat it as a new rule.
         """
         super().__init__()
         self.journal_file = journal_file
         self.rule = rule
+        self._clone = clone
         self.posting_count = 0
         self.accounts: list[str] = []
 
     @property
     def is_edit(self) -> bool:
         """Whether this form is editing an existing rule."""
-        return self.rule is not None
+        return self.rule is not None and not self._clone
 
     def compose(self) -> ComposeResult:
         """Create the modal form layout."""
-        title = "Edit Recurring Rule" if self.is_edit else "New Recurring Rule"
+        if self._clone:
+            title = "Clone Recurring Rule"
+        else:
+            title = "Edit Recurring Rule" if self.is_edit else "New Recurring Rule"
         r = self.rule
 
         # Determine initial period selection and custom expression
@@ -152,6 +163,7 @@ class RecurringFormScreen(
 
                 yield Static("Postings*", id="postings-header")
                 yield Vertical(id="postings-container")
+                yield Static("", id="postings-sum")
 
                 with Horizontal(id="posting-buttons"):
                     yield Button("\\[+] Add posting", id="btn-add-posting")
@@ -192,6 +204,7 @@ class RecurringFormScreen(
             self._add_posting_row(label="Credit:", commodity="")
 
         self.call_after_refresh(self.capture_initial_state)
+        self.call_after_refresh(self._update_posting_sum)
 
     def _add_posting_row(
         self,
@@ -214,6 +227,7 @@ class RecurringFormScreen(
         )
         container.mount(row)
         self.posting_count += 1
+        self.call_after_refresh(self._update_posting_sum)
 
     def _remove_last_posting_row(self) -> None:
         """Remove the last posting row from the form."""
@@ -222,6 +236,32 @@ class RecurringFormScreen(
         if len(rows) > 0:
             rows.last().remove()
             self.posting_count -= 1
+            self.call_after_refresh(self._update_posting_sum)
+
+    def _parse_posting_amount(
+        self, text: str, commodity: str
+    ) -> tuple[Decimal, str] | None:
+        """Parse a plain-decimal posting amount for the running sum."""
+        try:
+            return Decimal(text), commodity or load_default_commodity()
+        except InvalidOperation:
+            return None
+
+    def _update_posting_sum(self) -> None:
+        """Recompute the running balance shown under the posting rows."""
+        if not self.is_attached or not self.query("#postings-sum"):
+            return
+        widget = self.query_one("#postings-sum", Static)
+        rows = list(self.query_one("#postings-container", Vertical).query(PostingRow))
+        totals, incomplete = collect_posting_totals(rows, self._parse_posting_amount)
+        widget.update(
+            format_posting_sum(totals, incomplete, load_default_commodity())
+        )
+
+    @on(Input.Changed, ".amount-input")
+    def on_amount_changed(self, event: Input.Changed) -> None:
+        """Refresh the running balance as the user types an amount."""
+        self._update_posting_sum()
 
     @on(Select.Changed, "#recurring-select-period")
     def on_recurring_select_period_changed(self, event: Select.Changed) -> None:
@@ -312,12 +352,14 @@ class RecurringFormScreen(
             self.notify("Period is required", severity="error", timeout=3)
             return
 
-        if start_str and not validate_iso_date(start_str):
-            self.notify(f"Invalid start date: {start_str}", severity="error", timeout=3)
+        start_error = describe_iso_date_error(start_str) if start_str else None
+        if start_error:
+            self.notify(f"Invalid start date: {start_error}", severity="error", timeout=4)
             return
 
-        if end_str and not validate_iso_date(end_str):
-            self.notify(f"Invalid end date: {end_str}", severity="error", timeout=3)
+        end_error = describe_iso_date_error(end_str) if end_str else None
+        if end_error:
+            self.notify(f"Invalid end date: {end_error}", severity="error", timeout=4)
             return
 
         # Collect postings
@@ -338,7 +380,11 @@ class RecurringFormScreen(
                 try:
                     quantity = Decimal(amount_str)
                 except InvalidOperation:
-                    self.notify(f"Invalid amount: {amount_str}", severity="error", timeout=3)
+                    self.notify(
+                        f"Invalid amount: {describe_amount_error(amount_str)}",
+                        severity="error",
+                        timeout=4,
+                    )
                     return
 
                 style = AmountStyle(
