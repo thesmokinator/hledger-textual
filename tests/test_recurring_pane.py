@@ -179,3 +179,26 @@ class TestRecurringPaneWithRules:
             await pilot.press("escape")
             await pilot.pause(delay=0.3)
             assert not isinstance(rules_app.screen, RecurringDeleteConfirmModal)
+
+
+class TestRecurringPaneClone:
+    """'c' opens a pre-filled form that saves as a new rule."""
+
+    async def test_clone_opens_prefilled_new_form(self, rules_app: HledgerTuiApp) -> None:
+        from textual.widgets import Input, Static
+
+        async with rules_app.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await pilot.pause(delay=0.5)
+            await pilot.press("c")
+            await pilot.pause(delay=0.5)
+
+            form = rules_app.screen
+            assert isinstance(form, RecurringFormScreen)
+            assert form.is_edit is False
+            assert form.rule is not None
+            description = form.query_one("#recurring-input-description", Input).value
+            assert description.strip() != ""
+            title = form.query_one("#form-title", Static)
+            assert "Clone" in str(title.renderable)

@@ -54,27 +54,33 @@ class RecurringFormScreen(FormAccountSuggestionsMixin, ModalScreen[RecurringRule
         self,
         journal_file: Path,
         rule: RecurringRule | None = None,
+        clone: bool = False,
     ) -> None:
         """Initialize the form modal.
 
         Args:
             journal_file: Path to the journal file.
             rule: Existing recurring rule to edit, or None for new.
+            clone: If True, pre-fill from *rule* but treat it as a new rule.
         """
         super().__init__()
         self.journal_file = journal_file
         self.rule = rule
+        self._clone = clone
         self.posting_count = 0
         self.accounts: list[str] = []
 
     @property
     def is_edit(self) -> bool:
         """Whether this form is editing an existing rule."""
-        return self.rule is not None
+        return self.rule is not None and not self._clone
 
     def compose(self) -> ComposeResult:
         """Create the modal form layout."""
-        title = "Edit Recurring Rule" if self.is_edit else "New Recurring Rule"
+        if self._clone:
+            title = "Clone Recurring Rule"
+        else:
+            title = "Edit Recurring Rule" if self.is_edit else "New Recurring Rule"
         r = self.rule
 
         # Determine initial period selection and custom expression

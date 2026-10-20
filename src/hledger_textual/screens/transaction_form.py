@@ -370,6 +370,8 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+c", "copy_posting", "Copy posting", show=False, priority=True),
+        Binding("ctrl+v", "paste_posting", "Paste posting", show=False, priority=True),
     ]
 
     def __init__(
@@ -393,6 +395,8 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
         self.accounts: list[str] = []
         self.commodity_data: dict[str, tuple[Decimal, Decimal, str]] = {}
         self.commodity_styles: dict[str, AmountStyle] = load_journal_commodity_styles(self.journal_file)
+        # In-process clipboard for posting rows (Ctrl+C / Ctrl+V).
+        self._posting_clipboard: tuple[str, str] | None = None
 
     @property
     def default_commodity(self) -> str:
@@ -681,6 +685,37 @@ class TransactionFormScreen(FormAccountSuggestionsMixin, ModalScreen[Transaction
     def action_cancel(self) -> None:
         """Cancel the form."""
         self.dismiss(None)
+
+    def _focused_posting_row(self) -> PostingRow | None:
+        """Return the posting row that contains the focused widget, if any."""
+        node = self.focused
+        while node is not None:
+            if isinstance(node, PostingRow):
+                return node
+            node = node.parent
+        return None
+
+    def action_copy_posting(self) -> None:
+        """Copy the focused posting row into the in-process clipboard."""
+        row = self._focused_posting_row()
+        if row is None or not row.account:
+            self.notify("Focus a posting row to copy it", severity="warning", timeout=3)
+            return
+        self._posting_clipboard = row.copy_values()
+        self.notify("Posting copied", timeout=2)
+
+    def action_paste_posting(self) -> None:
+        """Paste the copied posting into the focused row, or into a new row."""
+        if self._posting_clipboard is None:
+            self.notify("Nothing to paste", severity="warning", timeout=3)
+            return
+        account, amount = self._posting_clipboard
+        row = self._focused_posting_row()
+        if row is None:
+            self._add_posting_row(account=account, amount=amount)
+        else:
+            row.set_values(account, amount)
+        self.notify("Posting pasted", timeout=2)
 
     @staticmethod
     def _reuse_initial_amounts(row: PostingRow) -> list[Amount] | None:
