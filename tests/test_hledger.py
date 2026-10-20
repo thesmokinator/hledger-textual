@@ -359,6 +359,89 @@ class TestLoadPeriodSummary:
         # both legs must be counted rather than the whole row dropping to zero.
         assert summary.income == Decimal("800.00")
 
+    def test_unconverted_commodity_excluded_from_totals(self, tmp_path: Path):
+        """A commodity without a price must not be folded into the total (#218).
+
+        ``hledger -X €`` leaves the BTC leg untouched; adding 0.01 BTC to the
+        euro income produced the meaningless ``€1000.01``.
+        """
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            "commodity €1,000.00\n"
+            "commodity 0.00000000 BTC\n"
+            f"{d1.isoformat()} * Salary\n"
+            "    assets:bank:checking   €1000.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d2.isoformat()} * Gift\n"
+            "    assets:crypto:wallet   0.01000000 BTC\n"
+            "    income:gifts\n"
+        )
+        journal = tmp_path / "unconverted.journal"
+        journal.write_text(content)
+        period = today.strftime("%Y-%m")
+
+        summary = load_period_summary(journal, period, commodity="€")
+
+        assert summary.commodity == "€"
+        assert summary.income == Decimal("1000.00")
+        assert summary.net == Decimal("1000.00")
+
+    def test_converted_income_is_included(self, tmp_path: Path):
+        """A convertible commodity contributes its converted amount."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            "commodity €1,000.00\n"
+            "commodity £1,000.00\n"
+            f"P {d1.isoformat()} € £0.50\n"
+            "\n"
+            f"{d1.isoformat()} * Salary\n"
+            "    assets:bank:checking   €1000.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d2.isoformat()} * Freelance\n"
+            "    assets:bank:checking   £1000.00\n"
+            "    income:freelance\n"
+        )
+        journal = tmp_path / "converted.journal"
+        journal.write_text(content)
+        period = today.strftime("%Y-%m")
+
+        summary = load_period_summary(journal, period, commodity="€")
+
+        # £1000 at 1€ = £0.50 becomes €2000.
+        assert summary.income == Decimal("3000.00")
+
+    def test_investments_only_count_target_commodity(self, tmp_path: Path):
+        """Investments priced in another currency are not added to the total."""
+        today = date.today()
+        d1 = today.replace(day=1)
+        d2 = today.replace(day=2)
+        content = (
+            "commodity €1,000.00\n"
+            "commodity $1,000.00\n"
+            "commodity 0.0000 VOO\n"
+            "commodity 0.0000 XDWD\n"
+            f"{d1.isoformat()} * Buy VOO with dollars\n"
+            "    assets:investments:VOO   2 VOO @ $100.00\n"
+            "    assets:bank:savings      $-200.00\n"
+            "\n"
+            f"{d2.isoformat()} * Buy XDWD with euros\n"
+            "    assets:investments:XDWD   5 XDWD @ €120.00\n"
+            "    assets:bank:checking      €-600.00\n"
+        )
+        journal = tmp_path / "invest.journal"
+        journal.write_text(content)
+        period = today.strftime("%Y-%m")
+
+        summary = load_period_summary(journal, period, commodity="€")
+
+        assert summary.investments == Decimal("600.00")
+
     def test_commodity_flag_appended_to_rx_queries(
         self, monkeypatch, tmp_path: Path
     ):

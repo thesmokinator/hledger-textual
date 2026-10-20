@@ -957,3 +957,42 @@ class TestSummaryPaneMulticurrencyBreakdowns:
             note = app.query_one("#summary-income-note", Static)
             assert note.display is True
             assert "default_commodity" in str(note.renderable)
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSummaryPaneCardTotals:
+    """Card totals only cover the converted commodity (issue #218)."""
+
+    async def test_cards_exclude_unconverted_commodities(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """Card totals only cover the default commodity (issue #218)."""
+        from hledger_textual.widgets.currency_marquee import CurrencyMarquee
+
+        today = date.today()
+        d1 = today.replace(day=1).isoformat()
+        journal = tmp_path / "btc_card.journal"
+        journal.write_text(
+            "commodity €1,000.00\n"
+            "commodity 0.00000000 BTC\n"
+            "\n"
+            f"{d1} * Salary\n"
+            "    assets:bank:checking   €1000.00\n"
+            "    income:salary\n"
+            "\n"
+            f"{d1} * Gift\n"
+            "    assets:crypto:wallet   0.01000000 BTC\n"
+            "    income:gifts\n"
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+            lambda _file: "€",
+        )
+        app = _SummaryApp(journal)
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: _cards_applied(app))
+            assert app.query_one(".income-value", Digits).value == "€1,000.00"
+            assert app.query_one(".net-value", Digits).value == "€1,000.00"
+            marquee = app.query_one(".income-multicurrency", CurrencyMarquee)
+            assert marquee.display is True
+            assert "BTC" in marquee._text

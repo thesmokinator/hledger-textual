@@ -886,10 +886,17 @@ def load_period_summary(
 ) -> PeriodSummary:
     """Load income, expense, and investment totals for a single period.
 
-    Two separate queries are used: one for income/expenses (unmodified) and
-    one for investment accounts with ``-B`` (at cost) so that non-EUR
-    commodities are converted to the purchase price without affecting the
-    income/expense amounts.
+    Two separate queries are used: one for income/expenses (converted to the
+    target commodity when one is resolved) and one for investment accounts
+    with ``-B`` (at cost) so that non-EUR commodities are converted to the
+    purchase price without affecting the income/expense amounts.
+
+    Amounts are summed per commodity and, when a target commodity is
+    resolved, only that commodity contributes to the totals: hledger leaves
+    commodities without a price unconverted, and adding ``0.01 BTC`` to a euro
+    amount would produce a meaningless number.  Without a target the previous
+    summing behaviour is kept and the total is labelled with the first
+    commodity seen; the Summary's per-currency marquee shows the composition.
 
     Args:
         file: Path to the journal file.
@@ -899,11 +906,12 @@ def load_period_summary(
         cache: Optional cache instance to avoid repeated subprocess calls.
         commodity: Optional target commodity for conversion (``-X``) applied
             to the income/expense queries only; the investments query stays at
-            cost (``-B``).  Requires ``P`` price directives for conversion;
-            unconverted commodities pass through unchanged.
+            cost (``-B``).  Requires prices for conversion; unconverted
+            commodities are excluded from the totals.
 
     Returns:
-        A :class:`PeriodSummary` instance.
+        A :class:`PeriodSummary` instance.  When ``commodity`` is given the
+        totals only cover it.
 
     Raises:
         HledgerError: If hledger fails or is not found.
@@ -919,29 +927,26 @@ def load_period_summary(
     period_args = ("-p", period) if period else ()
     x_args = ("-X", commodity, "--infer-market-prices") if commodity else ()
 
-    # Query 1a: income/revenue accounts (type:R — respects account type metadata)
-    income = Decimal("0")
-    expenses = Decimal("0")
-    # When a target commodity was requested via -X, trust it directly rather
-    # than inferring from output cells — a leftover unconverted commodity in a
-    # mixed cell (no price available) must not relabel the converted total.
-    commodity_out = commodity or ""
+    def _sum_by_commodity(output: str) -> dict[str, Decimal]:
+        """Split a flat balance CSV into absolute totals per commodity."""
+        totals: dict[str, Decimal] = {}
+        reader = csv.reader(io.StringIO(output))
+        next(reader, None)  # skip header
+        for row in reader:
+            if len(row) < 2 or not row[0]:
+                continue
+            for sub in split_raw_commodities(row[1].strip()):
+                qty, com = _parse_budget_amount(sub)
+                totals[com] = totals.get(com, Decimal("0")) + abs(qty)
+        return totals
 
+    # Query 1a: income/revenue accounts (type:R — respects account type metadata)
     output_r = run_hledger(
         "balance", "type:R",
         *period_args, *x_args, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
-    reader_r = csv.reader(io.StringIO(output_r))
-    next(reader_r, None)  # skip header
-    for row in reader_r:
-        if len(row) < 2 or not row[0]:
-            continue
-        for sub in split_raw_commodities(row[1].strip()):
-            qty, com = _parse_budget_amount(sub)
-            if not commodity_out and com:
-                commodity_out = com
-            income += abs(qty)
+    income_by_commodity = _sum_by_commodity(output_r)
 
     # Query 1b: expense accounts (type:X — respects account type metadata)
     output_x = run_hledger(
@@ -949,19 +954,10 @@ def load_period_summary(
         *period_args, *x_args, "--flat", "--no-total", "-O", "csv",
         file=file,
     )
-    reader_x = csv.reader(io.StringIO(output_x))
-    next(reader_x, None)  # skip header
-    for row in reader_x:
-        if len(row) < 2 or not row[0]:
-            continue
-        for sub in split_raw_commodities(row[1].strip()):
-            qty, com = _parse_budget_amount(sub)
-            if not commodity_out and com:
-                commodity_out = com
-            expenses += abs(qty)
+    expenses_by_commodity = _sum_by_commodity(output_x)
 
     # Query 2: investments at cost (-B converts units to purchase price)
-    investments = Decimal("0")
+    investments_by_commodity: dict[str, Decimal] = {}
     try:
         inv_output = run_hledger(
             "balance", "assets:investments",
@@ -975,12 +971,41 @@ def load_period_summary(
             if len(row) < 2 or not row[0]:
                 continue
             qty, com = _parse_budget_amount(row[1].strip())
-            if not commodity_out and com:
-                commodity_out = com
             if qty > 0:
-                investments += qty
+                investments_by_commodity[com] = (
+                    investments_by_commodity.get(com, Decimal("0")) + qty
+                )
     except HledgerError:
         pass  # no investments or hledger error, keep 0
+
+    # A conversion target was requested via -X, so trust it directly: a
+    # leftover unconverted commodity in a mixed cell must not relabel the
+    # converted total, and must not be added to it either.
+    if commodity:
+        commodity_out = commodity
+        income = income_by_commodity.get(commodity, Decimal("0"))
+        expenses = expenses_by_commodity.get(commodity, Decimal("0"))
+        investments = investments_by_commodity.get(commodity, Decimal("0"))
+    else:
+        # No target resolved: keep summing every commodity and label the total
+        # with the first one seen (the Summary's per-currency marquee shows the
+        # actual composition).  Callers that resolve a default currency (the
+        # Summary pane does) take the single-currency path above.
+        commodity_out = next(
+            (
+                com
+                for totals in (
+                    income_by_commodity,
+                    expenses_by_commodity,
+                    investments_by_commodity,
+                )
+                for com in totals
+            ),
+            "",
+        )
+        income = sum(income_by_commodity.values(), Decimal("0"))
+        expenses = sum(expenses_by_commodity.values(), Decimal("0"))
+        investments = sum(investments_by_commodity.values(), Decimal("0"))
 
     result = PeriodSummary(
         income=income, expenses=expenses,
