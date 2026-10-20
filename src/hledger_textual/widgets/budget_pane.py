@@ -29,7 +29,7 @@ from hledger_textual.config import load_budget_alert_threshold
 from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
 from hledger_textual.widgets.empty_state import EmptyState
-from hledger_textual.widgets.formatting import fmt_amount
+from hledger_textual.widgets.formatting import fmt_amount, fmt_amount_pretty
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
@@ -185,8 +185,8 @@ class BudgetPane(DataTablePaneMixin, Widget):
             remaining = budget_amount - actual_amount
             usage = float(actual_amount / budget_amount * 100) if budget_amount else 0.0
 
-            budget_str = fmt_amount(budget_amount, commodity)
-            actual_str = fmt_amount(actual_amount, commodity)
+            budget_str = fmt_amount_pretty(budget_amount, commodity)
+            actual_str = fmt_amount_pretty(actual_amount, commodity)
 
             if usage > 100:
                 remaining_str = f"[red]{fmt_amount(remaining, commodity)}[/red]"

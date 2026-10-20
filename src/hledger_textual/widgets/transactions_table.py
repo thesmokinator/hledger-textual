@@ -493,7 +493,7 @@ class TransactionsTable(Widget):
                     Text(txn.status.symbol, style="dim"),
                     Text(txn.description, style="dim"),
                     Text(accounts, style="dim"),
-                    Text(fmt_amount_str(txn.total_amount), style="dim"),
+                    Text(fmt_amount_str(txn.total_amount, accounting=True), style="dim"),
                     key=str(txn.index),
                 )
 
@@ -516,7 +516,7 @@ class TransactionsTable(Widget):
                     txn.status.symbol,
                     txn.description,
                     Text(accounts),
-                    fmt_amount_str(txn.total_amount),
+                    fmt_amount_str(txn.total_amount, accounting=True),
                     key=str(txn.index),
                 )
         else:
@@ -528,7 +528,7 @@ class TransactionsTable(Widget):
                     txn.status.symbol,
                     txn.description,
                     Text(accounts),
-                    fmt_amount_str(txn.total_amount),
+                    fmt_amount_str(txn.total_amount, accounting=True),
                     key=str(txn.index),
                 )
 
