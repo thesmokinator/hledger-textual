@@ -202,6 +202,15 @@ PaneToolbar {
     width: 100%;
 }
 
+/* DateInput flags impossible dates when the field loses focus. */
+DateInput.date-error {
+    border: tall $error;
+}
+
+DateInput.date-error:focus {
+    border: tall $error;
+}
+
 /* Period navigation (shared by Transactions + Budget) */
 .period-nav {
     width: 1fr;

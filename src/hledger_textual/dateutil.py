@@ -6,7 +6,7 @@ import calendar
 import re
 from datetime import date
 
-_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 
 
 def validate_iso_date(value: str) -> bool:
@@ -18,14 +18,40 @@ def validate_iso_date(value: str) -> bool:
     Returns:
         True if value matches YYYY-MM-DD AND represents a real calendar date.
     """
-    if not _ISO_DATE_RE.match(value):
-        return False
+    return describe_iso_date_error(value) is None
+
+
+def describe_iso_date_error(value: str) -> str | None:
+    """Explain why *value* is not a valid YYYY-MM-DD date.
+
+    Returns a short, user-facing message naming the part that is wrong, or
+    ``None`` when the date is valid.  Empty input is reported as missing
+    rather than malformed; widgets that should stay quiet while a field is
+    still empty can skip the check.
+
+    Args:
+        value: The date string to validate.
+
+    Returns:
+        A human-readable reason, or ``None`` if the date is valid.
+    """
+    if not value:
+        return "Date is required"
+
+    match = _ISO_DATE_RE.match(value)
+    if not match:
+        return "Use the format YYYY-MM-DD, e.g. 2026-01-31"
+
+    year, month, day = (int(part) for part in match.groups())
+    if not 1900 <= year <= 2200:
+        return "Year must be between 1900 and 2200"
+    if not 1 <= month <= 12:
+        return "Month must be between 01 and 12"
     try:
-        year, month, day = value.split("-")
-        date(int(year), int(month), int(day))
-        return True
+        date(year, month, day)
     except ValueError:
-        return False
+        return "That day does not exist in that month"
+    return None
 
 
 def prev_month(d: date) -> date:
