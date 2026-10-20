@@ -15,11 +15,14 @@ from textual.widgets import Button, Input, Label, Static
 from hledger_textual.config import load_default_commodity
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
+from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.amount_input import NumericAmountInput
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
-class BudgetFormScreen(FormAccountSuggestionsMixin, ModalScreen[BudgetRule | None]):
+class BudgetFormScreen(
+    FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[BudgetRule | None]
+):
     """Centered modal form for creating or editing a budget rule."""
 
     BINDINGS = [
@@ -102,6 +105,7 @@ class BudgetFormScreen(FormAccountSuggestionsMixin, ModalScreen[BudgetRule | Non
         """Load accounts for autocomplete."""
         self._configure_account_suggestions("budget-input-account")
         self._known_accounts = self.accounts
+        self.call_after_refresh(self.capture_initial_state)
 
     def on_descendant_blur(self, event: events.DescendantBlur) -> None:
         """Warn when the account field is left holding an unknown name.
@@ -134,11 +138,7 @@ class BudgetFormScreen(FormAccountSuggestionsMixin, ModalScreen[BudgetRule | Non
         if event.button.id == "btn-budget-save":
             self._save()
         elif event.button.id == "btn-budget-cancel":
-            self.dismiss(None)
-
-    def action_cancel(self) -> None:
-        """Cancel the form."""
-        self.dismiss(None)
+            self.action_cancel()
 
     def _save(self) -> None:
         """Validate and save the budget rule."""

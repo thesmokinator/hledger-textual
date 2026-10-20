@@ -25,6 +25,7 @@ from hledger_textual.csv_import import (
 )
 from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import CsvRulesFile
+from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 _SEPARATOR_OPTIONS = [
@@ -58,7 +59,7 @@ _FIELD_OPTIONS = [
 TOTAL_STEPS = 5
 
 
-class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
+class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None]):
     """Five-step wizard for creating or editing a CSV import rules file.
 
     Returns ``(csv_path, rules_path)`` on success, or ``None`` on cancel.
@@ -211,6 +212,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
             await self._init_auto_detect()
 
         self._show_step(0)
+        self.call_after_refresh(self.capture_initial_state)
 
     async def _init_auto_detect(self) -> None:
         """Auto-detect CSV properties and populate initial values."""
@@ -520,7 +522,7 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
         """Handle button presses."""
         match event.button.id:
             case "btn-wizard-cancel":
-                self.dismiss(None)
+                self.action_cancel()
             case "btn-wizard-back":
                 if self.current_step > 0:
                     self._show_step(self.current_step - 1)
@@ -599,8 +601,5 @@ class ImportWizardScreen(ModalScreen[tuple[Path, Path] | None]):
 
         self.dismiss((self.csv_path, rules_path))
 
-    def action_cancel(self) -> None:
-        """Cancel the wizard."""
-        self.dismiss(None)
 
 

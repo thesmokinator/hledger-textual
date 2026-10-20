@@ -7,8 +7,10 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
+from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 
-class AccountNoteModal(ModalScreen[str | None]):
+
+class AccountNoteModal(DirtyGuardMixin, ModalScreen[str | None]):
     """A simple modal to edit the note attached to an account directive."""
 
     BINDINGS = [
@@ -41,6 +43,7 @@ class AccountNoteModal(ModalScreen[str | None]):
     def on_mount(self) -> None:
         """Focus the text area on mount."""
         self.query_one("#note-input", TextArea).focus()
+        self.call_after_refresh(self.capture_initial_state)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -48,8 +51,4 @@ class AccountNoteModal(ModalScreen[str | None]):
             note = self.query_one("#note-input", TextArea).text.strip()
             self.dismiss(note)
         else:
-            self.dismiss(None)
-
-    def action_cancel(self) -> None:
-        """Cancel editing."""
-        self.dismiss(None)
+            self.action_cancel()
