@@ -16,11 +16,12 @@ from hledger_textual.config import resolve_default_commodity
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import HledgerError, load_period_summary
 from hledger_textual.models import Transaction, TransactionStatus
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
 
-class TransactionsPane(Widget):
+class TransactionsPane(DataTablePaneMixin, Widget):
     """Widget showing all transactions with add / edit / delete actions.
 
     Composes a :class:`~hledger_textual.widgets.transactions_table.TransactionsTable`
@@ -56,6 +57,10 @@ class TransactionsPane(Widget):
         Binding("i", "import_csv", "Import", show=True, priority=True),
     ]
 
+    _main_table_id = "transactions-table"
+    _fixed_column_widths = TransactionsTable._TXN_FIXED
+    _flex_column_weights = TransactionsTable._TXN_FLEX
+
     def __init__(
         self,
         journal_file: Path,
@@ -80,10 +85,6 @@ class TransactionsPane(Widget):
     def on_mount(self) -> None:
         """Load the summary for the initial month."""
         self._load_summary(self._table.current_month)
-
-    def on_show(self) -> None:
-        """Re-focus the table when the pane becomes visible."""
-        self.query_one(TransactionsTable).on_show()
 
     @property
     def _table(self) -> TransactionsTable:
@@ -261,18 +262,15 @@ class TransactionsPane(Widget):
         self.app.call_from_thread(_apply_summary)
 
     # ------------------------------------------------------------------
-    # Export
+    # Export (modal and worker are provided by DataTablePaneMixin)
     # ------------------------------------------------------------------
 
-    def action_export(self) -> None:
-        """Open the export modal with current transaction data."""
-        from hledger_textual.config import load_export_dir
-        from hledger_textual.export import ExportData, default_filename
-        from hledger_textual.screens.export_modal import ExportModal
+    def get_export_data(self):
+        """Return an ExportData with the currently loaded transactions."""
+        from hledger_textual.export import ExportData
 
-        txns = self._table._all_transactions
         rows = []
-        for txn in txns:
+        for txn in self._table._all_transactions:
             accounts = " · ".join(p.account for p in txn.postings)
             rows.append([
                 txn.date,
@@ -282,49 +280,12 @@ class TransactionsPane(Widget):
                 accounts,
                 txn.total_amount,
             ])
-        data = ExportData(
+        return ExportData(
             title=f"Transactions {self._table._period_label()}",
             headers=["Date", "Type", "Status", "Description", "Accounts", "Amount"],
             rows=rows,
             pane_name="transactions",
         )
-        filename = default_filename("transactions", "csv")
-        export_dir = str(load_export_dir())
-
-        def on_result(result: tuple[str, str, str] | None) -> None:
-            if result is not None:
-                fmt, fname, directory = result
-                self.notify(f"Exporting to {fname}…", timeout=5)
-                self._run_export(data, fmt, fname, directory)
-
-        self.app.push_screen(
-            ExportModal(default_filename=filename, default_directory=export_dir),
-            callback=on_result,
-        )
-
-    @work(thread=True)
-    def _run_export(self, data, fmt: str, filename: str, directory: str) -> None:
-        """Execute the export in a background thread."""
-        from pathlib import Path
-
-        from hledger_textual.export import export_csv, export_pdf
-
-        export_dir = Path(directory).expanduser().resolve()
-        export_dir.mkdir(parents=True, exist_ok=True)
-        path = export_dir / filename
-
-        try:
-            if fmt == "pdf":
-                export_pdf(data, path)
-            else:
-                export_csv(data, path)
-            self.app.call_from_thread(
-                self.notify, f"Exported to {path}", timeout=5
-            )
-        except Exception as exc:
-            self.app.call_from_thread(
-                self.notify, f"Export failed: {exc}", severity="error", timeout=8
-            )
 
     # ------------------------------------------------------------------
     # Mutation helpers (add is local — only needed in the main view)
