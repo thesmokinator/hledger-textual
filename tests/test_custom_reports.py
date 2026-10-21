@@ -212,12 +212,12 @@ class TestFormatCustomOutput:
 
     def _render(self, raw: str) -> str:
         """Render a Rich Text to a plain string for assertion."""
-        from hledger_textual.widgets.reports_pane import _format_custom_output
+        from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
         return _format_custom_output(raw).plain
 
     def test_replaces_pipe_separators(self):
         """|| is replaced with the Unicode box-drawing character │."""
-        from hledger_textual.widgets.reports_pane import _format_custom_output
+        from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
         raw = "Title\n  Account  ||  Jan\n"
         plain = _format_custom_output(raw).plain
         assert "│" in plain
@@ -225,7 +225,7 @@ class TestFormatCustomOutput:
 
     def test_replaces_plus_plus_separators(self):
         """++ is replaced with ┼."""
-        from hledger_textual.widgets.reports_pane import _format_custom_output
+        from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
         raw = "Title\n=========++==========\n"
         plain = _format_custom_output(raw).plain
         assert "┼" in plain
@@ -233,7 +233,7 @@ class TestFormatCustomOutput:
 
     def test_title_line_is_bold(self):
         """The first non-empty line is rendered bold."""
-        from hledger_textual.widgets.reports_pane import _format_custom_output
+        from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
         raw = "Balance changes in 2026Q1:\n  Account  ||  Jan\n"
         text = _format_custom_output(raw)
         # Find the span covering the title
@@ -242,7 +242,7 @@ class TestFormatCustomOutput:
 
     def test_total_rows_after_dashes(self):
         """Lines after the --- separator are styled bold yellow."""
-        from hledger_textual.widgets.reports_pane import _format_custom_output
+        from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
         raw = (
             "Title\n"
             "  Expenses  ||  €100\n"
@@ -255,7 +255,7 @@ class TestFormatCustomOutput:
 
     def test_standalone_zeros_are_dimmed(self):
         """Standalone 0 values are dimmed; 0 inside amounts like €0.50 is not."""
-        from hledger_textual.widgets.reports_pane import _format_custom_output
+        from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
         raw = "Title\n  Accounting  ||        0   €36.50\n"
         text = _format_custom_output(raw)
         # There should be a dim span; the plain text retains the 0
@@ -315,6 +315,10 @@ class TestReportsPaneCustomReports:
         )
         monkeypatch.setattr(
             "hledger_textual.widgets.reports_pane.load_custom_reports",
+            lambda: {"My report": "balance expenses"},
+        )
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_custom_actions.load_custom_reports",
             lambda: {"My report": "balance expenses"},
         )
         monkeypatch.setattr(

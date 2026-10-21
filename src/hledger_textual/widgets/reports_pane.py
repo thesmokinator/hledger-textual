@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import date
 from pathlib import Path
 
@@ -18,31 +17,24 @@ from textual.widgets import DataTable, Select, Static
 from hledger_textual.cache import HledgerCache
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.config import (
-    delete_custom_report,
     load_custom_reports,
     resolve_default_commodity,
-    save_custom_report,
 )
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
-from hledger_textual.models import CustomReport, ReportData, ReportRow
+from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
-from hledger_textual.widgets.constants import TREE_INDENT
 from hledger_textual.widgets.empty_state import EmptyState
-from hledger_textual.amountutil import parse_amount_string
-from hledger_textual.widgets.formatting import (
-    fmt_amount_str,
-    fmt_single_amount_str,
-    get_commodity_name,
-    split_raw_commodities,
-)
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
+from hledger_textual.widgets.reports_custom_actions import ReportsCustomActionsMixin
+from hledger_textual.widgets.reports_renderer import (
+    MULTI_COMMODITY_MARKER,
+    build_report_rows,
+    merge_investments,
+)
 
-_ONLY_SEPS = re.compile(r'^[\s=\-\+\|]+$')
-_STANDALONE_ZERO = re.compile(r'(?<![\d.])0(?![\d.])')
-
-MULTI_COMMODITY_MARKER = "◆ "
+__all__ = ["MULTI_COMMODITY_MARKER", "ReportsPane"]
 
 _REPORT_LABELS = {"is": "Income Statement", "bs": "Balance Sheet", "cf": "Cash Flow"}
 _PERIOD_LABELS = {3: "3 months", 6: "6 months", 12: "12 months", 0: "Year to date"}
@@ -61,121 +53,7 @@ _PERIOD_RANGES = [
 ]
 
 
-def _format_custom_output(raw: str, *, skip_title: bool = False) -> Text:
-    """Apply Rich styling to raw hledger text output.
-
-    Improvements applied:
-
-    - ``||`` and ``++`` replaced with Unicode box-drawing characters (``│`` / ``┼``)
-    - Separator lines (``===`` / ``---``) are dimmed
-    - Standalone zero values are dimmed
-    - The report title (first non-empty, non-indented line) is rendered bold,
-      unless ``skip_title`` is ``True`` in which case it is omitted entirely.
-      Lines that start with whitespace are treated as data rows, not titles.
-    - Total rows (lines after the ``---`` separator) are rendered bold yellow
-
-    Args:
-        raw: Raw stdout string from hledger.
-        skip_title: When ``True``, the first non-empty, non-indented line (the
-            hledger-generated title) is dropped from the output.  Use this when
-            the report name is already displayed in a separate header widget.
-            Lines that start with whitespace (data rows from simple commands
-            like ``bal``) are never treated as titles.
-
-    Returns:
-        A :class:`rich.text.Text` ready for use in a :class:`~textual.widgets.Static`.
-    """
-    result = Text(no_wrap=False)
-    lines = raw.splitlines()
-    after_total_sep = False
-    title_done = False
-
-    for line in lines:
-        display = line.replace('++', '┼').replace('||', '│')
-
-        # Title: first non-empty line.  Hledger titles (e.g. "Balance
-        # Sheet 2026-03-31") never start with whitespace, whereas data
-        # rows from simple commands like ``bal`` are indented for amount
-        # alignment.  Only treat the line as a title when it starts at
-        # column 0; otherwise fall through to normal data handling.
-        if not title_done:
-            if display.strip():
-                title_done = True
-                if not display[0].isspace():
-                    if not skip_title:
-                        result.append(display + "\n", style="bold")
-                    continue
-                # First non-empty line is indented → data row, fall through
-            else:
-                if not skip_title:
-                    result.append("\n")
-                continue
-
-        # Separator lines: only =, -, +, |, and spaces
-        if _ONLY_SEPS.match(line):
-            if line.strip() and '-' in line and '=' not in line:
-                after_total_sep = True
-            result.append(display + "\n", style="dim")
-            continue
-
-        # Total rows (after the --- separator)
-        if after_total_sep:
-            result.append(display + "\n", style="bold yellow")
-            continue
-
-        # Regular data line: dim standalone zero values
-        line_text = Text(no_wrap=False)
-        pos = 0
-        for m in _STANDALONE_ZERO.finditer(display):
-            if m.start() > pos:
-                line_text.append(display[pos:m.start()])
-            line_text.append("0", style="dim")
-            pos = m.end()
-        if pos < len(display):
-            line_text.append(display[pos:])
-        line_text.append("\n")
-        result.append_text(line_text)
-
-    return result
-
-
-def _merge_investments(is_data: ReportData, inv_data: ReportData) -> ReportData:
-    """Append investment rows as a new section to an Income Statement report.
-
-    Args:
-        is_data: The original Income Statement report data.
-        inv_data: Investment balance report data.
-
-    Returns:
-        A new :class:`ReportData` with the investment rows appended.
-    """
-    merged_rows = list(is_data.rows)
-
-    n_periods = len(is_data.period_headers)
-    merged_rows.append(ReportRow(
-        account="Investments",
-        amounts=[""] * n_periods,
-        is_section_header=True,
-    ))
-
-    for row in inv_data.rows:
-        if not row.is_section_header and not row.is_total:
-            account = row.account
-            if ":" in account:
-                account = account.rsplit(":", 1)[-1]
-            merged_rows.append(ReportRow(
-                account=account,
-                amounts=row.amounts,
-            ))
-
-    return ReportData(
-        title=is_data.title,
-        period_headers=is_data.period_headers,
-        rows=merged_rows,
-    )
-
-
-class ReportsPane(DataTablePaneMixin, Widget):
+class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     """Widget showing multi-period hledger financial reports."""
 
     _main_table_id = "reports-table"
@@ -299,69 +177,6 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
         self.query_one("#report-context-bar", Static).update(text)
 
-    def _update_context_bar_custom(self, name: str, command: str) -> None:
-        """Refresh the context bar to show the active custom report name and command.
-
-        Args:
-            name: The custom report name.
-            command: The hledger command string.
-        """
-        text = Text()
-        text.append(name, style="bold")
-        if command:
-            text.append("  ·  ", style="dim")
-            text.append(command, style="dim")
-
-        self.query_one("#report-context-bar", Static).update(text)
-
-    # --- View toggle ---
-
-    def _set_custom_view(self, active: bool) -> None:
-        """Toggle between the built-in report view and the custom report output view.
-
-        When ``active`` is ``True``, the DataTable and period Select are hidden
-        and the raw-output area is shown.  The inverse applies when ``False``.
-        A :class:`CustomReportStateChanged` message is posted so that the app
-        can update the footer accordingly.
-
-        Args:
-            active: ``True`` to show the custom report output; ``False`` for the
-                built-in DataTable view.
-        """
-        table = self.query_one("#reports-table", DataTable)
-        output = self.query_one("#custom-report-output", VerticalScroll)
-        period_select = self.query_one("#report-period-select", Select)
-        type_select = self.query_one("#report-type-select", Select)
-
-        output.display = active
-        type_select.display = not active
-        period_select.display = not active
-        if active:
-            table.display = False
-            self.query_one("#reports-empty-state", EmptyState).display = False
-        else:
-            self._sync_empty_state()
-
-        self.post_message(self.CustomReportStateChanged(active))
-
-    # --- Custom report Select ---
-
-    def _refresh_custom_report_select(self, select_name: str | None = None) -> None:
-        """Reload custom report options in the Select widget.
-
-        Args:
-            select_name: If provided, sets the Select to this report name
-                after refreshing the options.
-        """
-        reports = load_custom_reports()
-        select = self.query_one("#custom-report-select", Select)
-        options = [(name, name) for name in reports]
-        select.set_options(options)
-        if select_name is not None and select_name in reports:
-            select.value = select_name
-
-    # --- Period calculation ---
-
     def _period_range(self) -> tuple[str, str]:
         """Calculate begin and end dates based on the selected period range.
 
@@ -422,7 +237,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
                     commodity=commodity,
                 )
                 if inv_data.rows:
-                    data = _merge_investments(data, inv_data)
+                    data = merge_investments(data, inv_data)
             except HledgerError:
                 pass
 
@@ -453,21 +268,6 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
     # --- Apply methods ---
 
-    def _apply_custom_output(self, output: str, command: str) -> None:
-        """Display custom report output with Rich styling.
-
-        The hledger-generated title line is suppressed because the report name
-        is already shown in the context bar.
-
-        Args:
-            output: The raw text returned by hledger.
-            command: The command used, forwarded to the context bar.
-        """
-        static = self.query_one("#custom-report-text", Static)
-        static.update(_format_custom_output(output.rstrip(), skip_title=True))
-        if self._custom_report_name:
-            self._update_context_bar_custom(self._custom_report_name, command)
-
     def _apply_report(self) -> None:
         """Apply loaded report data to the DataTable."""
         table = self.query_one("#reports-table", DataTable)
@@ -484,148 +284,14 @@ class ReportsPane(DataTablePaneMixin, Widget):
             table.add_column(header, key=f"period-{i}")
             self._fixed_widths[col_idx] = 18
 
-        n_cols = len(data.period_headers) + 1
-        empty_row = [""] * n_cols
-
-        self._table_rows = []
-        self._row_full_paths = []
-        path_stack: list[str] = []
-
-        def _has_multi_commodity(amounts: list[str]) -> bool:
-            """Check whether any amount in the list spans multiple commodities."""
-            return any(", " in amt for amt in amounts)
-
-        def _make_account_text(r: ReportRow) -> Text:
-            """Build the Rich Text for the account column of a data row."""
-            if r.is_section_header:
-                return Text.from_markup(
-                    f"[bold cyan]{r.account}[/bold cyan]", emoji=False
-                )
-            if r.is_total:
-                return Text.from_markup(
-                    f"[bold yellow]{r.account}[/bold yellow]", emoji=False
-                )
-            return Text(TREE_INDENT * r.depth + r.account)
-
-        for idx, row in enumerate(data.rows):
-            if row.is_section_header and idx > 0:
-                table.add_row(*empty_row)
-                self._table_rows.append(None)
-                self._row_full_paths.append("")
-            elif row.is_total:
-                table.add_row(*empty_row)
-                self._table_rows.append(None)
-                self._row_full_paths.append("")
-
-            # Compute full account path for tree mode
-            if row.is_section_header or row.is_total:
-                full_path = ""
-                if row.is_section_header:
-                    path_stack.clear()
+        rows, self._table_rows, self._row_full_paths = build_report_rows(
+            data, tree_mode=self._tree_mode, stacked_currency=self._stacked_currency
+        )
+        for cells, auto_height in rows:
+            if auto_height:
+                table.add_row(*cells, height=None)
             else:
-                if self._tree_mode:
-                    while len(path_stack) > row.depth:
-                        path_stack.pop()
-                    if path_stack:
-                        full_path = f"{path_stack[-1]}:{row.account}"
-                    else:
-                        full_path = row.account
-                    if len(path_stack) == row.depth:
-                        path_stack.append(full_path)
-                    else:
-                        path_stack[row.depth] = full_path
-                else:
-                    full_path = row.account
-
-            account_text = _make_account_text(row)
-
-            if (
-                not self._tree_mode
-                and not self._stacked_currency
-                and not row.is_section_header
-                and not row.is_total
-                and _has_multi_commodity(row.amounts)
-            ):
-                account_text = Text(MULTI_COMMODITY_MARKER) + account_text
-
-            # --- Stacked multi-currency mode ---
-            if (
-                self._stacked_currency
-                and not row.is_section_header
-                and not row.is_total
-                and _has_multi_commodity(row.amounts)
-            ):
-                from decimal import Decimal
-
-                n_periods = len(data.period_headers)
-                period_splits: list[list[str]] = [
-                    split_raw_commodities(amt) for amt in row.amounts
-                ]
-
-                # Group raw sub-amounts by commodity name across all periods
-                # and compute each commodity's total absolute value for sorting.
-                commodity_sum: dict[str, Decimal] = {}
-                commodity_periods: dict[str, dict[int, str]] = {}
-
-                for p_idx, split_items in enumerate(period_splits):
-                    for raw_amt in split_items:
-                        name = get_commodity_name(raw_amt)
-                        if not name:
-                            continue
-                        if name not in commodity_periods:
-                            commodity_periods[name] = {}
-                            commodity_sum[name] = Decimal("0")
-                        commodity_periods[name][p_idx] = raw_amt
-                        try:
-                            qty, _ = parse_amount_string(raw_amt)
-                            commodity_sum[name] += abs(qty)
-                        except ValueError:
-                            pass
-
-                # Sort commodities by total absolute value (descending).
-                sorted_commodities = sorted(
-                    commodity_periods.keys(),
-                    key=lambda c: commodity_sum[c],
-                    reverse=True,
-                )
-
-                # One row per commodity.
-                for c_idx, commodity in enumerate(sorted_commodities):
-                    p_map = commodity_periods[commodity]
-                    if c_idx == 0:
-                        # Primary row — full account name.
-                        row_cells: list[str | Text] = [account_text]
-                    else:
-                        # Child row — dimmed commodity name, indented.
-                        row_cells = [Text(f"  {commodity}", style="dim")]
-
-                    for p_idx in range(n_periods):
-                        raw = p_map.get(p_idx, "")
-                        row_cells.append(fmt_single_amount_str(raw, accounting=True) if raw else "")
-
-                    while len(row_cells) < n_periods + 1:
-                        row_cells.append("")
-                    table.add_row(*row_cells)
-                    self._table_rows.append(row)
-                    self._row_full_paths.append(full_path)
-
-                continue
-
-            # --- Single-currency or non-stacked path ---
-            cells: list[str | Text] = [account_text]
-            for amt in row.amounts:
-                formatted = fmt_amount_str(amt, accounting=True)
-                if row.is_total:
-                    cells.append(f"[bold]{formatted}[/bold]")
-                else:
-                    cells.append(formatted)
-
-            while len(cells) < len(data.period_headers) + 1:
-                cells.append("")
-
-            table.add_row(*cells, height=None)
-            self._table_rows.append(row)
-            self._row_full_paths.append(full_path)
+                table.add_row(*cells)
 
         if self._fixed_widths:
             distribute_column_widths(table, self._fixed_widths)
@@ -778,83 +444,6 @@ class ReportsPane(DataTablePaneMixin, Widget):
         else:
             self._load_report_data()
         self.notify("Refreshed", timeout=2)
-
-    def action_new_custom_report(self) -> None:
-        """Open the form to create a new custom report."""
-        from hledger_textual.screens.custom_report_form import CustomReportFormScreen
-
-        def _on_result(report: CustomReport | None) -> None:
-            if report is None:
-                return
-            save_custom_report(report.name, report.command)
-            self._custom_report_name = report.name
-            self._refresh_custom_report_select(select_name=report.name)
-            self._set_custom_view(active=True)
-            self._load_custom_report_data()
-
-        self.app.push_screen(CustomReportFormScreen(), _on_result)
-
-    def action_edit_custom_report(self) -> None:
-        """Open the form to edit the currently selected custom report."""
-        if self._custom_report_name is None:
-            self.notify("No custom report selected", severity="warning", timeout=3)
-            return
-
-        from hledger_textual.screens.custom_report_form import CustomReportFormScreen
-
-        reports = load_custom_reports()
-        command = reports.get(self._custom_report_name, "")
-        old_name = self._custom_report_name
-        report = CustomReport(name=old_name, command=command)
-
-        def _on_result(updated: CustomReport | None) -> None:
-            if updated is None:
-                return
-            if updated.name != old_name:
-                delete_custom_report(old_name)
-            save_custom_report(updated.name, updated.command)
-            self._custom_report_name = updated.name
-            self._refresh_custom_report_select(select_name=updated.name)
-            self._update_context_bar_custom(updated.name, updated.command)
-            self._load_custom_report_data()
-
-        self.app.push_screen(CustomReportFormScreen(report=report), _on_result)
-
-    def action_delete_custom_report(self) -> None:
-        """Open a confirmation dialog to delete the currently selected custom report."""
-        if self._custom_report_name is None:
-            self.notify("No custom report selected", severity="warning", timeout=3)
-            return
-
-        from hledger_textual.screens.custom_report_delete_confirm import (
-            CustomReportDeleteConfirmModal,
-        )
-
-        name = self._custom_report_name
-
-        def _on_result(confirmed: bool) -> None:
-            if not confirmed:
-                return
-            delete_custom_report(name)
-            self._custom_report_name = None
-            self._refresh_custom_report_select()
-            self._set_custom_view(active=False)
-            self._update_context_bar_builtin()
-            self._load_report_data()
-
-        self.app.push_screen(CustomReportDeleteConfirmModal(name), _on_result)
-
-    def action_back_to_builtin(self) -> None:
-        """Return from custom report view to the built-in report view."""
-        if self._custom_report_name is None:
-            return
-        self._custom_report_name = None
-        self.query_one("#custom-report-select", Select).clear()
-        self._set_custom_view(active=False)
-        self._update_context_bar_builtin()
-        self._load_report_data()
-
-    # --- Event handlers ---
 
     @on(DataTable.CellSelected, "#reports-table")
     def on_report_cell_selected(self, event: DataTable.CellSelected) -> None:
