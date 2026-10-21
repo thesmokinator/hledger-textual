@@ -38,6 +38,7 @@ from hledger_textual.models import (
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
+from hledger_textual.widgets.constants import TRANSACTION_STATUS_OPTIONS
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 from hledger_textual.widgets.posting_sum import (
@@ -363,13 +364,6 @@ def parse_amount_str(
 
     return _parse_simple_amount_str(s, default_commodity, commodity_styles)
 
-STATUS_OPTIONS = [
-    ("Unmarked", TransactionStatus.UNMARKED),
-    ("Pending (!)", TransactionStatus.PENDING),
-    ("Cleared (*)", TransactionStatus.CLEARED),
-]
-
-
 class TransactionFormScreen(
     FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[Transaction | None]
 ):
@@ -460,7 +454,7 @@ class TransactionFormScreen(
                         self.transaction.status if self._has_template else TransactionStatus.UNMARKED
                     )
                     yield Select(
-                        options=STATUS_OPTIONS,
+                        options=TRANSACTION_STATUS_OPTIONS,
                         value=initial_status,
                         id="select-status",
                     )

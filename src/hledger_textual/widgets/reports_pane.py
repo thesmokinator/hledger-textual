@@ -26,7 +26,13 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import CustomReport, ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
-from hledger_textual.widgets.constants import TREE_INDENT
+from hledger_textual.widgets.constants import (
+    REPORT_LABELS,
+    REPORT_PERIOD_LABELS,
+    REPORT_PERIOD_RANGES,
+    REPORT_TYPES,
+    TREE_INDENT,
+)
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.amountutil import parse_amount_string
 from hledger_textual.widgets.formatting import (
@@ -43,22 +49,6 @@ _ONLY_SEPS = re.compile(r'^[\s=\-\+\|]+$')
 _STANDALONE_ZERO = re.compile(r'(?<![\d.])0(?![\d.])')
 
 MULTI_COMMODITY_MARKER = "◆ "
-
-_REPORT_LABELS = {"is": "Income Statement", "bs": "Balance Sheet", "cf": "Cash Flow"}
-_PERIOD_LABELS = {3: "3 months", 6: "6 months", 12: "12 months", 0: "Year to date"}
-
-_REPORT_TYPES = [
-    ("Income Statement", "is"),
-    ("Balance Sheet", "bs"),
-    ("Cash Flow", "cf"),
-]
-
-_PERIOD_RANGES = [
-    ("3 months", 3),
-    ("6 months", 6),
-    ("12 months", 12),
-    ("Year to date", 0),
-]
 
 
 def _format_custom_output(raw: str, *, skip_title: bool = False) -> Text:
@@ -241,13 +231,13 @@ class ReportsPane(DataTablePaneMixin, Widget):
         """Create the pane layout."""
         with PaneToolbar():
             yield Select(
-                [(label, value) for label, value in _REPORT_TYPES],
+                [(label, value) for label, value in REPORT_TYPES],
                 value="is",
                 id="report-type-select",
                 allow_blank=False,
             )
             yield Select(
-                [(label, value) for label, value in _PERIOD_RANGES],
+                [(label, value) for label, value in REPORT_PERIOD_RANGES],
                 value=6,
                 id="report-period-select",
                 allow_blank=False,
@@ -289,8 +279,8 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
     def _update_context_bar_builtin(self) -> None:
         """Refresh the context bar to show the active built-in report and period."""
-        report_name = _REPORT_LABELS.get(self._report_type, self._report_type)
-        period_name = _PERIOD_LABELS.get(self._period_months, "")
+        report_name = REPORT_LABELS.get(self._report_type, self._report_type)
+        period_name = REPORT_PERIOD_LABELS.get(self._period_months, "")
 
         text = Text()
         text.append(report_name, style="bold")
@@ -731,8 +721,8 @@ class ReportsPane(DataTablePaneMixin, Widget):
             self.notify("No chart data available for this report", severity="warning", timeout=3)
             return
 
-        report_label = _REPORT_LABELS.get(self._report_type, self._report_type)
-        period_label = _PERIOD_LABELS.get(self._period_months, "")
+        report_label = REPORT_LABELS.get(self._report_type, self._report_type)
+        period_label = REPORT_PERIOD_LABELS.get(self._period_months, "")
         title = f"{report_label}  ·  {period_label}"
         self.app.push_screen(ReportChartModal(chart_data, self._report_type, title))
 
