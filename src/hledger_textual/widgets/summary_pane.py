@@ -23,6 +23,7 @@ from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import (
     fmt_amount,
 )
+from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (
     HledgerError,
@@ -329,6 +330,7 @@ class SummaryPane(Widget):
 
     @work(thread=True, exclusive=True, group="summary-static")
     def _load_static_data(self) -> None:
+        self.app.call_from_thread(show_loading_overlay, self, "Loading summary…")
         """Load current-month cards and portfolio data.
 
         The cards (Income / Expenses / Net) always show the current calendar
@@ -467,6 +469,7 @@ class SummaryPane(Widget):
         commodity: str | None = None,
     ) -> None:
         """Apply card values, basic investments, and liabilities."""
+        hide_loading_overlay(self)
         if not self.is_attached:
             return
         # Guard against the widget being unmounted between the is_attached check
@@ -631,6 +634,7 @@ class SummaryPane(Widget):
     @work(thread=True, exclusive=True, group="summary-breakdown")
     def _load_breakdown_data(self) -> None:
         """Load income and expense breakdowns for the selected month."""
+        self.app.call_from_thread(show_loading_overlay, self, "Loading summary…")
         period = self._period_str()
         # Convert both sides to the default commodity so that percentages are
         # computed on comparable amounts (mirrors the cards and Accounts view).
@@ -661,6 +665,7 @@ class SummaryPane(Widget):
         commodity: str | None = None,
     ) -> None:
         """Apply loaded income and expense breakdowns to their tables."""
+        hide_loading_overlay(self)
         # Guard against teardown: is_attached can still be True for a moment
         # while the child widgets have already been removed.
         if not self.is_attached or not self.query("#summary-income-title"):

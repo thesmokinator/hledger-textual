@@ -29,6 +29,26 @@ ContentSwitcher {
     height: 1fr;
 }
 
+/* --- Loading feedback --- */
+
+.loading-overlay {
+    dock: top;
+    height: 1;
+    background: $accent;
+    color: $text;
+    align: left middle;
+}
+
+.loading-overlay LoadingIndicator {
+    width: 4;
+    height: 1;
+}
+
+.loading-message {
+    height: 1;
+    content-align: left middle;
+}
+
 #footer-bar {
     dock: bottom;
     height: 1;

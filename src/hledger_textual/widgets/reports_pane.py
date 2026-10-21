@@ -35,6 +35,7 @@ from hledger_textual.widgets.formatting import (
     get_commodity_name,
     split_raw_commodities,
 )
+from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
@@ -391,6 +392,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
     @work(thread=True, exclusive=True, group="reports-load")
     def _load_report_data(self) -> None:
         """Load built-in report data in a background thread."""
+        self.app.call_from_thread(show_loading_overlay, self, "Loading report…")
         begin, end = self._period_range()
         self._period_begin = date.fromisoformat(begin)
         commodity = resolve_default_commodity(self.journal_file)
@@ -434,6 +436,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
         """Load custom report output in a background thread."""
         if self._custom_report_name is None:
             return
+        self.app.call_from_thread(show_loading_overlay, self, "Loading report…")
 
         reports = load_custom_reports()
         command = reports.get(self._custom_report_name)
@@ -463,6 +466,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
             output: The raw text returned by hledger.
             command: The command used, forwarded to the context bar.
         """
+        hide_loading_overlay(self)
         static = self.query_one("#custom-report-text", Static)
         static.update(_format_custom_output(output.rstrip(), skip_title=True))
         if self._custom_report_name:
@@ -470,6 +474,7 @@ class ReportsPane(DataTablePaneMixin, Widget):
 
     def _apply_report(self) -> None:
         """Apply loaded report data to the DataTable."""
+        hide_loading_overlay(self)
         table = self.query_one("#reports-table", DataTable)
         data = self._report_data
 
