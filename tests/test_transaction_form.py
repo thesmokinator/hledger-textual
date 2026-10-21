@@ -1412,3 +1412,46 @@ class TestUnsavedChangesGuard:
             await pilot.click(form.query_one("#btn-form-cancel"))
             await pilot.pause(delay=0.3)
             assert isinstance(app.screen, TransactionFormScreen)
+
+
+class TestPostingRowLayout:
+    """Posting rows are two lines tall so more postings fit on screen."""
+
+    async def test_five_postings_fit_with_save_visible_at_24_lines(self, app: HledgerTuiApp):
+        """A 5-posting form at 24 lines keeps every row 2 tall and Save visible."""
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            for _ in range(3):
+                form._add_posting_row()
+                await pilot.pause(delay=0.2)
+
+            rows = list(form.query(PostingRow))
+            assert len(rows) == 5
+            assert all(row.region.height == 2 for row in rows)
+
+            save_region = form.query_one("#btn-save").region
+            assert save_region.y + save_region.height <= 24
+
+    async def test_focused_posting_input_has_visible_background(self, app: HledgerTuiApp):
+        """The focused posting input is highlighted at the tighter density."""
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            await pilot.press("2")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+            form = app.screen
+            assert isinstance(form, TransactionFormScreen)
+
+            amount = form.query_one("#amount-0")
+            amount.focus()
+            await pilot.pause()
+            assert amount.has_focus
+            assert amount.styles.background.a == pytest.approx(0.25)
