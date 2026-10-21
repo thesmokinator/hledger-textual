@@ -12,17 +12,7 @@ from hledger_textual.models import CustomReport
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.form_base import FormScreenBase
 
-_EXAMPLES: list[tuple[str, str]] = [
-    ("balance --tree", "Full balance tree"),
-    ("balance expenses --tree", "Expenses tree"),
-    ("balance expenses --tree -M", "Monthly expenses tree"),
-    ("balance income --tree", "Income tree"),
-    ("balance assets --tree", "Assets tree"),
-    ("register expenses -M", "Monthly expense register"),
-    ("register income -M", "Monthly income register"),
-    ("incomestatement -M", "Monthly income statement"),
-    ("balancesheet", "Balance sheet"),
-]
+from hledger_textual.widgets.constants import CUSTOM_REPORT_EXAMPLES
 
 
 class CustomReportFormScreen(DirtyGuardMixin, FormScreenBase[CustomReport | None]):
@@ -70,7 +60,7 @@ class CustomReportFormScreen(DirtyGuardMixin, FormScreenBase[CustomReport | None
 
             yield Label("Examples (click to fill command):", id="custom-report-examples-label")
             yield OptionList(
-                *[Option(f"{cmd}  [{desc}]", id=cmd) for cmd, desc in _EXAMPLES],
+                *[Option(f"{cmd}  [{desc}]", id=cmd) for cmd, desc in CUSTOM_REPORT_EXAMPLES],
                 id="custom-report-examples",
             )
 

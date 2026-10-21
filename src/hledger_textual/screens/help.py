@@ -12,6 +12,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Static, TabPane, TabbedContent
 
 from hledger_textual.hledger import HledgerError, get_hledger_version, load_journal_stats
+from hledger_textual.widgets.constants import KEY_LABELS
 
 
 def _row(key: str, desc: str) -> str:
@@ -24,28 +25,10 @@ def _info_row(label: str, value: str) -> str:
     return f"  [dim]{label:<14}[/dim]{value}"
 
 
-_KEY_LABELS = {
-    "slash": "/",
-    "question_mark": "?",
-    "exclamation_mark": "!",
-    "enter": "Enter",
-    "escape": "Esc",
-    "space": "Space",
-    "left": "Left",
-    "right": "Right",
-    "up": "Up",
-    "down": "Down",
-    "home": "Home",
-    "end": "End",
-    "tab": "Tab",
-    "backspace": "Backspace",
-}
-
-
 def _format_key(key: str) -> str:
     """Render a Textual binding key for humans (``slash`` -> ``/``)."""
     return " / ".join(
-        _KEY_LABELS.get(part, part) for part in key.split(",") if part.strip()
+        KEY_LABELS.get(part, part) for part in key.split(",") if part.strip()
     )
 
 

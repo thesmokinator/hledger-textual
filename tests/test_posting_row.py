@@ -95,3 +95,23 @@ class TestPostingRow:
             row.query_one("#amount-0", Input).value = "99.99"
             await pilot.pause()
             assert row.amount == "99.99"
+
+
+class TestPostingRowCommoditySuffix:
+    """Tests for the commodity suffix label."""
+
+    async def test_commodity_rendered_as_suffix_label(self):
+        app = PostingRowApp()
+        async with app.run_test(size=(100, 20)) as pilot:
+            await pilot.pause()
+            row = app.query(PostingRow).first()
+            suffixes = list(row.query(".posting-commodity"))
+            assert len(suffixes) == 1
+            assert str(suffixes[0].renderable) == "€"
+
+    async def test_no_suffix_without_commodity(self):
+        app = PostingRowApp()
+        async with app.run_test(size=(100, 20)) as pilot:
+            await pilot.pause()
+            rows = list(app.query(PostingRow))
+            assert list(rows[1].query(".posting-commodity")) == []
