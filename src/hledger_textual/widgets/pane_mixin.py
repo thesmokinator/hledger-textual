@@ -90,6 +90,7 @@ class DataTablePaneMixin:
         def on_result(result: tuple[str, str, str] | None) -> None:
             if result is not None:
                 fmt, fname, directory = result
+                self.notify(f"Exporting to {fname}…", timeout=5)
                 self._run_export(data, fmt, fname, directory)
 
         self.app.push_screen(

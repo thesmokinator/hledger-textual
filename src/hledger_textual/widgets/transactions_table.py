@@ -22,6 +22,7 @@ from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
+from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
@@ -429,6 +430,7 @@ class TransactionsTable(Widget):
     @work(thread=True, exclusive=True)
     def _load_transactions(self) -> None:
         """Load transactions from hledger in a background thread."""
+        self.app.call_from_thread(show_loading_overlay, self, "Loading transactions…")
         parts = [
             q
             for q in [self._fixed_query, self._date_query, self._search_query]
@@ -451,6 +453,7 @@ class TransactionsTable(Widget):
         been unmounted (app teardown, fast view switch), in which case the
         DataTable child is gone and refreshing would raise ``NoMatches``.
         """
+        hide_loading_overlay(self)
         self._all_transactions = txns
         if not self.is_mounted or not self.query(DataTable):
             return
