@@ -23,6 +23,7 @@ from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.form_base import FormScreenBase
 from hledger_textual.widgets.constants import RECURRING_PERIOD_OPTIONS
 from hledger_textual.widgets.date_input import DateInput
+from hledger_textual.widgets.form_field import FormField
 from hledger_textual.widgets.posting_row import PostingRow
 from hledger_textual.widgets.posting_sum import (
     collect_posting_totals,
@@ -95,29 +96,34 @@ class RecurringFormScreen(
             yield Static(title, id="form-title")
 
             with VerticalScroll(id="form-scroll"):
-                with Horizontal(classes="form-field form-field--required"):
-                    yield Label("Description:*")
-                    yield Input(
+                yield FormField(
+                    "Description:",
+                    Input(
                         value=r.description if r else "",
                         placeholder="e.g. Rent payment",
                         id="recurring-input-description",
-                    )
-
-                with Horizontal(classes="form-field form-field--required"):
-                    yield Label("Period:*")
-                    yield Select(
+                    ),
+                    required=True,
+                )
+                yield FormField(
+                    "Period:",
+                    Select(
                         options=RECURRING_PERIOD_OPTIONS,
                         value=initial_period,
                         id="recurring-select-period",
-                    )
-
-                with Horizontal(classes="form-field form-field--required", id="recurring-custom-period-row"):
-                    yield Label("Expression:*")
-                    yield Input(
+                    ),
+                    required=True,
+                )
+                yield FormField(
+                    "Expression:",
+                    Input(
                         value=initial_custom,
                         placeholder="e.g. every 2 weeks  (also: every 3 days, monthly)",
                         id="recurring-input-custom-period",
-                    )
+                    ),
+                    required=True,
+                    id="recurring-custom-period-row",
+                )
 
                 # Inline hint mirroring hledger's periodic-rules grammar so
                 # users don't have to flip to the docs to discover what's
@@ -139,20 +145,23 @@ class RecurringFormScreen(
                         classes="form-error",
                     )
 
-                with Horizontal(classes="form-field form-field--required"):
-                    yield Label("Start date:*")
-                    yield DateInput(
+                yield FormField(
+                    "Start date:",
+                    DateInput(
                         value=r.start_date if (r and r.start_date) else date.today().isoformat(),
                         id="recurring-input-start",
-                    )
-
-                with Horizontal(classes="form-field form-field--optional"):
-                    yield Label("End date:")
-                    yield DateInput(
+                    ),
+                    required=True,
+                )
+                yield FormField(
+                    "End date:",
+                    DateInput(
                         value=r.end_date if (r and r.end_date) else "",
                         placeholder="YYYY-MM-DD (optional)",
                         id="recurring-input-end",
-                    )
+                    ),
+                    optional=True,
+                )
 
                 yield Static("Postings*", id="postings-header")
                 yield Vertical(id="postings-container")

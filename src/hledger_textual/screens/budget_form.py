@@ -8,7 +8,7 @@ from pathlib import Path
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Static
 
 from hledger_textual.amountutil import describe_amount_error
 from hledger_textual.config import load_default_commodity
@@ -17,6 +17,7 @@ from hledger_textual.screens._form_account_suggestions import FormAccountSuggest
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.form_base import FormScreenBase
 from hledger_textual.widgets.amount_input import NumericAmountInput
+from hledger_textual.widgets.form_field import FormField
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
@@ -59,40 +60,45 @@ class BudgetFormScreen(
         with Vertical(id="budget-form-dialog"):
             yield Static(title, id="budget-form-title")
 
+            default_commodity = load_default_commodity()
             with Vertical(classes="form-field-group"):
-                with Horizontal(classes="form-field form-field--required"):
-                    yield Label("Account:*")
-                    yield AutocompleteInput(
+                yield FormField(
+                    "Account:",
+                    AutocompleteInput(
                         value=self.rule.account if self.is_edit else "",
                         placeholder="e.g. Expenses:Groceries",
                         id="budget-input-account",
-                    )
-
+                    ),
+                    required=True,
+                )
                 yield Static("", id="budget-account-warning", classes="field-warning hidden")
 
-            with Horizontal(classes="form-field form-field--required"):
-                yield Label("Amount:*")
-                yield NumericAmountInput(
+            yield FormField(
+                "Amount:",
+                NumericAmountInput(
                     value=f"{self.rule.amount.quantity:.2f}" if self.is_edit else "",
                     id="budget-input-amount",
-                )
-
-            with Horizontal(classes="form-field form-field--required"):
-                yield Label("Commodity:*")
-                default_commodity = load_default_commodity()
-                yield Input(
+                ),
+                required=True,
+            )
+            yield FormField(
+                "Commodity:",
+                Input(
                     value=self.rule.amount.commodity if self.is_edit else default_commodity,
                     placeholder=default_commodity,
                     id="budget-input-commodity",
-                )
-
-            with Horizontal(classes="form-field form-field--optional"):
-                yield Label("Category:")
-                yield Input(
+                ),
+                required=True,
+            )
+            yield FormField(
+                "Category:",
+                Input(
                     value=self.rule.category if self.is_edit else "",
                     placeholder="e.g. Fixed, Variable, Food (optional)",
                     id="budget-input-category",
-                )
+                ),
+                optional=True,
+            )
 
             yield Static("* required", classes="form-required-footer")
 
