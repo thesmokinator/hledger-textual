@@ -12,7 +12,8 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from hledger_textual.models import ReportData, ReportRow
-from hledger_textual.widgets.reports_pane import ReportsPane, _format_custom_output
+from hledger_textual.widgets.reports_pane import ReportsPane
+from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
 from tests.conftest import wait_until
 
 
