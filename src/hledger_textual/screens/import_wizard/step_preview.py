@@ -7,18 +7,8 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Label, Select, Static
 
 from hledger_textual.screens.import_wizard.state import WizardState
+from hledger_textual.widgets.constants import HEADER_OPTIONS, SEPARATOR_OPTIONS
 
-SEPARATOR_OPTIONS = [
-    ("Comma (,)", ","),
-    ("Semicolon (;)", ";"),
-    ("Tab", "\t"),
-    ("Pipe (|)", "|"),
-]
-
-HEADER_OPTIONS = [
-    ("Yes", "yes"),
-    ("No", "no"),
-]
 
 
 class PreviewStep(Vertical):

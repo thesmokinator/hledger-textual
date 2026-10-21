@@ -7,22 +7,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Label, Select, Static
 
 from hledger_textual.screens.import_wizard.state import WizardState
+from hledger_textual.widgets.constants import FIELD_OPTIONS
 
-FIELD_OPTIONS = [
-    ("(skip)", ""),
-    ("date", "date"),
-    ("date2", "date2"),
-    ("status", "status"),
-    ("code", "code"),
-    ("description", "description"),
-    ("comment", "comment"),
-    ("amount", "amount"),
-    ("amount-in", "amount-in"),
-    ("amount-out", "amount-out"),
-    ("currency", "currency"),
-    ("account1", "account1"),
-    ("account2", "account2"),
-]
 
 
 class MappingStep(VerticalScroll):

@@ -27,14 +27,12 @@ from hledger_textual.models import CsvRulesFile
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.import_wizard.state import WizardState
 from hledger_textual.screens.import_wizard.step_mapping import MappingStep
-from hledger_textual.screens.import_wizard.step_preview import (
-    SEPARATOR_OPTIONS,
-    PreviewStep,
-)
+from hledger_textual.screens.import_wizard.step_preview import PreviewStep
 from hledger_textual.screens.import_wizard.step_review import ReviewStep
 from hledger_textual.screens.import_wizard.step_rules import RulesStep
 from hledger_textual.screens.import_wizard.step_settings import SettingsStep
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
+from hledger_textual.widgets.constants import SEPARATOR_OPTIONS
 
 TOTAL_STEPS = 5
 
