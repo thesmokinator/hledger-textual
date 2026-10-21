@@ -11,12 +11,14 @@ import pytest
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.dateutil import validate_iso_date
 from hledger_textual.models import Amount, AmountStyle, Posting, TransactionStatus
+from hledger_textual.amount_parser import (
+    extract_commodity_and_qty,
+    load_journal_commodity_styles,
+    parse_amount_str,
+)
 from hledger_textual.screens.transaction_form import (
     TransactionFormScreen,
     _build_commodity_data,
-    _extract_commodity_and_qty,
-    load_journal_commodity_styles,
-    parse_amount_str,
 )
 from hledger_textual.widgets.amount_input import AmountInput
 from hledger_textual.widgets.date_input import DateInput
@@ -1099,23 +1101,23 @@ class TestParseAmountStr:
 
 
 class TestExtractCommodityAndQty:
-    """Unit tests for _extract_commodity_and_qty."""
+    """Unit tests for extract_commodity_and_qty."""
 
     def test_plain_number_returns_none(self):
-        assert _extract_commodity_and_qty("50.00") is None
+        assert extract_commodity_and_qty("50.00") is None
 
     def test_currency_prefix_returns_none(self):
-        assert _extract_commodity_and_qty("€742.55") is None
+        assert extract_commodity_and_qty("€742.55") is None
 
     def test_negative_currency_prefix_returns_none(self):
-        assert _extract_commodity_and_qty("-€742.55") is None
+        assert extract_commodity_and_qty("-€742.55") is None
 
     def test_named_commodity_negative(self):
-        result = _extract_commodity_and_qty("-5 XEON")
+        result = extract_commodity_and_qty("-5 XEON")
         assert result == (Decimal("-5"), "XEON", None)
 
     def test_named_commodity_with_total_cost(self):
-        result = _extract_commodity_and_qty("-5 XEON @@ €200")
+        result = extract_commodity_and_qty("-5 XEON @@ €200")
         assert result is not None
         qty, commodity, proceeds = result
         assert qty == Decimal("-5")
@@ -1124,7 +1126,7 @@ class TestExtractCommodityAndQty:
 
     def test_named_commodity_with_total_cost_partial(self):
         """Incomplete cost annotation still extracts commodity without proceeds."""
-        result = _extract_commodity_and_qty("-5 XEON @@ €7")
+        result = extract_commodity_and_qty("-5 XEON @@ €7")
         assert result is not None
         qty, commodity, proceeds = result
         assert qty == Decimal("-5")
@@ -1132,11 +1134,11 @@ class TestExtractCommodityAndQty:
         assert proceeds == Decimal("7")
 
     def test_named_commodity_positive(self):
-        result = _extract_commodity_and_qty("10 STCK")
+        result = extract_commodity_and_qty("10 STCK")
         assert result == (Decimal("10"), "STCK", None)
 
     def test_named_commodity_with_decimal(self):
-        result = _extract_commodity_and_qty("-5.50 ETF")
+        result = extract_commodity_and_qty("-5.50 ETF")
         assert result is not None
         qty, commodity, proceeds = result
         assert qty == Decimal("-5.50")
@@ -1144,11 +1146,11 @@ class TestExtractCommodityAndQty:
         assert proceeds is None
 
     def test_empty_returns_none(self):
-        assert _extract_commodity_and_qty("") is None
+        assert extract_commodity_and_qty("") is None
 
     def test_named_commodity_with_unit_cost(self):
         """@ unit cost is converted to total proceeds (qty × unit_price)."""
-        result = _extract_commodity_and_qty("-5 XEON @ €148.51")
+        result = extract_commodity_and_qty("-5 XEON @ €148.51")
         assert result is not None
         qty, commodity, proceeds = result
         assert qty == Decimal("-5")
@@ -1157,7 +1159,7 @@ class TestExtractCommodityAndQty:
 
     def test_buy_has_no_gain_proceeds(self):
         """Positive qty (buy) still returns proceeds when annotation is present."""
-        result = _extract_commodity_and_qty("10 XEON @@ €1500")
+        result = extract_commodity_and_qty("10 XEON @@ €1500")
         assert result is not None
         qty, commodity, proceeds = result
         assert qty == Decimal("10")
