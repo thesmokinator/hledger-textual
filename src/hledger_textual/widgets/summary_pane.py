@@ -23,6 +23,7 @@ from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import (
     fmt_amount,
 )
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (
     HledgerError,
@@ -140,7 +141,7 @@ def _conversion_note(totals: dict[str, Decimal], target: str | None) -> str:
     )
 
 
-class SummaryPane(Widget):
+class SummaryPane(DataTablePaneMixin, Widget):
     """Widget showing journal statistics and a monthly financial overview.
 
     The Income / Expenses / Net cards and expense breakdown all show the
@@ -149,6 +150,7 @@ class SummaryPane(Widget):
 
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
+        Binding("x", "export", "Export", show=False, priority=True),
     ]
 
     def __init__(
@@ -171,6 +173,7 @@ class SummaryPane(Widget):
         self._breakdown_loaded = False
         self._has_static_sections = False
         self._has_breakdown_sections = False
+        self._summary_export_rows: list[list[str]] = []
 
     # ------------------------------------------------------------------
     # Layout
@@ -237,6 +240,18 @@ class SummaryPane(Widget):
     # Column index → fixed width for breakdown table (col 0 = flex)
     _BREAKDOWN_FIXED = {1: 14, 2: 24}
 
+    # DataTablePaneMixin configuration: the income table is primary, the
+    # other tables only get resize handling (all summary tables are
+    # read-only, so the pane must not steal focus on show).
+    _main_table_id = "summary-income-table"
+    _fixed_column_widths = _BREAKDOWN_FIXED
+    _additional_tables = {
+        "summary-portfolio-table": _PORTFOLIO_FIXED,
+        "summary-liabilities-table": _BREAKDOWN_FIXED,
+        "summary-breakdown-table": _BREAKDOWN_FIXED,
+    }
+    _focus_on_show = False
+
     def on_mount(self) -> None:
         """Set up data tables and start loading data."""
         portfolio_table = self.query_one("#summary-portfolio-table", _DisplayTable)
@@ -278,17 +293,6 @@ class SummaryPane(Widget):
         self._set_empty_state_visible(False)
         self._load_static_data()
         self._load_breakdown_data()
-
-    def on_resize(self) -> None:
-        """Recalculate flex column widths for all tables."""
-        ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
-        distribute_column_widths(ptable, self._PORTFOLIO_FIXED)
-        ltable = self.query_one("#summary-liabilities-table", _DisplayTable)
-        distribute_column_widths(ltable, self._BREAKDOWN_FIXED)
-        itable = self.query_one("#summary-income-table", DataTable)
-        distribute_column_widths(itable, self._BREAKDOWN_FIXED)
-        btable = self.query_one("#summary-breakdown-table", DataTable)
-        distribute_column_widths(btable, self._BREAKDOWN_FIXED)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -673,6 +677,7 @@ class SummaryPane(Widget):
             f"{month_name} Income"
         )
 
+        self._summary_export_rows = []
         income_section = self.query_one("#summary-income-breakdown")
         itable = self.query_one("#summary-income-table", DataTable)
         itable.clear()
@@ -689,6 +694,9 @@ class SummaryPane(Widget):
                     Text(account),
                     fmt_amount(qty, com),
                     _share_cell(share),
+                )
+                self._summary_export_rows.append(
+                    ["Income", account, fmt_amount(qty, com), _share_cell(share)]
                 )
             self._set_note(
                 "#summary-income-note", _conversion_note(totals, commodity)
@@ -724,12 +732,26 @@ class SummaryPane(Widget):
                 fmt_amount(qty, com),
                 _share_cell(share),
             )
+            self._summary_export_rows.append(
+                ["Expenses", account, fmt_amount(qty, com), _share_cell(share)]
+            )
         self._set_note("#summary-breakdown-note", _conversion_note(totals, commodity))
 
         self.call_after_refresh(
             distribute_column_widths, table, self._BREAKDOWN_FIXED
         )
         self._sync_empty_state()
+
+    def get_export_data(self):
+        """Return an ExportData with the income/expense breakdown rows."""
+        from hledger_textual.export import ExportData
+
+        return ExportData(
+            title="Summary",
+            headers=["Section", "Account", "Amount", "% of total"],
+            rows=[list(row) for row in self._summary_export_rows],
+            pane_name="summary",
+        )
 
     def _set_note(self, selector: str, text: str) -> None:
         """Update a conversion note below a breakdown table."""
