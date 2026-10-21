@@ -10,9 +10,7 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static
 
 from hledger_textual.amountutil import describe_amount_error
@@ -22,6 +20,7 @@ from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, 
 from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
+from hledger_textual.screens.form_base import FormScreenBase
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 from hledger_textual.widgets.posting_sum import (
@@ -49,13 +48,9 @@ def _slugify(text: str) -> str:
 
 
 class RecurringFormScreen(
-    FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[RecurringRule | None]
+    FormAccountSuggestionsMixin, DirtyGuardMixin, FormScreenBase[RecurringRule | None]
 ):
     """Centered modal form for creating or editing a recurring rule."""
-
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-    ]
 
     def __init__(
         self,
@@ -312,17 +307,16 @@ class RecurringFormScreen(
         else:
             error_label.update(f"Invalid period: {expr!r}. Try 'every 2 weeks' or 'every 3 days'.")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
+    def _on_extra_button(self, event: Button.Pressed) -> bool:
+        """Handle posting-row buttons; Save/Cancel are routed by the base."""
         match event.button.id:
             case "btn-add-posting":
                 self._add_posting_row()
             case "btn-remove-posting":
                 self._remove_last_posting_row()
-            case "btn-save":
-                self._save()
-            case "btn-form-cancel":
-                self.action_cancel()
+            case _:
+                return False
+        return True
 
     def _save(self) -> None:
         """Validate inputs and dismiss with a RecurringRule (or None on cancel)."""

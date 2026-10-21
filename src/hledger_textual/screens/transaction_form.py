@@ -11,7 +11,6 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Label, Select, Static
 
@@ -37,6 +36,7 @@ from hledger_textual.models import (
 )
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
+from hledger_textual.screens.form_base import FormScreenBase
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
@@ -371,12 +371,11 @@ STATUS_OPTIONS = [
 
 
 class TransactionFormScreen(
-    FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[Transaction | None]
+    FormAccountSuggestionsMixin, DirtyGuardMixin, FormScreenBase[Transaction | None]
 ):
     """Centered modal form for creating or editing a transaction."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
         Binding("ctrl+c", "copy_posting", "Copy posting", show=False, priority=True),
         Binding("ctrl+v", "paste_posting", "Paste posting", show=False, priority=True),
     ]
@@ -708,17 +707,16 @@ class TransactionFormScreen(
         hint_widget.update("")
         hint_widget.remove_class("visible")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
+    def _on_extra_button(self, event: Button.Pressed) -> bool:
+        """Handle posting-row buttons; Save/Cancel are routed by the base."""
         match event.button.id:
             case "btn-add-posting":
                 self._add_posting_row()
             case "btn-remove-posting":
                 self._remove_last_posting_row()
-            case "btn-save":
-                self._save()
-            case "btn-form-cancel":
-                self.action_cancel()
+            case _:
+                return False
+        return True
 
     def _focused_posting_row(self) -> PostingRow | None:
         """Return the posting row that contains the focused widget, if any."""

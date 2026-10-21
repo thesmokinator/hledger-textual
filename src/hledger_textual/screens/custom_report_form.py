@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from textual import on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 from hledger_textual.models import CustomReport
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
+from hledger_textual.screens.form_base import FormScreenBase
 
 _EXAMPLES: list[tuple[str, str]] = [
     ("balance --tree", "Full balance tree"),
@@ -26,12 +25,11 @@ _EXAMPLES: list[tuple[str, str]] = [
 ]
 
 
-class CustomReportFormScreen(DirtyGuardMixin, ModalScreen[CustomReport | None]):
+class CustomReportFormScreen(DirtyGuardMixin, FormScreenBase[CustomReport | None]):
     """Centered modal form for creating or editing a custom report."""
 
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-    ]
+    SAVE_BUTTON_ID = "btn-custom-report-save"
+    CANCEL_BUTTON_ID = "btn-custom-report-cancel"
 
     def __init__(self, report: CustomReport | None = None) -> None:
         """Initialize the form modal.
@@ -91,13 +89,6 @@ class CustomReportFormScreen(DirtyGuardMixin, ModalScreen[CustomReport | None]):
     def on_mount(self) -> None:
         """Snapshot the initial field values for the unsaved-changes guard."""
         self.call_after_refresh(self.capture_initial_state)
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
-        if event.button.id == "btn-custom-report-save":
-            self._save()
-        elif event.button.id == "btn-custom-report-cancel":
-            self.action_cancel()
 
     def _save(self) -> None:
         """Validate and save the custom report."""

@@ -7,9 +7,7 @@ from pathlib import Path
 
 from textual import events
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from hledger_textual.amountutil import describe_amount_error
@@ -17,18 +15,18 @@ from hledger_textual.config import load_default_commodity
 from hledger_textual.models import Amount, AmountStyle, BudgetRule
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
+from hledger_textual.screens.form_base import FormScreenBase
 from hledger_textual.widgets.amount_input import NumericAmountInput
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 
 
 class BudgetFormScreen(
-    FormAccountSuggestionsMixin, DirtyGuardMixin, ModalScreen[BudgetRule | None]
+    FormAccountSuggestionsMixin, DirtyGuardMixin, FormScreenBase[BudgetRule | None]
 ):
     """Centered modal form for creating or editing a budget rule."""
 
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-    ]
+    SAVE_BUTTON_ID = "btn-budget-save"
+    CANCEL_BUTTON_ID = "btn-budget-cancel"
 
     def __init__(
         self,
@@ -133,13 +131,6 @@ class BudgetFormScreen(
         else:
             warning.update("")
             warning.add_class("hidden")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
-        if event.button.id == "btn-budget-save":
-            self._save()
-        elif event.button.id == "btn-budget-cancel":
-            self.action_cancel()
 
     def _save(self) -> None:
         """Validate and save the budget rule."""

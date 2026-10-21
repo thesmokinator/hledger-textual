@@ -4,18 +4,17 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Label, TextArea
 
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
+from hledger_textual.screens.form_base import FormScreenBase
 
 
-class AccountNoteModal(DirtyGuardMixin, ModalScreen[str | None]):
+class AccountNoteModal(DirtyGuardMixin, FormScreenBase[str | None]):
     """A simple modal to edit the note attached to an account directive."""
 
-    BINDINGS = [
-        ("escape", "cancel", "Cancel"),
-    ]
+    SAVE_BUTTON_ID = "btn-note-save"
+    CANCEL_BUTTON_ID = "btn-note-cancel"
 
     def __init__(self, account: str, current_note: str) -> None:
         """Initialize the modal.
@@ -45,10 +44,7 @@ class AccountNoteModal(DirtyGuardMixin, ModalScreen[str | None]):
         self.query_one("#note-input", TextArea).focus()
         self.call_after_refresh(self.capture_initial_state)
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
-        if event.button.id == "btn-note-save":
-            note = self.query_one("#note-input", TextArea).text.strip()
-            self.dismiss(note)
-        else:
-            self.action_cancel()
+    def _save(self) -> None:
+        """Dismiss with the edited note text."""
+        note = self.query_one("#note-input", TextArea).text.strip()
+        self.dismiss(note)
