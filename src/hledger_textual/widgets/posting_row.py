@@ -78,6 +78,8 @@ class PostingRow(Widget):
                 classes="amount-input",
                 id=f"amount-{self.row_index}",
             )
+            if self.initial_commodity:
+                yield Label(self.initial_commodity, classes="posting-commodity")
 
     @property
     def account(self) -> str:
