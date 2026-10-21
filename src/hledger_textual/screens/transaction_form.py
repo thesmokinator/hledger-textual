@@ -12,7 +12,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.suggester import SuggestFromList
-from textual.widgets import Button, Input, Label, Select, Static
+from textual.widgets import Button, Input, Select, Static
 
 from hledger_textual.amountutil import (
     decimal_places_for_number_string,
@@ -39,6 +39,7 @@ from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.form_base import FormScreenBase
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.date_input import DateInput
+from hledger_textual.widgets.form_field import FormField
 from hledger_textual.widgets.posting_row import PostingRow
 from hledger_textual.widgets.posting_sum import (
     collect_posting_totals,
@@ -435,52 +436,48 @@ class TransactionFormScreen(
             yield Static(title, id="form-title")
 
             with VerticalScroll(id="form-scroll"):
-                # Date field
-                with Horizontal(classes="form-field form-field--required"):
-                    yield Label("Date:*")
-                    yield DateInput(
+                initial_status = (
+                    self.transaction.status if self._has_template else TransactionStatus.UNMARKED
+                )
+                yield FormField(
+                    "Date:",
+                    DateInput(
                         value=self.transaction.date if self._has_template else date.today().isoformat(),
                         id="input-date",
-                    )
-
-                # Description field
-                with Horizontal(classes="form-field form-field--required"):
-                    yield Label("Description:*")
-                    yield AutocompleteInput(
+                    ),
+                    required=True,
+                )
+                yield FormField(
+                    "Description:",
+                    AutocompleteInput(
                         value=self.transaction.description if self._has_template else "",
                         placeholder="Transaction description",
                         id="input-description",
-                    )
-
-                # Status field
-                with Horizontal(classes="form-field"):
-                    yield Label("Status:")
-                    initial_status = (
-                        self.transaction.status if self._has_template else TransactionStatus.UNMARKED
-                    )
-                    yield Select(
-                        options=STATUS_OPTIONS,
-                        value=initial_status,
-                        id="select-status",
-                    )
-
-                # Code field
-                with Horizontal(classes="form-field form-field--optional"):
-                    yield Label("Code:")
-                    yield Input(
+                    ),
+                    required=True,
+                )
+                yield FormField(
+                    "Status:",
+                    Select(options=STATUS_OPTIONS, value=initial_status, id="select-status"),
+                )
+                yield FormField(
+                    "Code:",
+                    Input(
                         value=self.transaction.code if self._has_template else "",
                         placeholder="Optional transaction code",
                         id="input-code",
-                    )
-
-                # Comment field
-                with Horizontal(classes="form-field form-field--optional"):
-                    yield Label("Comment:")
-                    yield Input(
+                    ),
+                    optional=True,
+                )
+                yield FormField(
+                    "Comment:",
+                    Input(
                         value=self.transaction.comment if self._has_template else "",
                         placeholder="Optional comment",
                         id="input-comment",
-                    )
+                    ),
+                    optional=True,
+                )
 
                 # Postings section
                 yield Static("Postings*", id="postings-header")

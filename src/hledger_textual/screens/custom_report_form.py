@@ -11,6 +11,7 @@ from textual.widgets.option_list import Option
 from hledger_textual.models import CustomReport
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.form_base import FormScreenBase
+from hledger_textual.widgets.form_field import FormField
 
 _EXAMPLES: list[tuple[str, str]] = [
     ("balance --tree", "Full balance tree"),
@@ -52,21 +53,24 @@ class CustomReportFormScreen(DirtyGuardMixin, FormScreenBase[CustomReport | None
         with Vertical(id="custom-report-form-dialog"):
             yield Static(title, id="custom-report-form-title")
 
-            with Horizontal(classes="form-field form-field--required"):
-                yield Label("Name:*")
-                yield Input(
+            yield FormField(
+                "Name:",
+                Input(
                     value=self.report.name if self.is_edit else "",
                     placeholder="e.g. Monthly expenses tree",
                     id="custom-report-input-name",
-                )
-
-            with Horizontal(classes="form-field form-field--required"):
-                yield Label("Command:*")
-                yield Input(
+                ),
+                required=True,
+            )
+            yield FormField(
+                "Command:",
+                Input(
                     value=self.report.command if self.is_edit else "",
                     placeholder="e.g. balance expenses --tree -M",
                     id="custom-report-input-command",
-                )
+                ),
+                required=True,
+            )
 
             yield Label("Examples (click to fill command):", id="custom-report-examples-label")
             yield OptionList(
