@@ -20,6 +20,7 @@ from hledger_textual.config import (
 )
 from hledger_textual.models import CustomReport
 from hledger_textual.widgets.empty_state import EmptyState
+from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.reports_renderer import format_custom_output
 
 
@@ -99,6 +100,7 @@ class ReportsCustomActionsMixin:
             output: The raw text returned by hledger.
             command: The command used, forwarded to the context bar.
         """
+        hide_loading_overlay(self)
         static = self.query_one("#custom-report-text", Static)
         static.update(format_custom_output(output.rstrip(), skip_title=True))
         if self._custom_report_name:

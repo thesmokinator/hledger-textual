@@ -27,34 +27,7 @@ from hledger_textual.hledger import HledgerError, load_accounts
 from hledger_textual.models import CsvRulesFile
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
-
-_SEPARATOR_OPTIONS = [
-    ("Comma (,)", ","),
-    ("Semicolon (;)", ";"),
-    ("Tab", "\t"),
-    ("Pipe (|)", "|"),
-]
-
-_HEADER_OPTIONS = [
-    ("Yes", "yes"),
-    ("No", "no"),
-]
-
-_FIELD_OPTIONS = [
-    ("(skip)", ""),
-    ("date", "date"),
-    ("date2", "date2"),
-    ("status", "status"),
-    ("code", "code"),
-    ("description", "description"),
-    ("comment", "comment"),
-    ("amount", "amount"),
-    ("amount-in", "amount-in"),
-    ("amount-out", "amount-out"),
-    ("currency", "currency"),
-    ("account1", "account1"),
-    ("account2", "account2"),
-]
+from hledger_textual.widgets.constants import FIELD_OPTIONS, HEADER_OPTIONS, SEPARATOR_OPTIONS
 
 TOTAL_STEPS = 5
 
@@ -111,14 +84,14 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
                 with Horizontal(classes="form-field form-field--required"):
                     yield Label("Separator:*")
                     yield Select(
-                        options=_SEPARATOR_OPTIONS,
+                        options=SEPARATOR_OPTIONS,
                         value=",",
                         id="wizard-separator",
                     )
                 with Horizontal(classes="form-field form-field--required"):
                     yield Label("Header row:*")
                     yield Select(
-                        options=_HEADER_OPTIONS,
+                        options=HEADER_OPTIONS,
                         value="yes",
                         id="wizard-header",
                     )
@@ -292,7 +265,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
     def _set_separator_select(self, sep: str) -> None:
         """Set the separator Select to match the given separator."""
         select = self.query_one("#wizard-separator", Select)
-        for _, val in _SEPARATOR_OPTIONS:
+        for _, val in SEPARATOR_OPTIONS:
             if val == sep:
                 select.value = val
                 return
@@ -330,7 +303,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             row = Horizontal(classes="mapping-row", id=f"mapping-row-{i}")
             label = Label(f'"{col_name}"', classes="mapping-label")
             select = Select(
-                options=_FIELD_OPTIONS,
+                options=FIELD_OPTIONS,
                 value=initial,
                 id=f"mapping-select-{i}",
                 classes="mapping-select",

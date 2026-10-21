@@ -23,7 +23,14 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.constants import (
+    REPORT_LABELS,
+    REPORT_PERIOD_LABELS,
+    REPORT_PERIOD_RANGES,
+    REPORT_TYPES,
+)
 from hledger_textual.widgets.empty_state import EmptyState
+from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
 from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
@@ -35,22 +42,6 @@ from hledger_textual.widgets.reports_renderer import (
 )
 
 __all__ = ["MULTI_COMMODITY_MARKER", "ReportsPane"]
-
-_REPORT_LABELS = {"is": "Income Statement", "bs": "Balance Sheet", "cf": "Cash Flow"}
-_PERIOD_LABELS = {3: "3 months", 6: "6 months", 12: "12 months", 0: "Year to date"}
-
-_REPORT_TYPES = [
-    ("Income Statement", "is"),
-    ("Balance Sheet", "bs"),
-    ("Cash Flow", "cf"),
-]
-
-_PERIOD_RANGES = [
-    ("3 months", 3),
-    ("6 months", 6),
-    ("12 months", 12),
-    ("Year to date", 0),
-]
 
 
 class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
@@ -119,13 +110,13 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         """Create the pane layout."""
         with PaneToolbar():
             yield Select(
-                [(label, value) for label, value in _REPORT_TYPES],
+                [(label, value) for label, value in REPORT_TYPES],
                 value="is",
                 id="report-type-select",
                 allow_blank=False,
             )
             yield Select(
-                [(label, value) for label, value in _PERIOD_RANGES],
+                [(label, value) for label, value in REPORT_PERIOD_RANGES],
                 value=6,
                 id="report-period-select",
                 allow_blank=False,
@@ -167,8 +158,8 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
 
     def _update_context_bar_builtin(self) -> None:
         """Refresh the context bar to show the active built-in report and period."""
-        report_name = _REPORT_LABELS.get(self._report_type, self._report_type)
-        period_name = _PERIOD_LABELS.get(self._period_months, "")
+        report_name = REPORT_LABELS.get(self._report_type, self._report_type)
+        period_name = REPORT_PERIOD_LABELS.get(self._period_months, "")
 
         text = Text()
         text.append(report_name, style="bold")
@@ -206,6 +197,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @work(thread=True, exclusive=True, group="reports-load")
     def _load_report_data(self) -> None:
         """Load built-in report data in a background thread."""
+        self.app.call_from_thread(show_loading_overlay, self, "Loading report…")
         begin, end = self._period_range()
         self._period_begin = date.fromisoformat(begin)
         commodity = resolve_default_commodity(self.journal_file)
@@ -249,6 +241,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         """Load custom report output in a background thread."""
         if self._custom_report_name is None:
             return
+        self.app.call_from_thread(show_loading_overlay, self, "Loading report…")
 
         reports = load_custom_reports()
         command = reports.get(self._custom_report_name)
@@ -270,6 +263,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
 
     def _apply_report(self) -> None:
         """Apply loaded report data to the DataTable."""
+        hide_loading_overlay(self)
         table = self.query_one("#reports-table", DataTable)
         data = self._report_data
 
@@ -397,8 +391,8 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
             self.notify("No chart data available for this report", severity="warning", timeout=3)
             return
 
-        report_label = _REPORT_LABELS.get(self._report_type, self._report_type)
-        period_label = _PERIOD_LABELS.get(self._period_months, "")
+        report_label = REPORT_LABELS.get(self._report_type, self._report_type)
+        period_label = REPORT_PERIOD_LABELS.get(self._period_months, "")
         title = f"{report_label}  ·  {period_label}"
         self.app.push_screen(ReportChartModal(chart_data, self._report_type, title))
 

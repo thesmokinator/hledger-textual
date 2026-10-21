@@ -15,6 +15,7 @@ from textual.containers import Vertical
 from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, load_multi_period_budget_report
 from hledger_textual.models import BudgetRule
+from hledger_textual.widgets.constants import BUDGET_OVERVIEW_PERIOD_OPTIONS
 
 
 def _months_range(end: date, n: int) -> tuple[str, str]:
@@ -61,7 +62,7 @@ class BudgetOverviewScreen(ModalScreen[None]):
         with Vertical(id="budget-overview-dialog"):
             yield Label("Budget Overview", id="budget-overview-title")
             yield Select(
-                [("3 months", 3), ("6 months", 6), ("12 months", 12)],
+                BUDGET_OVERVIEW_PERIOD_OPTIONS,
                 value=3,
                 allow_blank=False,
                 id="budget-overview-periods",

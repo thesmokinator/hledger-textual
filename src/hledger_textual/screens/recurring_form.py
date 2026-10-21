@@ -22,15 +22,13 @@ from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, 
 from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
+from hledger_textual.widgets.constants import RECURRING_PERIOD_OPTIONS
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.posting_row import PostingRow
 from hledger_textual.widgets.posting_sum import (
     collect_posting_totals,
     format_posting_sum,
 )
-
-_PERIOD_OPTIONS = [(p.capitalize(), p) for p in SUPPORTED_PERIODS] + [("Custom", "custom")]
-
 
 def _slugify(text: str) -> str:
     """Convert a description string to a slug suitable for use as a rule ID prefix.
@@ -113,7 +111,7 @@ class RecurringFormScreen(
                 with Horizontal(classes="form-field form-field--required"):
                     yield Label("Period:*")
                     yield Select(
-                        options=_PERIOD_OPTIONS,
+                        options=RECURRING_PERIOD_OPTIONS,
                         value=initial_period,
                         id="recurring-select-period",
                     )
