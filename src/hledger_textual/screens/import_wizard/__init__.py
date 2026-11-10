@@ -6,6 +6,7 @@ from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
@@ -36,6 +37,15 @@ from hledger_textual.widgets.constants import SEPARATOR_OPTIONS
 
 TOTAL_STEPS = 5
 
+#: Human-readable title of each wizard step, used by the progress strip.
+STEP_TITLES = (
+    "CSV Preview",
+    "Column Mapping",
+    "Settings",
+    "Categorization Rules",
+    "Review & Save",
+)
+
 
 class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None]):
     """Five-step wizard for creating or editing a CSV import rules file.
@@ -47,6 +57,10 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
 
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
+        Binding("ctrl+n", "next_step", "Next step", priority=True),
+        # Priority: the app-level command palette also uses Ctrl+P, but
+        # inside the wizard Back takes precedence.
+        Binding("ctrl+p", "prev_step", "Previous step", priority=True),
     ]
 
     def __init__(
@@ -219,6 +233,25 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
     # Step navigation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _render_step_indicator(step: int) -> str:
+        """Render the progress strip for the given step.
+
+        Shows filled/empty dots plus the active step name; the upcoming
+        step name follows muted (except on the last step).
+
+        Args:
+            step: Zero-based index of the current step.
+
+        Returns:
+            Rich markup for the progress strip.
+        """
+        dots = " ".join("●" if i <= step else "○" for i in range(TOTAL_STEPS))
+        text = f"{dots}   Step {step + 1} of {TOTAL_STEPS}: [b]{STEP_TITLES[step]}[/b]"
+        if step < TOTAL_STEPS - 1:
+            text += f"   [dim](next: {STEP_TITLES[step + 1]})[/dim]"
+        return text
+
     def _show_step(self, step: int) -> None:
         """Show only the container for the given step."""
         self.state.current_step = step
@@ -226,9 +259,9 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             widget = self.query_one(f"#wizard-step-{i}")
             widget.display = i == step
 
-        # Update indicator
+        # Update progress strip
         self.query_one("#wizard-step-indicator", Static).update(
-            f"Import CSV - Step {step + 1} of {TOTAL_STEPS}"
+            self._render_step_indicator(step)
         )
 
         # Show/hide nav buttons
@@ -239,6 +272,47 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         # Prepare step-specific content
         if step == 4:
             self._generate_raw_preview()
+
+        self._focus_first(step)
+
+    def _focus_first(self, step: int) -> None:
+        """Move keyboard focus to the first input of the given step.
+
+        Args:
+            step: Zero-based index of the step being shown.
+        """
+        target: str | None = None
+        if step == 0:
+            target = "#wizard-separator"
+        elif step == 1:
+            if self.state.column_names:
+                target = "#mapping-select-0"
+        elif step == 2:
+            target = "#wizard-rules-name"
+        elif step == 3:
+            if self.state.conditional_rule_count > 0:
+                target = "#cond-pattern-0"
+            else:
+                target = "#btn-wizard-add-rule"
+        elif step == 4:
+            target = "#wizard-raw-editor"
+        if target is None:
+            return
+        try:
+            self.query_one(target).focus()
+        except Exception:
+            pass
+
+    def action_next_step(self) -> None:
+        """Advance to the next step (Ctrl+N), validating first."""
+        if self.state.current_step < TOTAL_STEPS - 1:
+            if self._validate_current_step():
+                self._show_step(self.state.current_step + 1)
+
+    def action_prev_step(self) -> None:
+        """Go back to the previous step (Ctrl+P)."""
+        if self.state.current_step > 0:
+            self._show_step(self.state.current_step - 1)
 
     def _generate_raw_preview(self) -> None:
         """Generate rules content and show in the TextArea."""
@@ -359,11 +433,9 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             case "btn-wizard-cancel":
                 self.action_cancel()
             case "btn-wizard-back":
-                if self.state.current_step > 0:
-                    self._show_step(self.state.current_step - 1)
+                self.action_prev_step()
             case "btn-wizard-next":
-                if self._validate_current_step():
-                    self._show_step(self.state.current_step + 1)
+                self.action_next_step()
             case "btn-wizard-save":
                 self._do_save()
             case "btn-wizard-add-rule":
