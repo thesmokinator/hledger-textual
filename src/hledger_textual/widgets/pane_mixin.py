@@ -10,6 +10,7 @@ from textual.widgets import DataTable
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.empty_state import EmptyState
+from hledger_textual.widgets.loading import show_loading_overlay
 
 
 def set_empty_state_visible(
@@ -72,6 +73,48 @@ def run_mutation(
             widget.app.call_from_thread(
                 widget.notify, str(exc), severity="error", timeout=8
             )
+
+
+def run_pane_load(
+    widget,
+    load: Callable[[], object],
+    apply: Callable[[object], None],
+    *,
+    loading_message: str | None = None,
+    on_error: Callable[[Exception], object] | None = None,
+) -> None:
+    """Load pane data on a worker thread with standard overlay/error handling.
+
+    Runs ``load()`` and dispatches ``apply(result)`` on the app thread.
+    Shows *loading_message* in a loading overlay first (when given) and, on
+    failure, a :func:`humanize_error` toast. When *on_error* is given,
+    ``apply(on_error(exc))`` still runs so the pane can render its
+    empty/fallback state; otherwise ``apply`` is skipped on failure.
+
+    Must be called from a worker thread (``call_from_thread`` is used).
+
+    Args:
+        widget: The pane or table widget owning the load.
+        load: Zero-arg callable computing the payload (may raise).
+        apply: Called on the app thread with the payload (or the
+            ``on_error`` fallback) to refresh the UI.
+        loading_message: Overlay text, or None for no overlay.
+        on_error: Maps the exception to a fallback payload; None skips
+            ``apply`` on failure.
+    """
+    if loading_message is not None:
+        widget.app.call_from_thread(show_loading_overlay, widget, loading_message)
+    try:
+        result = load()
+    except Exception as exc:
+        title, body = humanize_error(exc)
+        widget.app.call_from_thread(
+            widget.notify, body, title=title, severity="error", timeout=10
+        )
+        if on_error is None:
+            return
+        result = on_error(exc)
+    widget.app.call_from_thread(apply, result)
 
 
 class DataTablePaneMixin:

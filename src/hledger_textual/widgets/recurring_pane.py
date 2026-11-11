@@ -24,7 +24,11 @@ from hledger_textual.recurring import (
     update_recurring_rule,
 )
 from hledger_textual.widgets.empty_state import EmptyState
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
+from hledger_textual.widgets.pane_mixin import (
+    DataTablePaneMixin,
+    run_pane_load,
+    set_empty_state_visible,
+)
 
 
 class RecurringPane(DataTablePaneMixin, Widget):
@@ -86,19 +90,19 @@ class RecurringPane(DataTablePaneMixin, Widget):
     @work(thread=True, exclusive=True)
     def _load_data(self) -> None:
         """Load recurring rules from file."""
-        try:
+
+        def _load() -> list[RecurringRule]:
             self._recurring_path = ensure_recurring_file(self.journal_file)
-            self._rules = sorted(
+            return sorted(
                 parse_recurring_rules(self._recurring_path),
                 key=lambda r: r.start_date or "",
             )
-        except RecurringError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
-            self._rules = []
 
-        self.app.call_from_thread(self._update_table)
+        def _apply(rules: list[RecurringRule]) -> None:
+            self._rules = rules
+            self._update_table()
+
+        run_pane_load(self, _load, _apply, on_error=lambda _exc: [])
 
     def _update_table(self) -> None:
         """Refresh the DataTable with current rules."""

@@ -30,7 +30,11 @@ from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount, fmt_amount_pretty
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
+from hledger_textual.widgets.pane_mixin import (
+    DataTablePaneMixin,
+    run_pane_load,
+    set_empty_state_visible,
+)
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
@@ -123,26 +127,29 @@ class BudgetPane(DataTablePaneMixin, Widget):
     @work(thread=True, exclusive=True)
     def _load_budget_data(self) -> None:
         """Load budget rules and actual spending data."""
-        try:
+
+        def _load() -> None:
             self._budget_path = ensure_budget_file(self.journal_file)
             self._rules = sorted(
                 parse_budget_rules(self._budget_path),
                 key=lambda r: r.account.lower(),
             )
-        except BudgetError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
-            self._rules = []
+            self._load_budget_rows()
 
+        def _on_error(_exc: Exception) -> None:
+            self._rules = []
+            self._load_budget_rows()
+
+        run_pane_load(self, _load, lambda _result: self._update_table(), on_error=_on_error)
+
+    def _load_budget_rows(self) -> None:
+        """Load actual spending rows, falling back to empty on failure."""
         try:
             self._budget_rows = load_budget_report(
                 self.journal_file, self._period_string(), cache=self._cache
             )
         except HledgerError:
             self._budget_rows = []
-
-        self.app.call_from_thread(self._update_table)
 
     def _update_table(self) -> None:
         """Refresh the DataTable with current budget data, grouped by category."""
