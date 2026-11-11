@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from textual import work
 from textual.widgets import DataTable
 
@@ -23,6 +25,53 @@ def set_empty_state_visible(
     """
     widget.query_one(f"#{empty_id}", EmptyState).display = visible
     widget.query_one(f"#{table_id}", DataTable).display = not visible
+
+
+def run_mutation(
+    widget,
+    mutate: Callable[[], object],
+    *,
+    success_message: str | Callable[[], str],
+    error_cls: type[Exception],
+    guard: object = True,
+    after: Callable[[], None] | None = None,
+    humanize_errors: bool = False,
+) -> None:
+    """Run a journal mutation from a ``@work`` thread with standard handling.
+
+    Shared implementation behind :meth:`DataTablePaneMixin._run_mutation`,
+    also usable by table widgets that do not inherit the mixin
+    (e.g. ``TransactionsTable``).
+
+    Args:
+        widget: The widget owning the mutation (provides ``app``/``notify``).
+        mutate: Zero-arg callable performing the mutation.
+        success_message: Toast on success, or a zero-arg callable
+            returning it (for messages computed from the result).
+        error_cls: Exception type caught and reported as an error toast.
+        guard: Falsy values skip the mutation entirely.
+        after: Optional refresh callback run before the success toast.
+        humanize_errors: Report failures via :func:`humanize_error`
+            (title + body, longer timeout) instead of ``str(exc)``.
+    """
+    if not guard:
+        return
+    try:
+        mutate()
+        message = success_message() if callable(success_message) else success_message
+        if after is not None:
+            widget.app.call_from_thread(after)
+        widget.app.call_from_thread(widget.notify, message, timeout=3)
+    except error_cls as exc:
+        if humanize_errors:
+            title, body = humanize_error(exc)
+            widget.app.call_from_thread(
+                widget.notify, body, title=title, severity="error", timeout=10
+            )
+        else:
+            widget.app.call_from_thread(
+                widget.notify, str(exc), severity="error", timeout=8
+            )
 
 
 class DataTablePaneMixin:
@@ -112,6 +161,43 @@ class DataTablePaneMixin:
         self.app.push_screen(
             ExportModal(default_filename=filename, default_directory=export_dir),
             callback=on_result,
+        )
+
+    def _run_mutation(
+        self,
+        mutate: Callable[[], object],
+        *,
+        success_message: str | Callable[[], str],
+        error_cls: type[Exception],
+        guard: object = True,
+        after: Callable[[], None] | None = None,
+        humanize_errors: bool = False,
+    ) -> None:
+        """Run a journal mutation from a ``@work`` thread with standard handling.
+
+        Calls *mutate*, then refreshes via *after* and notifies success;
+        a *error_cls* failure notifies an error instead. Must be called
+        from a worker thread (``call_from_thread`` is used throughout).
+
+        Args:
+            mutate: Zero-arg callable performing the mutation.
+            success_message: Toast on success, or a zero-arg callable
+                returning it (for messages computed from the result).
+            error_cls: Exception type caught and reported as an error toast.
+            guard: Falsy values skip the mutation entirely (e.g. a missing
+                ``Path`` for panes backed by an optional rule file).
+            after: Optional refresh callback run before the success toast.
+            humanize_errors: Report failures via :func:`humanize_error`
+                (title + body, longer timeout) instead of ``str(exc)``.
+        """
+        run_mutation(
+            self,
+            mutate,
+            success_message=success_message,
+            error_cls=error_cls,
+            guard=guard,
+            after=after,
+            humanize_errors=humanize_errors,
         )
 
     @work(thread=True)
