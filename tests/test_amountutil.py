@@ -334,6 +334,36 @@ class TestCommaJournalMatrix:
         assert normalize_number_string_for_style("100,00") == "100.00"
         assert normalize_number_string_for_style("1,000") == "1000"
 
+
+class TestParseAmountInvalidNumbers:
+    """InvalidOperation paths in both commodity positions (85% push)."""
+
+    def test_left_commodity_invalid_number_raises(self):
+        """A left-commodity amount with bad digits raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid amount"):
+            parse_amount_string("€1.2.3")
+
+    def test_right_commodity_invalid_number_raises(self):
+        """A right-commodity amount with bad digits raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid amount"):
+            parse_amount_string("1.2.3 EUR")
+
+
+class TestDescribeCostEdgeCases:
+    """Cost-annotation hint paths (85% push)."""
+
+    def test_double_at_sign_is_unwrapped(self):
+        """'5 @@ €40' parses the cost after the second @."""
+        assert "cost after @" not in describe_amount_error("5 @@ €40")
+
+    def test_bare_at_sign_reports_missing_quantity(self):
+        """'@ €40.00' is missing its quantity."""
+        assert "quantity before @" in describe_amount_error("@ €40.00")
+
+    def test_symbols_besides_currency_rejected(self):
+        """Multiple non-currency symbols are rejected."""
+        assert "only one currency" in describe_amount_error("50 £€")
+
     @pytest.mark.parametrize(
         ("raw", "expected"),
         [

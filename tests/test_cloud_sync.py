@@ -102,3 +102,24 @@ def test_cloud_sync_download(tmp_path):
         result = cloud_sync_download(journal, config)
 
     assert "gdrive:hledger-backup" in result
+
+
+def test_cloud_sync_download_failure_restores_backup(tmp_path):
+    """A failed download restores the local journal and cleans the backup."""
+    from unittest.mock import patch
+
+    from hledger_textual.cloud_sync import CloudSyncError, cloud_sync_download
+
+    journal = tmp_path / "test.journal"
+    journal.write_text("original\n", encoding="utf-8")
+    config = {"remote": "gdrive", "path": "backup"}
+
+    def _fail(*args, **kwargs):
+        raise CloudSyncError("network down")
+
+    with patch("hledger_textual.cloud_sync.run_rclone", side_effect=_fail):
+        with pytest.raises(CloudSyncError, match="network down"):
+            cloud_sync_download(journal, config)
+
+    assert journal.read_text(encoding="utf-8") == "original\n"
+    assert list(tmp_path.glob("*.bak")) == []

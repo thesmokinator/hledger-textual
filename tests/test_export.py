@@ -6,6 +6,8 @@ import csv
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from hledger_textual.export import (
     ExportData,
     _strip_markup,
@@ -127,3 +129,58 @@ def test_export_csv_creates_parent_dirs():
         path = Path(tmpdir) / "sub" / "dir" / "test.csv"
         export_csv(data, path)
         assert path.exists()
+
+
+def test_export_pdf_no_headers_early_exit():
+    """export_pdf with zero columns writes the title page only."""
+    from hledger_textual.export import ExportData
+
+    data = ExportData.from_rows("Empty", [], [], "empty")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "empty.pdf"
+        export_pdf(data, path)
+        assert path.exists()
+        assert path.stat().st_size > 0
+
+
+def test_from_rows_normalises_tuples():
+    """from_rows converts tuples and coerces cells to string lists."""
+    from hledger_textual.export import ExportData
+
+    data = ExportData.from_rows("T", ("A", "B"), [(1, 2), ("x", "y")], "t")
+    assert data.headers == ["A", "B"]
+    assert data.rows == [["1", "2"], ["x", "y"]]
+    assert all(isinstance(row, list) for row in data.rows)
+
+
+def test_compute_col_widths_zero_total():
+    """All-zero measurements fall back to even widths."""
+    from hledger_textual.export import ExportData, _compute_col_widths
+
+    class _ZeroPdf:
+        def set_font(self, *args, **kwargs) -> None:
+            pass
+
+        def get_string_width(self, _text: str) -> float:
+            return 0.0
+
+    data = ExportData.from_rows("T", ["A", "B"], [], "t")
+    assert _compute_col_widths(_ZeroPdf(), data, 100.0) == [50.0, 50.0]
+
+
+def test_compute_col_widths_enforces_minimum():
+    """A dwarfed column is widened, then totals are renormalised to fit."""
+    from hledger_textual.export import ExportData, _compute_col_widths
+
+    class _LenPdf:
+        def set_font(self, *args, **kwargs) -> None:
+            pass
+
+        def get_string_width(self, text: str) -> float:
+            return float(len(text))
+
+    data = ExportData.from_rows("T", ["A", "B" * 200], [["x", "y"]], "t")
+    widths = _compute_col_widths(_LenPdf(), data, 100.0)
+    assert len(widths) == 2
+    assert sum(widths) == pytest.approx(100.0)
+    assert widths[1] > widths[0]

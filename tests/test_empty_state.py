@@ -84,3 +84,9 @@ async def test_transactions_empty_state_toggles_when_data_appears(
         assert empty_state.display is False
         assert table.display is True
         assert table.row_count == 1
+
+
+def test_empty_state_with_action_hint() -> None:
+    """An action hint is appended below the message (85% push)."""
+    state = EmptyState("No data", "Nothing here yet", action_hint="Press r to reload")
+    assert "Press r to reload" in state._content

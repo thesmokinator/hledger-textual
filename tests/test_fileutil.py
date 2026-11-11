@@ -189,3 +189,30 @@ class TestSafeWriteWithValidation:
                 safe_write_with_validation(target, "new", journal, lambda p: None, self._AppError)
 
         assert not bak.exists()
+
+
+class TestAtomicWriteFailureCleanup:
+    """atomic_write_text BaseException path removes the temp file (85% push)."""
+
+    def test_replace_failure_removes_tmp_and_reraises(self, tmp_path: Path, monkeypatch):
+        """os.replace failure deletes the temp file and propagates."""
+        from hledger_textual.fileutil import atomic_write_text
+
+        target = tmp_path / "out.journal"
+        with monkeypatch.context() as m:
+            m.setattr("os.replace", lambda _s, _d: (_ for _ in ()).throw(OSError("disk full")))
+            with pytest.raises(OSError, match="disk full"):
+                atomic_write_text(target, "content")
+        assert list(tmp_path.glob("*.tmp")) == []
+        assert not target.exists()
+
+    def test_unlink_failure_still_reraises(self, tmp_path: Path, monkeypatch):
+        """An unlink failure during cleanup does not mask the original error."""
+        from hledger_textual.fileutil import atomic_write_text
+
+        target = tmp_path / "out.journal"
+        with monkeypatch.context() as m:
+            m.setattr("os.replace", lambda _s, _d: (_ for _ in ()).throw(OSError("disk full")))
+            m.setattr("os.unlink", lambda _p: (_ for _ in ()).throw(OSError("locked")))
+            with pytest.raises(OSError, match="disk full"):
+                atomic_write_text(target, "content")

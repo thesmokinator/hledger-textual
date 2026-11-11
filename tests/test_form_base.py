@@ -183,3 +183,32 @@ async def test_guarded_form_warns_before_discarding_changes():
         await pilot.press("escape")
         await pilot.pause()
     assert app.result is None
+
+
+class TestFormBaseSaveHook:
+    """The base _save is a must-override hook (85% push)."""
+
+    def test_base_save_raises_not_implemented(self):
+        """Calling the base _save raises NotImplementedError."""
+        import pytest as _pytest
+
+        base = object.__new__(FormScreenBase)
+        with _pytest.raises(NotImplementedError):
+            base._save()
+
+
+class TestDirtyGuardPrimitives:
+    """Dirty-guard state queries without a mounted form (85% push)."""
+
+    def test_no_initial_state_means_clean(self):
+        """Without a snapshot the form counts as unchanged."""
+        guard = DirtyGuardMixin()
+        guard._initial_state = None
+        assert guard.has_unsaved_changes() is False
+
+    def test_disarm_clears_pending_discard(self):
+        """_disarm_discard resets the armed flag."""
+        guard = DirtyGuardMixin()
+        guard._discard_armed = True
+        guard._disarm_discard()
+        assert guard._discard_armed is False
