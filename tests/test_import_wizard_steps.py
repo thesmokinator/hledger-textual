@@ -10,7 +10,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical
-from textual.widgets import DataTable, Input, Select, TextArea
+from textual.widgets import DataTable, Input, Select, Static, TextArea
 
 from hledger_textual.screens.import_wizard.state import WizardState
 from hledger_textual.screens.import_wizard.step_mapping import MappingStep
@@ -125,3 +125,64 @@ async def test_review_step_has_editor(tmp_path):
     async with app.run_test() as pilot:
         await pilot.pause()
         assert app.query_one("#wizard-raw-editor", TextArea) is not None
+
+
+async def test_mapping_step_shows_suggested_badges(tmp_path):
+    """Auto-detected rows carry a [suggested] badge; manual rows don't."""
+    state = _state(
+        tmp_path,
+        column_names=["Date", "Amount"],
+        sample_rows=[["2026-01-01", "10.00"]],
+        field_mapping=["date", "amount"],
+        auto_suggested=[True, False],
+    )
+    step = MappingStep(state)
+    app = _StepApp(step)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await step.populate_mapping()
+        await pilot.pause()
+        assert "suggested" in str(
+            app.query_one("#mapping-suggested-0", Static).renderable
+        )
+        assert len(app.query("#mapping-suggested-1")) == 0
+
+
+async def test_mapping_step_clears_badge_on_user_change(tmp_path):
+    """Touching a Select clears its suggestion flag and badge."""
+    state = _state(
+        tmp_path,
+        column_names=["Date", "Amount"],
+        sample_rows=[["2026-01-01", "10.00"]],
+        field_mapping=["date", "amount"],
+        auto_suggested=[True, True],
+    )
+    step = MappingStep(state)
+    app = _StepApp(step)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await step.populate_mapping()
+        await pilot.pause()
+        assert len(app.query("#mapping-suggested-0")) == 1
+
+        app.query_one("#mapping-select-0", Select).value = "description"
+        await pilot.pause()
+
+        assert state.auto_suggested[0] is False
+        assert len(app.query("#mapping-suggested-0")) == 0
+        # Untouched rows keep their badge.
+        assert len(app.query("#mapping-suggested-1")) == 1
+
+
+async def test_mapping_step_error_line(tmp_path):
+    """set_error/clear_error control the inline mapping error line."""
+    step = MappingStep(_state(tmp_path))
+    app = _StepApp(step)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        step.set_error("boom")
+        await pilot.pause()
+        assert "boom" in str(app.query_one("#wizard-mapping-error", Static).renderable)
+        step.clear_error()
+        await pilot.pause()
+        assert str(app.query_one("#wizard-mapping-error", Static).renderable) == ""

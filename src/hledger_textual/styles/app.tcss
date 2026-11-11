@@ -1388,6 +1388,25 @@ ImportWizardScreen {
     content-align: left middle;
 }
 
+.mapping-suggested {
+    width: auto;
+    color: $accent;
+    height: 3;
+    content-align: left middle;
+    text-style: italic;
+}
+
+.wizard-error {
+    color: $error;
+    margin-top: 1;
+    height: auto;
+}
+
+#wizard-raw-hint {
+    margin-bottom: 1;
+    color: $text-muted;
+}
+
 #wizard-conditional-hint {
     margin-bottom: 1;
     color: $text-muted;
