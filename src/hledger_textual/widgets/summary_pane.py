@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from textual import work
+from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -124,6 +125,102 @@ def _share_cell(pct: float | None, width: int = 12) -> str:
     return f"{_progress_bar(pct, width=width)} {pct:.0f}%"
 
 
+@dataclass
+class PortfolioRow:
+    """Per-commodity portfolio figures for one table row.
+
+    ``market_total`` is ``None`` when no market price is available;
+    ``avg_cost``, ``unrealised_pl`` and ``portfolio_pct`` are ``None`` when
+    their inputs are missing or not comparable.
+    """
+
+    commodity: str
+    quantity: Decimal
+    book_total: Decimal
+    book_commodity: str
+    market_total: Decimal | None
+    market_commodity: str
+    avg_cost: Decimal | None
+    unrealised_pl: Decimal | None
+    portfolio_pct: float | None
+
+
+def _portfolio_rows(
+    by_commodity: dict[str, list[tuple[str, Decimal]]],
+    cost_by_account: dict[str, tuple[Decimal, str]],
+    tickers: dict[str, str],
+    eur_by_account: dict[str, tuple[Decimal, str]] | None = None,
+) -> list[PortfolioRow]:
+    """Compute per-commodity portfolio figures from raw loader output.
+
+    Args:
+        by_commodity: Commodity → list of ``(account, quantity)`` pairs.
+        cost_by_account: Book value per account from ``load_investment_cost``.
+        tickers: Commodity-to-ticker mappings from config.
+        eur_by_account: Market value per account, or None when prices are
+            unavailable.
+
+    Returns:
+        One :class:`PortfolioRow` per commodity, sorted alphabetically.
+    """
+    rows: list[PortfolioRow] = []
+    market_totals: dict[str, Decimal] = {}
+    for com in sorted(by_commodity.keys()):
+        accs = by_commodity[com]
+        total_qty = sum(q for _, q in accs)
+        book_total = sum(
+            cost_by_account.get(acc, (Decimal("0"), ""))[0] for acc, _ in accs
+        )
+        book_com = next(
+            (cost_by_account[acc][1] for acc, _ in accs if acc in cost_by_account),
+            "",
+        )
+        market_total: Decimal | None = None
+        market_com = ""
+        if eur_by_account is not None and com in tickers:
+            market_total = sum(
+                eur_by_account.get(acc, (Decimal("0"), ""))[0] for acc, _ in accs
+            )
+            market_com = next(
+                (eur_by_account[acc][1] for acc, _ in accs if acc in eur_by_account),
+                "",
+            )
+            market_com = normalize_commodity(market_com)
+            # hledger returns the original commodity when it cannot convert.
+            if market_com == com:
+                market_total = None
+                market_com = ""
+        if market_total is not None:
+            market_totals[com] = market_total
+        avg_cost = book_total / total_qty if book_com and total_qty else None
+        unrealised_pl = None
+        if (
+            market_total is not None
+            and book_com
+            and normalize_commodity(book_com) == normalize_commodity(market_com)
+        ):
+            unrealised_pl = market_total - book_total
+        rows.append(
+            PortfolioRow(
+                commodity=com,
+                quantity=total_qty,
+                book_total=book_total,
+                book_commodity=book_com,
+                market_total=market_total,
+                market_commodity=market_com,
+                avg_cost=avg_cost,
+                unrealised_pl=unrealised_pl,
+                portfolio_pct=None,
+            )
+        )
+    grand_total = sum(market_totals.values(), Decimal("0"))
+    if grand_total:
+        for row in rows:
+            if row.market_total is not None:
+                row.portfolio_pct = float(row.market_total / grand_total * 100)
+    return rows
+
+
 def _conversion_note(totals: dict[str, Decimal], target: str | None) -> str:
     """Explain why some percentages are hidden, or return an empty string."""
     if target is None:
@@ -216,7 +313,10 @@ class SummaryPane(DataTablePaneMixin, Widget):
                     id="summary-portfolio-title",
                     classes="summary-section-title",
                 )
-                yield _DisplayTable(id="summary-portfolio-table", show_cursor=False)
+                yield DataTable(
+                    id="summary-portfolio-table",
+                    cursor_type="row",
+                )
                 yield Static("", id="summary-portfolio-loading", classes="summary-portfolio-loading-line")
 
             # Income breakdown — current month
@@ -240,7 +340,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 yield Static("", id="summary-breakdown-note", classes="summary-note")
 
     # Column index → fixed width for portfolio table (col 0 = flex)
-    _PORTFOLIO_FIXED = {1: 12, 2: 18, 3: 18}
+    _PORTFOLIO_FIXED = {1: 12, 2: 14, 3: 16, 4: 16, 5: 14}
     # Column index → fixed width for breakdown table (col 0 = flex)
     _BREAKDOWN_FIXED = {1: 14, 2: 24}
 
@@ -258,12 +358,14 @@ class SummaryPane(DataTablePaneMixin, Widget):
 
     def on_mount(self) -> None:
         """Set up data tables and start loading data."""
-        portfolio_table = self.query_one("#summary-portfolio-table", _DisplayTable)
-        portfolio_table.cursor_type = "none"
-        portfolio_table.add_column("Asset", width=12)
+        portfolio_table = self.query_one("#summary-portfolio-table", DataTable)
+        portfolio_table.cursor_type = "row"
+        portfolio_table.add_column("Symbol", width=12)
         portfolio_table.add_column("Quantity", width=self._PORTFOLIO_FIXED[1])
-        portfolio_table.add_column("Balance", width=self._PORTFOLIO_FIXED[2])
+        portfolio_table.add_column("Avg Cost", width=self._PORTFOLIO_FIXED[2])
         portfolio_table.add_column("Market Value", width=self._PORTFOLIO_FIXED[3])
+        portfolio_table.add_column("Unrealised P/L", width=self._PORTFOLIO_FIXED[4])
+        portfolio_table.add_column("% of Portfolio", width=self._PORTFOLIO_FIXED[5])
 
         liabilities_table = self.query_one("#summary-liabilities-table", _DisplayTable)
         liabilities_table.cursor_type = "none"
@@ -339,6 +441,11 @@ class SummaryPane(DataTablePaneMixin, Widget):
         """Collapse or expand the Liabilities section."""
         self._toggle_section("liabilities")
 
+    _COLLAPSE_TABLES = {
+        "portfolio": "#summary-portfolio-table",
+        "liabilities": "#summary-liabilities-table",
+    }
+
     def _toggle_section(self, section: str) -> None:
         """Flip the collapsed state of a section and redraw it.
 
@@ -349,6 +456,16 @@ class SummaryPane(DataTablePaneMixin, Widget):
             self._collapsed_sections.discard(section)
         else:
             self._collapsed_sections.add(section)
+            # Hiding the focused table would strand focus outside the pane
+            # (and its bindings), so park it on the income table first.
+            try:
+                table = self.query_one(
+                    self._COLLAPSE_TABLES[section], DataTable
+                )
+                if table.has_focus:
+                    self.query_one("#summary-income-table", DataTable).focus()
+            except Exception:
+                pass
         self._apply_collapsed()
 
     def _apply_collapsed(self) -> None:
@@ -386,6 +503,26 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 self.query_one(title_id, Static).update(label)
             except Exception:
                 continue
+
+    @on(DataTable.RowSelected, "#summary-portfolio-table")
+    def _on_portfolio_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Drill down to every transaction touching the selected commodity.
+
+        Args:
+            event: The row selection event carrying the commodity row key.
+        """
+        commodity = str(event.row_key.value or "")
+        if not commodity:
+            return
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        self.app.push_screen(
+            AccountTransactionsScreen(
+                "", journal_file=self.journal_file, commodity=commodity
+            )
+        )
 
     # ------------------------------------------------------------------
     # Background workers
@@ -561,7 +698,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         )
 
         # Investments table — columns are fixed; clear rows only
-        ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
+        ptable = self.query_one("#summary-portfolio-table", DataTable)
         ptable.clear()
 
         by_commodity = self._group_positions_by_commodity(positions)
@@ -619,7 +756,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         """Rebuild the investments table with actual Value (€) data from pricehist."""
         if not self.is_attached or not self.query("#summary-portfolio-table"):
             return
-        ptable = self.query_one("#summary-portfolio-table", _DisplayTable)
+        ptable = self.query_one("#summary-portfolio-table", DataTable)
         ptable.clear()
 
         by_commodity = self._group_positions_by_commodity(positions)
@@ -644,11 +781,8 @@ class SummaryPane(DataTablePaneMixin, Widget):
     ) -> None:
         """Fill investments DataTable rows.
 
-        Always emits 4 columns (Asset, Qty, Balance, Market Value).
-        The Market Value column shows '—' when:
-        - eur_by_account is None (prices not fetched yet)
-        - the commodity has no ticker configured
-        - hledger couldn't convert to EUR (returned the original commodity)
+        Always emits 6 columns (Symbol, Quantity, Avg Cost, Market Value,
+        Unrealised P/L, % of Portfolio).  Columns without data show '—'.
 
         Args:
             ptable: The DataTable to populate.
@@ -657,44 +791,36 @@ class SummaryPane(DataTablePaneMixin, Widget):
             tickers: Commodity-to-ticker mappings from config.
             eur_by_account: EUR market value per account, or None if loading/unavailable.
         """
-        # Investment rows (one per commodity, sorted alphabetically)
-        for com in sorted(by_commodity.keys()):
-            accs = by_commodity[com]
-            total_qty = sum(q for _, q in accs)
-
-            # Book value: sum purchase cost across all accounts for this commodity
-            book_total = sum(
-                cost_by_account.get(acc, (Decimal("0"), ""))[0] for acc, _ in accs
+        for row in _portfolio_rows(
+            by_commodity, cost_by_account, tickers, eur_by_account
+        ):
+            avg_str = (
+                fmt_amount(row.avg_cost, row.book_commodity)
+                if row.avg_cost is not None
+                else "\u2014"
             )
-            book_com = next(
-                (cost_by_account[acc][1] for acc, _ in accs if acc in cost_by_account),
-                "",
+            market_str = (
+                fmt_amount(row.market_total, row.market_commodity)
+                if row.market_total is not None
+                else "\u2014"
             )
-            book_str = fmt_amount(book_total, book_com) if book_com else fmt_amount(book_total, "")
-
-            if eur_by_account is not None and com in tickers:
-                # EUR market value: sum across all accounts for this commodity
-                eur_total = sum(
-                    eur_by_account.get(acc, (Decimal("0"), ""))[0] for acc, _ in accs
-                )
-                eur_com = next(
-                    (eur_by_account[acc][1] for acc, _ in accs if acc in eur_by_account),
-                    "",
-                )
-                eur_com = normalize_commodity(eur_com)
-                # If hledger couldn't convert (returned original commodity), show —
-                if eur_com == com:
-                    ptable.add_row(com, f"{total_qty:g}", book_str, "\u2014")
-                    continue
-                eur_str = fmt_amount(eur_total, eur_com) if eur_com else fmt_amount(eur_total, "")
-                # Color: green if market value exceeds book value (gain), red if loss
-                if book_com and eur_total > book_total:
-                    eur_str = f"[green]{eur_str}[/green]"
-                elif book_com and eur_total < book_total:
-                    eur_str = f"[red]{eur_str}[/red]"
-                ptable.add_row(com, f"{total_qty:g}", book_str, eur_str)
+            if row.unrealised_pl is None:
+                pl_str = "\u2014"
             else:
-                ptable.add_row(com, f"{total_qty:g}", book_str, "\u2014")
+                pl_str = fmt_amount(row.unrealised_pl, row.market_commodity)
+                if row.unrealised_pl > 0:
+                    pl_str = f"[green]{pl_str}[/green]"
+                elif row.unrealised_pl < 0:
+                    pl_str = f"[red]{pl_str}[/red]"
+            ptable.add_row(
+                row.commodity,
+                f"{row.quantity:g}",
+                avg_str,
+                market_str,
+                pl_str,
+                _share_cell(row.portfolio_pct),
+                key=row.commodity,
+            )
 
     @work(thread=True, exclusive=True, group="summary-breakdown")
     def _load_breakdown_data(self) -> None:

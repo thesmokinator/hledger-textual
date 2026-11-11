@@ -30,3 +30,6 @@ class WizardState:
     sample_rows: list[list[str]] = field(default_factory=list)
     field_mapping: list[str] = field(default_factory=list)
     date_format: str = "%Y-%m-%d"
+    # Parallel to ``field_mapping``: True where the value came from
+    # auto-detection and the user has not touched the Select yet.
+    auto_suggested: list[bool] = field(default_factory=list)

@@ -358,9 +358,21 @@ class HledgerTuiApp(App):
         self.push_screen(HelpScreen(self.journal_file))
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
-        """Disable the sync action when no backend is configured."""
+        """Gate actions on app state.
+
+        - ``sync`` is disabled when no backend is configured.
+        - ``command_palette`` is disabled while the import wizard is open:
+          the wizard binds Ctrl+P to "previous step", and the app-level
+          palette binding (priority) would otherwise swallow the key
+          before the modal screen ever sees it.
+        """
         if action == "sync":
             return self._sync_backend is not None
+        if action == "command_palette":
+            from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+            if isinstance(self.screen, ImportWizardScreen):
+                return False
         return True
 
     def action_sync(self) -> None:

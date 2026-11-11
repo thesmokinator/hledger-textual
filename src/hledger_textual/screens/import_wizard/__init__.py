@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from textual import on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.events import DescendantBlur
 from textual.screen import ModalScreen
 from textual.suggester import SuggestFromList
 from textual.widgets import Button, Input, Select, Static, TextArea
@@ -20,6 +23,7 @@ from hledger_textual.csv_import import (
     get_rules_dir,
     read_csv_preview,
     save_rules_file,
+    validate_field_mapping,
     validate_rules_content,
 )
 from hledger_textual.hledger import HledgerError, load_accounts
@@ -36,6 +40,15 @@ from hledger_textual.widgets.constants import SEPARATOR_OPTIONS
 
 TOTAL_STEPS = 5
 
+#: Human-readable title of each wizard step, used by the progress strip.
+STEP_TITLES = (
+    "CSV Preview",
+    "Column Mapping",
+    "Settings",
+    "Categorization Rules",
+    "Review & Save",
+)
+
 
 class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None]):
     """Five-step wizard for creating or editing a CSV import rules file.
@@ -47,6 +60,10 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
 
     BINDINGS = [
         ("escape", "cancel", "Cancel"),
+        Binding("ctrl+n", "next_step", "Next step", priority=True),
+        # Priority: the app-level command palette also uses Ctrl+P, but
+        # inside the wizard Back takes precedence.
+        Binding("ctrl+p", "prev_step", "Previous step", priority=True),
     ]
 
     def __init__(
@@ -112,6 +129,18 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         self._show_step(0)
         self.call_after_refresh(self.capture_initial_state)
 
+    def _mark_auto_suggested(self) -> None:
+        """Flag auto-detected mapping values as suggestions.
+
+        The mapping step shows a ``[suggested]`` badge next to these rows
+        until the user touches the corresponding Select.
+        """
+        self.state.auto_suggested = [
+            bool(value) for value in self.state.field_mapping
+        ]
+        while len(self.state.auto_suggested) < len(self.state.column_names):
+            self.state.auto_suggested.append(False)
+
     async def _init_auto_detect(self) -> None:
         """Auto-detect CSV properties and populate initial values."""
         self.state.separator = detect_separator(self.state.csv_path)
@@ -125,6 +154,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         self.state.field_mapping = auto_detect_field_mapping(
             self.state.column_names, self.state.sample_rows
         )
+        self._mark_auto_suggested()
 
         # Detect date format from samples
         date_col = None
@@ -169,6 +199,8 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         # Pad if columns don't match
         while len(self.state.field_mapping) < len(self.state.column_names):
             self.state.field_mapping.append("")
+        # Values loaded from an existing file are the user's own, not suggestions.
+        self.state.auto_suggested = [False] * len(self.state.column_names)
         self.state.date_format = r.date_format
 
         self._set_separator_select(self.state.separator)
@@ -219,6 +251,25 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
     # Step navigation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _render_step_indicator(step: int) -> str:
+        """Render the progress strip for the given step.
+
+        Shows filled/empty dots plus the active step name; the upcoming
+        step name follows muted (except on the last step).
+
+        Args:
+            step: Zero-based index of the current step.
+
+        Returns:
+            Rich markup for the progress strip.
+        """
+        dots = " ".join("●" if i <= step else "○" for i in range(TOTAL_STEPS))
+        text = f"{dots}   Step {step + 1} of {TOTAL_STEPS}: [b]{STEP_TITLES[step]}[/b]"
+        if step < TOTAL_STEPS - 1:
+            text += f"   [dim](next: {STEP_TITLES[step + 1]})[/dim]"
+        return text
+
     def _show_step(self, step: int) -> None:
         """Show only the container for the given step."""
         self.state.current_step = step
@@ -226,9 +277,9 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             widget = self.query_one(f"#wizard-step-{i}")
             widget.display = i == step
 
-        # Update indicator
+        # Update progress strip
         self.query_one("#wizard-step-indicator", Static).update(
-            f"Import CSV - Step {step + 1} of {TOTAL_STEPS}"
+            self._render_step_indicator(step)
         )
 
         # Show/hide nav buttons
@@ -240,11 +291,53 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         if step == 4:
             self._generate_raw_preview()
 
+        self._focus_first(step)
+
+    def _focus_first(self, step: int) -> None:
+        """Move keyboard focus to the first input of the given step.
+
+        Args:
+            step: Zero-based index of the step being shown.
+        """
+        target: str | None = None
+        if step == 0:
+            target = "#wizard-separator"
+        elif step == 1:
+            if self.state.column_names:
+                target = "#mapping-select-0"
+        elif step == 2:
+            target = "#wizard-rules-name"
+        elif step == 3:
+            if self.state.conditional_rule_count > 0:
+                target = "#cond-pattern-0"
+            else:
+                target = "#btn-wizard-add-rule"
+        elif step == 4:
+            target = "#wizard-raw-editor"
+        if target is None:
+            return
+        try:
+            self.query_one(target).focus()
+        except Exception:
+            pass
+
+    def action_next_step(self) -> None:
+        """Advance to the next step (Ctrl+N), validating first."""
+        if self.state.current_step < TOTAL_STEPS - 1:
+            if self._validate_current_step():
+                self._show_step(self.state.current_step + 1)
+
+    def action_prev_step(self) -> None:
+        """Go back to the previous step (Ctrl+P)."""
+        if self.state.current_step > 0:
+            self._show_step(self.state.current_step - 1)
+
     def _generate_raw_preview(self) -> None:
         """Generate rules content and show in the TextArea."""
         content = self._build_rules_content()
         editor = self.query_one("#wizard-raw-editor", TextArea)
         editor.text = content
+        self.query_one(ReviewStep).clear_errors()
 
     def _build_rules_content(self) -> str:
         """Build rules file content from current wizard state."""
@@ -304,38 +397,67 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             return self._validate_settings()
         return True
 
-    def _validate_mapping(self) -> bool:
-        """Validate that at least date and amount (or amount-in) are mapped."""
-        has_date = False
-        has_amount = False
-        has_amount_in = False
-
+    def _current_mapping(self) -> list[str]:
+        """Read the field mapping from the on-screen Select widgets."""
+        mapping: list[str] = []
         for i in range(len(self.state.column_names)):
             try:
                 sel = self.query_one(f"#mapping-select-{i}", Select)
                 val = sel.value
+                mapping.append(val if val != Select.BLANK else "")
             except Exception:
-                continue
-            if val == "date":
-                has_date = True
-            elif val == "amount":
-                has_amount = True
-            elif val == "amount-in":
-                has_amount_in = True
+                mapping.append("")
+        return mapping
 
-        if not has_date:
-            self.notify(
-                "Please map at least one column to 'date'",
-                severity="error", timeout=5,
-            )
+    def _validate_mapping(self) -> bool:
+        """Validate the column mapping, showing inline errors.
+
+        Requires ``date``, ``description`` and an amount field, each mapped
+        at most once.  The account is covered by the settings step, which
+        requires a bank account.
+        """
+        errors = validate_field_mapping(self._current_mapping())
+        mapping_step = self.query_one(MappingStep)
+        if errors:
+            mapping_step.set_error("  •  ".join(errors))
             return False
-        if not has_amount and not has_amount_in:
-            self.notify(
-                "Please map at least one column to 'amount' or 'amount-in'",
-                severity="error", timeout=5,
-            )
-            return False
+        mapping_step.clear_error()
         return True
+
+    @staticmethod
+    def _format_rules_error(error: str) -> str:
+        """Format a rules validation error, surfacing line numbers first.
+
+        Args:
+            error: The raw error message from ``validate_rules_content``.
+
+        Returns:
+            A one-or-two-line message with any ``line N`` reference pulled
+            to the front; falls back to the raw message.
+        """
+        match = re.search(r"[Ll]ine (\d+)", error)
+        if match:
+            return f"[red]⛔ Rules error at line {match.group(1)}: {error}[/red]"
+        return f"[red]⛔ Rules error: {error}[/red]"
+
+    def on_descendant_blur(self, event: DescendantBlur) -> None:
+        """Validate the edited rules when the editor loses focus.
+
+        Args:
+            event: The blur event bubbled from the focused child.
+        """
+        if event.control.id != "wizard-raw-editor":
+            return
+        try:
+            content = self.query_one("#wizard-raw-editor", TextArea).text
+        except Exception:
+            return
+        error = validate_rules_content(self.state.csv_path, content)
+        review = self.query_one(ReviewStep)
+        if error:
+            review.set_errors(self._format_rules_error(error))
+        else:
+            review.clear_errors()
 
     def _validate_settings(self) -> bool:
         """Validate required settings fields."""
@@ -359,11 +481,9 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             case "btn-wizard-cancel":
                 self.action_cancel()
             case "btn-wizard-back":
-                if self.state.current_step > 0:
-                    self._show_step(self.state.current_step - 1)
+                self.action_prev_step()
             case "btn-wizard-next":
-                if self._validate_current_step():
-                    self._show_step(self.state.current_step + 1)
+                self.action_next_step()
             case "btn-wizard-save":
                 self._do_save()
             case "btn-wizard-add-rule":
@@ -386,6 +506,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         self.state.field_mapping = auto_detect_field_mapping(
             self.state.column_names, self.state.sample_rows
         )
+        self._mark_auto_suggested()
         self.query_one("#wizard-header", Select).value = (
             "yes" if self.state.has_header else "no"
         )
@@ -412,6 +533,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         self.state.field_mapping = auto_detect_field_mapping(
             self.state.column_names, self.state.sample_rows
         )
+        self._mark_auto_suggested()
         self._populate_csv_preview()
         await self._populate_mapping()
 

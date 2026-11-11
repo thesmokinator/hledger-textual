@@ -39,6 +39,7 @@ class AccountTransactionsScreen(Screen):
         journal_file: Path | None = None,
         *,
         date_query: str | None = None,
+        commodity: str | None = None,
     ) -> None:
         """Initialise the screen.
 
@@ -48,20 +49,28 @@ class AccountTransactionsScreen(Screen):
             journal_file: Path to the hledger journal file.
             date_query: Optional hledger date query (e.g. ``'date:2026-01'``)
                 to restrict the transactions to a specific period.
+            commodity: Optional commodity symbol (e.g. ``'BTC'``) to show
+                every transaction touching that commodity instead of an
+                account.  Account metadata (notes) is skipped in this mode.
         """
         super().__init__()
         self.account = account
         self.balance = balance
         self.journal_file = journal_file
         self._date_query = date_query
+        self.commodity = commodity
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
+        title = f"← {self.commodity}" if self.commodity else f"← {self.account}"
         with Horizontal(id="acctxn-header"):
-            yield Label(f"← {self.account}", id="acctxn-title")
+            yield Label(title, id="acctxn-title")
             yield Label(self.balance, id="acctxn-balance")
 
-        fixed_query = f"acct:^{escape_for_hledger(self.account)}$"
+        if self.commodity:
+            fixed_query = f"cur:{escape_for_hledger(self.commodity)}"
+        else:
+            fixed_query = f"acct:^{escape_for_hledger(self.account)}$"
         if self._date_query:
             fixed_query = f"{fixed_query} {self._date_query}"
         yield TransactionsTable(self.journal_file, fixed_query=fixed_query)
@@ -82,6 +91,8 @@ class AccountTransactionsScreen(Screen):
 
     def _refresh_metadata(self) -> None:
         """Load account directive metadata and update the note section."""
+        if self.commodity:
+            return
         directives = load_account_directives(self.journal_file)
         directive = directives.get(self.account)
         note_widget = self.query_one("#acctxn-note", Static)
@@ -119,6 +130,11 @@ class AccountTransactionsScreen(Screen):
 
     def action_edit_note(self) -> None:
         """Open a dialog to edit the account note/comment."""
+        if self.commodity:
+            self.notify(
+                "Notes are not available in commodity view", severity="warning"
+            )
+            return
         from hledger_textual.screens.account_note_form import AccountNoteModal
 
         directives = load_account_directives(self.journal_file)

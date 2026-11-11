@@ -24,4 +24,25 @@ class ReviewStep(Vertical):
     def compose(self) -> ComposeResult:
         """Create the review layout."""
         yield Static("Review & Save", classes="wizard-step-title")
+        yield Static(
+            "You can tweak the generated rules below; "
+            "they are validated when you leave this field.",
+            id="wizard-raw-hint",
+        )
         yield TextArea(id="wizard-raw-editor")
+        yield Static("", id="wizard-raw-errors", classes="wizard-error")
+
+    def set_errors(self, message: str) -> None:
+        """Show inline validation errors below the editor.
+
+        Args:
+            message: The error text to display (empty hides the line).
+        """
+        self.query_one("#wizard-raw-errors", Static).update(message)
+
+    def clear_errors(self) -> None:
+        """Hide the inline validation errors."""
+        try:
+            self.query_one("#wizard-raw-errors", Static).update("")
+        except Exception:
+            pass

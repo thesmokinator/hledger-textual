@@ -18,6 +18,7 @@ from hledger_textual.widgets.formatting import (
 from hledger_textual.widgets.summary_pane import (
     SummaryPane,
     _conversion_note,
+    _portfolio_rows,
     _progress_bar,
     _share_cell,
     _share_pct,
@@ -96,6 +97,93 @@ class TestFmtAmount:
         """Without a commodity, only the number is returned."""
         assert fmt_amount(Decimal("42.00"), "") == "42.00"
 
+
+
+class TestPortfolioRows:
+    """Tests for the per-commodity portfolio computation."""
+
+    def test_gain_row(self) -> None:
+        """Avg cost, P/L and share are computed when all data is known."""
+        rows = _portfolio_rows(
+            {"BTC": [("assets:crypto:wallet", Decimal("0.01"))]},
+            {"assets:crypto:wallet": (Decimal("500"), "€")},
+            {"BTC": "BTC-USD"},
+            {"assets:crypto:wallet": (Decimal("600"), "€")},
+        )
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.quantity == Decimal("0.01")
+        assert row.avg_cost == Decimal("50000")
+        assert row.unrealised_pl == Decimal("100")
+        assert row.portfolio_pct == pytest.approx(100.0)
+
+    def test_loss_and_shares_split(self) -> None:
+        """Two commodities split the portfolio by market value."""
+        rows = _portfolio_rows(
+            {
+                "BTC": [("assets:crypto:btc", Decimal("0.01"))],
+                "ETH": [("assets:crypto:eth", Decimal("1"))],
+            },
+            {
+                "assets:crypto:btc": (Decimal("500"), "€"),
+                "assets:crypto:eth": (Decimal("200"), "€"),
+            },
+            {"BTC": "BTC-USD", "ETH": "ETH-USD"},
+            {
+                "assets:crypto:btc": (Decimal("400"), "€"),
+                "assets:crypto:eth": (Decimal("200"), "€"),
+            },
+        )
+        by_com = {row.commodity: row for row in rows}
+        assert by_com["BTC"].unrealised_pl == Decimal("-100")
+        assert by_com["ETH"].unrealised_pl == Decimal("0")
+        assert by_com["BTC"].portfolio_pct == pytest.approx(400 / 600 * 100)
+        assert by_com["ETH"].portfolio_pct == pytest.approx(200 / 600 * 100)
+
+    def test_missing_market_gives_dashes(self) -> None:
+        """Without prices, market, P/L and share are all unknown."""
+        (row,) = _portfolio_rows(
+            {"BTC": [("assets:crypto:wallet", Decimal("0.01"))]},
+            {"assets:crypto:wallet": (Decimal("500"), "€")},
+            {},
+            None,
+        )
+        assert row.market_total is None
+        assert row.avg_cost == Decimal("50000")
+        assert row.unrealised_pl is None
+        assert row.portfolio_pct is None
+
+    def test_unconvertible_market_is_ignored(self) -> None:
+        """hledger echoing the original commodity means 'no price'."""
+        (row,) = _portfolio_rows(
+            {"BTC": [("assets:crypto:wallet", Decimal("0.01"))]},
+            {"assets:crypto:wallet": (Decimal("500"), "€")},
+            {"BTC": "BTC-USD"},
+            {"assets:crypto:wallet": (Decimal("0.01"), "BTC")},
+        )
+        assert row.market_total is None
+        assert row.unrealised_pl is None
+        assert row.portfolio_pct is None
+
+    def test_mixed_cost_currency_skips_pl(self) -> None:
+        """P/L needs book and market in the same commodity."""
+        (row,) = _portfolio_rows(
+            {"BTC": [("assets:crypto:wallet", Decimal("0.01"))]},
+            {"assets:crypto:wallet": (Decimal("550"), "USD")},
+            {"BTC": "BTC-USD"},
+            {"assets:crypto:wallet": (Decimal("600"), "€")},
+        )
+        assert row.unrealised_pl is None
+
+    def test_zero_quantity_has_no_avg_cost(self) -> None:
+        """A zero balance cannot produce an average cost."""
+        (row,) = _portfolio_rows(
+            {"BTC": [("assets:crypto:wallet", Decimal("0"))]},
+            {"assets:crypto:wallet": (Decimal("0"), "€")},
+            {},
+            None,
+        )
+        assert row.avg_cost is None
 
 
 class TestProgressBar:
@@ -273,7 +361,64 @@ def _foldable_journal(tmp_path: Path) -> Path:
     return journal
 
 
-@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+def _investment_journal(tmp_path: Path) -> Path:
+    """A journal with a 0.01 BTC holding bought with euros."""
+    today = date.today()
+    d1 = today.replace(day=1).isoformat()
+    journal = tmp_path / "invest.journal"
+    journal.write_text(
+        "commodity €1,000.00\n"
+        "commodity 0.00000000 BTC\n"
+        "\n"
+        f"{d1} * Gift\n"
+        "    assets:investments:crypto   0.01000000 BTC\n"
+        "    income:gifts\n"
+    )
+    return journal
+
+
+def _mock_market(monkeypatch, tmp_path: Path, market: Decimal) -> None:
+    """Pretend pricehist is configured with a fixed BTC market value."""
+    prices = tmp_path / "prices.db"
+    prices.write_text("")
+    monkeypatch.setattr(
+        "hledger_textual.widgets.summary_pane.resolve_default_commodity",
+        lambda _file: "€",
+    )
+    monkeypatch.setattr(
+        "hledger_textual.widgets.summary_pane.has_pricehist", lambda: True
+    )
+    monkeypatch.setattr(
+        "hledger_textual.widgets.summary_pane.load_price_tickers",
+        lambda: {"BTC": "BTC-USD"},
+    )
+    monkeypatch.setattr(
+        "hledger_textual.widgets.summary_pane.get_prices_file",
+        lambda _tickers: prices,
+    )
+    monkeypatch.setattr(
+        "hledger_textual.widgets.summary_pane.load_investment_cost",
+        lambda _file: {"assets:investments:crypto": (Decimal("500"), "€")},
+    )
+    monkeypatch.setattr(
+        "hledger_textual.widgets.summary_pane.load_investment_eur_by_account",
+        lambda _file, _prices: {
+            "assets:investments:crypto": (market, "€")
+        },
+    )
+
+
+def _portfolio_market(app) -> str:
+    """Return the first portfolio row's market value, or "" while loading."""
+    try:
+        rows = _table_rows(app, "#summary-portfolio-table")
+    except Exception:
+        return ""
+    if not rows or len(rows[0]) < 4:
+        return ""
+    return rows[0][3]
+
+
 class TestCollapsibleSections:
     """Pilot tests for the i/l section folding (issue #165)."""
 
@@ -321,8 +466,89 @@ class TestCollapsibleSections:
             assert str(title.renderable) == "Investments"
 
 
+class TestInvestmentPane:
+    """Pilot tests for the portfolio table (issue #164)."""
 
-@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+    async def test_portfolio_has_six_columns(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """The portfolio table shows the symbol/cost/value/P/L layout."""
+        _mock_market(monkeypatch, tmp_path, Decimal("600"))
+        app = _SummaryApp(_investment_journal(tmp_path))
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot,
+                lambda: _portfolio_market(app) == "€600.00",
+            )
+            table = app.query_one("#summary-portfolio-table", DataTable)
+            labels = [str(col.label) for col in table.columns.values()]
+            assert labels == [
+                "Symbol",
+                "Quantity",
+                "Avg Cost",
+                "Market Value",
+                "Unrealised P/L",
+                "% of Portfolio",
+            ]
+            rows = _table_rows(app, "#summary-portfolio-table")
+            assert rows[0][0] == "BTC"
+            assert rows[0][2] == "€50,000.00"
+            assert rows[0][3] == "€600.00"
+
+    async def test_gain_row_is_green(self, tmp_path: Path, monkeypatch):
+        """A market value above cost highlights the P/L cell green."""
+        _mock_market(monkeypatch, tmp_path, Decimal("600"))
+        app = _SummaryApp(_investment_journal(tmp_path))
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot,
+                lambda: _portfolio_market(app) == "€600.00",
+            )
+            table = app.query_one("#summary-portfolio-table", DataTable)
+            pl_cell = table.get_row_at(0)[4]
+            assert "[green]" in str(pl_cell)
+            assert "100.00" in str(pl_cell)
+
+    async def test_loss_row_is_red(self, tmp_path: Path, monkeypatch):
+        """A market value below cost highlights the P/L cell red."""
+        _mock_market(monkeypatch, tmp_path, Decimal("400"))
+        app = _SummaryApp(_investment_journal(tmp_path))
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot,
+                lambda: _portfolio_market(app) == "€400.00",
+            )
+            table = app.query_one("#summary-portfolio-table", DataTable)
+            pl_cell = table.get_row_at(0)[4]
+            assert "[red]" in str(pl_cell)
+            assert "100.00" in str(pl_cell)
+
+    async def test_row_drill_down_opens_commodity_transactions(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """Enter on a portfolio row opens that commodity's transactions."""
+        from hledger_textual.screens.account_transactions import (
+            AccountTransactionsScreen,
+        )
+
+        _mock_market(monkeypatch, tmp_path, Decimal("600"))
+        app = _SummaryApp(_investment_journal(tmp_path))
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot,
+                lambda: _portfolio_market(app) == "€600.00",
+            )
+            table = app.query_one("#summary-portfolio-table", DataTable)
+            table.focus()
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, AccountTransactionsScreen)
+            assert screen.commodity == "BTC"
+
+
+
 class TestSummaryPaneDataLoad:
     """Tests for background data loading in SummaryPane."""
 
