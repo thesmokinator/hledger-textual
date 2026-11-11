@@ -186,12 +186,28 @@ class TestRulesManagerModal:
 
 
 class _WizardHostApp(App):
-    """Host app that opens the import wizard on mount."""
+    """Host app that opens the import wizard on mount.
+
+    Mirrors the production ``check_action`` veto: while the wizard modal
+    is on top, the app-level command palette must not swallow Ctrl+P.
+    """
 
     def __init__(self, csv_path: Path, journal: Path) -> None:
         super().__init__()
         self._csv_path = csv_path
         self._journal = journal
+
+    def check_action(
+        self, action: str, parameters: tuple[object, ...]
+    ) -> bool | None:
+        """Veto the command palette while the wizard is open."""
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        if action == "command_palette" and isinstance(
+            self.screen, ImportWizardScreen
+        ):
+            return False
+        return True
 
     def compose(self) -> ComposeResult:
         yield Static("test")
@@ -200,6 +216,132 @@ class _WizardHostApp(App):
         from hledger_textual.screens.import_wizard import ImportWizardScreen
 
         self.push_screen(ImportWizardScreen(self._csv_path, self._journal))
+
+
+class TestImportWizardProgress:
+    """Pilot tests for the progress strip, focus and Ctrl+N/P navigation."""
+
+    @staticmethod
+    def _indicator(screen) -> str:
+        """Return the progress strip as plain text."""
+        return str(screen.query_one("#wizard-step-indicator", Static).renderable)
+
+    @pytest.mark.asyncio
+    async def test_indicator_and_focus_on_mount(self, tmp_path: Path) -> None:
+        """Mounting shows step 1 in the strip and focuses the separator."""
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            strip = self._indicator(screen)
+            assert "● ○ ○ ○ ○" in strip
+            assert "Step 1 of 5" in strip
+            assert "CSV Preview" in strip
+            assert "next:" in strip
+            assert screen.focused is not None
+            assert screen.focused.id == "wizard-separator"
+
+    @pytest.mark.asyncio
+    async def test_ctrl_navigates_and_restores_focus(
+        self, tmp_path: Path
+    ) -> None:
+        """Ctrl+N/P move between steps focusing each step's first input."""
+        from textual.widgets import Button, Input
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+        from hledger_textual.widgets.autocomplete_input import AutocompleteInput
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 1
+            assert "Step 2 of 5" in self._indicator(screen)
+            assert "Column Mapping" in self._indicator(screen)
+            assert screen.focused is not None
+            assert screen.focused.id == "mapping-select-0"
+
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 2
+            assert screen.focused is not None
+            assert screen.focused.id == "wizard-rules-name"
+
+            # Settings step requires name + account before advancing.
+            screen.query_one("#wizard-rules-name", Input).value = "Test Bank"
+            screen.query_one("#wizard-account1", AutocompleteInput).value = (
+                "assets:bank:test"
+            )
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 3
+            # No conditional rules yet: focus lands on the Add button.
+            assert screen.focused is not None
+            assert screen.focused.id == "btn-wizard-add-rule"
+
+            # Add a rule, go back and forth: focus lands on its pattern.
+            screen.query_one("#btn-wizard-add-rule", Button).press()
+            await pilot.pause()
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            assert screen.state.current_step == 2
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 3
+            assert screen.focused is not None
+            assert screen.focused.id == "cond-pattern-0"
+
+            # Last step: all dots filled, no "next", editor focused.
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 4
+            strip = self._indicator(screen)
+            assert "● ● ● ● ●" in strip
+            assert "Step 5 of 5" in strip
+            assert "Review & Save" in strip
+            assert "next:" not in strip
+            assert screen.focused is not None
+            assert screen.focused.id == "wizard-raw-editor"
+
+    @pytest.mark.asyncio
+    async def test_ctrl_n_validates_before_advancing(
+        self, tmp_path: Path
+    ) -> None:
+        """Ctrl+N on an invalid mapping stays put like the Next button."""
+        from textual.widgets import Select
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 1
+
+            screen.query_one("#mapping-select-0", Select).value = ""
+            await pilot.pause()
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            assert screen.state.current_step == 1
 
 
 class TestImportWizardMappingValidation:
