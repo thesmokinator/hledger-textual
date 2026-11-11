@@ -10,7 +10,12 @@ from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
 from hledger_textual.cache import HledgerCache
-from hledger_textual.config import load_auto_generate_recurring, load_sync_config, load_theme
+from hledger_textual.config import (
+    load_auto_generate_recurring,
+    load_sync_config,
+    load_tab_order,
+    load_theme,
+)
 from hledger_textual.sync import SyncBackend, SyncError, create_sync_backend
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
@@ -19,6 +24,47 @@ from hledger_textual.widgets.reports_pane import ReportsPane
 from hledger_textual.widgets.summary_pane import SummaryPane
 from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
+
+
+#: Default tab order (issue #165): account-first workflow.
+DEFAULT_TAB_ORDER = (
+    "summary",
+    "accounts",
+    "transactions",
+    "budget",
+    "recurring",
+    "reports",
+)
+
+#: Human-readable tab labels.  "Recurring" was renamed because it was
+#: ambiguous with recurring reports; "Recurring Txns" names the content.
+TAB_LABELS = {
+    "summary": "Summary",
+    "accounts": "Accounts",
+    "transactions": "Transactions",
+    "budget": "Budget",
+    "recurring": "Recurring Txns",
+    "reports": "Reports",
+}
+
+
+def resolve_tab_order(configured: list[str] | None) -> list[str]:
+    """Resolve the effective tab order from config.
+
+    Unknown names are dropped; sections missing from the configuration
+    keep their relative default order at the end.
+
+    Args:
+        configured: The ``tab_order`` value from config, or ``None``.
+
+    Returns:
+        The ordered section names covering every known section exactly once.
+    """
+    if not configured:
+        return list(DEFAULT_TAB_ORDER)
+    known = [name for name in configured if name in TAB_LABELS]
+    missing = [name for name in DEFAULT_TAB_ORDER if name not in known]
+    return known + missing or list(DEFAULT_TAB_ORDER)
 
 
 def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
@@ -34,7 +80,7 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
     global_part = f"\\[x] Export  {sync_part}\\[?] Help  \\[q] Quit"
     global_no_export = f"{sync_part}\\[?] Help  \\[q] Quit"
     return {
-        "summary": f"\\[r] Reload  {global_no_export}",
+        "summary": f"\\[r] Reload  \\[i]/\\[l] Fold  {global_no_export}",
         "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
         "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
         "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  \\[o] Overview  {global_part}",
@@ -69,12 +115,14 @@ class HledgerTuiApp(App):
     CSS_PATH = "styles/app.tcss"
 
     BINDINGS = [
-        Binding("1", "switch_section('summary')", "Summary", show=False),
-        Binding("2", "switch_section('transactions')", "Transactions", show=False),
-        Binding("3", "switch_section('recurring')", "Recurring", show=False),
-        Binding("4", "switch_section('budget')", "Budget", show=False),
-        Binding("5", "switch_section('reports')", "Reports", show=False),
-        Binding("6", "switch_section('accounts')", "Accounts", show=False),
+        # Number keys follow the visual tab order (see tab_order in config),
+        # so their help descriptions name the default sections at each slot.
+        Binding("1", "switch_nth(0)", "Summary", show=False),
+        Binding("2", "switch_nth(1)", "Accounts", show=False),
+        Binding("3", "switch_nth(2)", "Transactions", show=False),
+        Binding("4", "switch_nth(3)", "Budget", show=False),
+        Binding("5", "switch_nth(4)", "Recurring Txns", show=False),
+        Binding("6", "switch_nth(5)", "Reports", show=False),
         Binding("s", "sync", "Sync", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("q", "quit", "Quit"),
@@ -101,29 +149,40 @@ class HledgerTuiApp(App):
             except SyncError:
                 pass
         self._footer_commands = _build_footer_commands(self._sync_backend is not None)
+        self._tab_order = resolve_tab_order(load_tab_order())
         saved_theme = load_theme()
         if saved_theme:
             self.theme = saved_theme
 
+    def _pane_for_section(self, section: str):
+        """Build the pane widget for a tab section."""
+        if section == "summary":
+            return SummaryPane(self.journal_file, cache=self._cache, id="summary")
+        if section == "transactions":
+            return TransactionsPane(
+                self.journal_file, cache=self._cache, id="transactions"
+            )
+        if section == "budget":
+            return BudgetPane(self.journal_file, cache=self._cache, id="budget")
+        if section == "reports":
+            return ReportsPane(self.journal_file, cache=self._cache, id="reports")
+        if section == "accounts":
+            return AccountsPane(self.journal_file, cache=self._cache, id="accounts")
+        return RecurringPane(self.journal_file, id="recurring")
+
     def compose(self) -> ComposeResult:
-        """Create the app layout."""
+        """Create the app layout, with tabs in the configured order."""
         yield _NavTabs(
-            _NavTab("1. Summary", id="tab-summary"),
-            _NavTab("2. Transactions", id="tab-transactions"),
-            _NavTab("3. Recurring", id="tab-recurring"),
-            _NavTab("4. Budget", id="tab-budget"),
-            _NavTab("5. Reports", id="tab-reports"),
-            _NavTab("6. Accounts", id="tab-accounts"),
+            *[
+                _NavTab(f"{i + 1}. {TAB_LABELS[section]}", id=f"tab-{section}")
+                for i, section in enumerate(self._tab_order)
+            ],
             id="nav-tabs",
         )
 
         with ContentSwitcher(initial="summary", id="content-switcher"):
-            yield SummaryPane(self.journal_file, cache=self._cache, id="summary")
-            yield TransactionsPane(self.journal_file, cache=self._cache, id="transactions")
-            yield BudgetPane(self.journal_file, cache=self._cache, id="budget")
-            yield ReportsPane(self.journal_file, cache=self._cache, id="reports")
-            yield AccountsPane(self.journal_file, cache=self._cache, id="accounts")
-            yield RecurringPane(self.journal_file, id="recurring")
+            for section in self._tab_order:
+                yield self._pane_for_section(section)
 
         yield Static(self._footer_commands["summary"], id="footer-bar")
 
@@ -284,8 +343,13 @@ class HledgerTuiApp(App):
         )
 
     def action_switch_section(self, section: str) -> None:
-        """Switch to the given section via keyboard shortcut (1-6)."""
+        """Switch to the given section."""
         self._activate_section(section)
+
+    def action_switch_nth(self, index: int) -> None:
+        """Switch to the tab at the given position (number keys 1-6)."""
+        if 0 <= index < len(self._tab_order):
+            self._activate_section(self._tab_order[index])
 
     def action_show_help(self) -> None:
         """Open the combined help and about panel."""

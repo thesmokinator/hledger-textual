@@ -308,7 +308,7 @@ class TestTransactionsTableEditFlow:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("e")
             from hledger_textual.screens.transaction_form import TransactionFormScreen
@@ -343,7 +343,7 @@ class TestTransactionsTableEditFlow:
         monkeypatch.setattr("hledger_textual.journal.replace_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test(notifications=True) as pilot:
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("e")
             from hledger_textual.screens.transaction_form import TransactionFormScreen
@@ -377,7 +377,7 @@ class TestTransactionsTableEditFlow:
         monkeypatch.setattr("hledger_textual.journal.delete_transaction", _raise)
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test(notifications=True) as pilot:
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("d")
             from hledger_textual.screens.delete_confirm import DeleteConfirmModal
@@ -405,7 +405,7 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.press("2")  # Switch to Transactions tab
+            await pilot.press("3")  # Switch to Transactions tab
             await select_first_transaction(pilot, app)
             # Row 0 is Salary (newest first, reverse order), which is unmarked.
             # Invoke the pane action directly: key delivery in the headless
@@ -426,7 +426,7 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.press("2")
+            await pilot.press("3")
             table = await select_first_transaction(pilot, app)
             # Move to row 1: Grocery shopping (cleared). Set the cursor directly
             # rather than relying on a keypress that may be swallowed in CI.
@@ -449,7 +449,7 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             # Row 0 is Salary (unmarked)
             app.query_one(TransactionsPane).action_toggle_pending()
@@ -468,7 +468,7 @@ class TestTransactionsTableStatusToggle:
 
         app = HledgerTuiApp(journal_file=table_journal)
         async with app.run_test() as pilot:
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             # Row 0 is Salary (unmarked) — set to pending first
             app.query_one(TransactionsPane).action_toggle_pending()

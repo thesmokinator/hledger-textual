@@ -68,7 +68,7 @@ class TestRoundTrip:
 
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.press("a")
             await wait_until(pilot, lambda: isinstance(app.screen, TransactionFormScreen))
 
@@ -103,7 +103,7 @@ class TestRoundTrip:
 
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
 
             await pilot.press("e")
@@ -137,7 +137,7 @@ class TestRoundTrip:
 
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             # Toggle cleared on the currently selected transaction. Invoke the
             # pane action directly: key delivery in the headless harness is
@@ -164,7 +164,7 @@ class TestRoundTrip:
 
         async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             # Trigger delete → pushes DeleteConfirmModal
             await pilot.press("d")

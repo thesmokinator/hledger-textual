@@ -79,7 +79,7 @@ class TestAppStartup:
         """Switching to Transactions shows the data table with rows."""
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await wait_until(pilot, lambda: _txn_rows(app) == 3)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
@@ -96,7 +96,7 @@ class TestFilter:
     async def test_filter_shows_input(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("slash")
             from hledger_textual.widgets.transactions_table import TransactionsTable
@@ -108,7 +108,7 @@ class TestFilter:
         """Searching with hledger query narrows results."""
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("slash")
             search_input = app.screen.query_one("#txn-search-input")
@@ -122,7 +122,7 @@ class TestFilter:
         """Pressing escape clears the search and restores all results."""
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("slash")
             search_input = app.screen.query_one("#txn-search-input")
@@ -140,7 +140,7 @@ class TestFilter:
 
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             from hledger_textual.widgets.transactions_table import TransactionsTable
             txn_table = app.screen.query_one(TransactionsTable)
@@ -161,7 +161,7 @@ class TestRefresh:
     async def test_refresh_reloads(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await wait_until(pilot, lambda: _txn_rows(app) == 3)
             table = app.screen.query_one("#transactions-table")
             assert table.row_count == 3
@@ -184,7 +184,7 @@ class TestDelete:
     async def test_delete_shows_modal(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
@@ -192,7 +192,7 @@ class TestDelete:
     async def test_delete_cancel(self, app: HledgerTuiApp):
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
@@ -204,7 +204,7 @@ class TestDelete:
     async def test_delete_confirm(self, app: HledgerTuiApp, app_journal: Path):
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("d")
             await self._wait_for_delete_modal(app, pilot)
@@ -356,11 +356,11 @@ class TestTabNavigation:
             await pilot.pause()
             sections = [
                 ("1", "summary"),
-                ("2", "transactions"),
-                ("3", "recurring"),
+                ("2", "accounts"),
+                ("3", "transactions"),
                 ("4", "budget"),
-                ("5", "reports"),
-                ("6", "accounts"),
+                ("5", "recurring"),
+                ("6", "reports"),
             ]
             for key, expected in sections:
                 await pilot.press(key)
@@ -370,13 +370,64 @@ class TestTabNavigation:
                 )
                 assert switcher.current == expected
 
+    async def test_tabs_follow_default_order_with_new_labels(
+        self, app: HledgerTuiApp
+    ):
+        """Tabs render positionally numbered with the new labels."""
+        from textual.widgets import Tabs
+
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            tabs = app.screen.query_one("#nav-tabs", Tabs)
+            labels = [str(tab.label) for tab in tabs.query("_NavTab")]
+            assert labels == [
+                "1. Summary",
+                "2. Accounts",
+                "3. Transactions",
+                "4. Budget",
+                "5. Recurring Txns",
+                "6. Reports",
+            ]
+
+    async def test_custom_tab_order_remaps_tabs_and_keys(
+        self, app_journal: Path, monkeypatch
+    ):
+        """tab_order from config reorders tabs and remaps number keys."""
+        from textual.widgets import ContentSwitcher, Tabs
+
+        monkeypatch.setattr(
+            "hledger_textual.app.load_tab_order",
+            lambda: ["reports", "summary"],
+        )
+        custom = HledgerTuiApp(journal_file=app_journal)
+        assert custom._tab_order == [
+            "reports",
+            "summary",
+            "accounts",
+            "transactions",
+            "budget",
+            "recurring",
+        ]
+        async with custom.run_test() as pilot:
+            await pilot.pause()
+            tabs = custom.screen.query_one("#nav-tabs", Tabs)
+            labels = [str(tab.label) for tab in tabs.query("_NavTab")]
+            assert labels[0] == "1. Reports"
+            assert labels[1] == "2. Summary"
+            await pilot.press("1")
+            await pilot.pause()
+            switcher = custom.screen.query_one(
+                "#content-switcher", ContentSwitcher
+            )
+            assert switcher.current == "reports"
+
     async def test_footer_updates_on_switch(self, app: HledgerTuiApp):
         """Footer help text updates when switching sections."""
         from textual.widgets import Static
 
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             footer = app.screen.query_one("#footer-bar", Static)
             rendered = str(footer.renderable)

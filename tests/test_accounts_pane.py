@@ -56,7 +56,7 @@ class TestAccountsPane:
         """Pressing 2 switches to the accounts pane."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             from textual.widgets import ContentSwitcher
 
@@ -69,7 +69,7 @@ class TestAccountsPane:
         """Accounts table shows accounts when data exists."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             table = accounts_app.screen.query_one("#accounts-table")
             assert table.row_count > 0
@@ -78,7 +78,7 @@ class TestAccountsPane:
         """Pressing r refreshes the accounts list."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             table = accounts_app.screen.query_one("#accounts-table")
             count_before = table.row_count
@@ -94,7 +94,7 @@ class TestAccountsFilter:
         """Pressing / shows the filter input."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("slash")
             await pilot.pause()
@@ -108,7 +108,7 @@ class TestAccountsFilter:
         """Typing in the filter narrows the account list."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             table = accounts_app.screen.query_one("#accounts-table")
             count_all = table.row_count
@@ -124,7 +124,7 @@ class TestAccountsFilter:
         """Pressing Escape hides the filter and restores all rows."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             table = accounts_app.screen.query_one("#accounts-table")
             count_all = table.row_count
@@ -145,7 +145,7 @@ class TestAccountDrillDown:
         """Pressing Enter on an account opens the drill-down screen."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("enter")
             await pilot.pause(delay=0.5)
@@ -161,7 +161,7 @@ class TestAccountDrillDown:
         """Pressing Escape on the drill-down screen goes back."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("enter")
             await pilot.pause(delay=0.5)
@@ -179,7 +179,7 @@ class TestAccountDrillDown:
         """Drill-down screen shows transactions for the selected account."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("enter")
             await pilot.pause(delay=1.0)
@@ -196,7 +196,7 @@ class TestAccountsToggleView:
 
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause()
             pane = accounts_app.screen.query_one(AccountsPane)
             initial = pane._tree_mode
@@ -210,7 +210,7 @@ class TestAccountsToggleView:
 
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause()
             pane = accounts_app.screen.query_one(AccountsPane)
             initial = pane._tree_mode
@@ -240,7 +240,7 @@ class TestAccountsTreeExport:
         """Regression: tree mode loaded only the tree, so export was empty."""
         async with accounts_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await wait_until(pilot, lambda: _accounts_rows(accounts_app) > 0)
             pane = accounts_app.screen.query_one(AccountsPane)
             await pilot.press("t")
@@ -323,7 +323,7 @@ class TestAccountsLazyLoading:
             await wait_until(pilot, lambda: len(flat_calls) >= 1)
             flat_before = len(flat_calls)
             tree_before = len(tree_calls)
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause()
             await pilot.press("t")
             await wait_until(pilot, lambda: len(tree_calls) == tree_before + 1)
@@ -363,7 +363,7 @@ class TestAccountsLazyLoading:
         async with accounts_app.run_test() as pilot:
             await wait_until(pilot, lambda: len(flat_calls) >= 1)
             flat_after_mount = len(flat_calls)
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause()
             pane = accounts_app.screen.query_one(AccountsPane)
             await pilot.press("t")
@@ -491,7 +491,7 @@ class TestAccountsCommodityConversion:
         app = HledgerTuiApp(journal_file=journal)
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await wait_until(pilot, lambda: _accounts_rows(app) > 0)
             table = app.screen.query_one("#accounts-table")
             target_row = None
@@ -564,7 +564,7 @@ class TestAccountsRowHeight:
         app = HledgerTuiApp(journal_file=journal)
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await wait_until(pilot, lambda: _accounts_rows(app) > 0)
             table = app.screen.query_one("#accounts-table")
             keys = {rk.value: rk for rk in table.rows.keys() if rk.value}
@@ -596,7 +596,7 @@ class TestAccountsRowHeight:
         app = HledgerTuiApp(journal_file=journal)
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await wait_until(pilot, lambda: _accounts_rows(app) > 0)
             table = app.screen.query_one("#accounts-table")
             keys = {rk.value: rk for rk in table.rows.keys() if rk.value}

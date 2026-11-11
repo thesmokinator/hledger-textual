@@ -110,7 +110,7 @@ async def test_s1_accounts_flat_shows_all_currencies(
     app = HledgerTuiApp(journal_file=directive_free)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("6")
+        await pilot.press("2")
         await wait_until(pilot, lambda: _accounts_loaded(app))
 
         cell = _accounts_cell(app, "assets:bank:checking")
@@ -147,7 +147,7 @@ async def test_s2_accounts_convert_to_configured_commodity(
     app = HledgerTuiApp(journal_file=journal)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("6")
+        await pilot.press("2")
         await wait_until(pilot, lambda: _accounts_loaded(app))
 
         cell = _accounts_cell(app, "assets:bank:checking")
@@ -405,7 +405,7 @@ async def test_s11_journal_directive_drives_conversion_without_config(
     app = HledgerTuiApp(journal_file=journal)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("6")
+        await pilot.press("2")
         await wait_until(pilot, lambda: _accounts_loaded(app))
 
         cell = _accounts_cell(app, "assets:bank:checking")
@@ -421,7 +421,7 @@ async def test_s11_journal_directive_drives_conversion_without_config(
     app2 = HledgerTuiApp(journal_file=flipped)
     async with app2.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("6")
+        await pilot.press("2")
         await wait_until(pilot, lambda: _accounts_loaded(app2))
 
         cell = _accounts_cell(app2, "assets:bank:checking")

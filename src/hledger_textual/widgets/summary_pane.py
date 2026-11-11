@@ -249,6 +249,8 @@ class SummaryPane(DataTablePaneMixin, Widget):
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
+        Binding("i", "toggle_investments", "Fold investments", show=True, priority=True),
+        Binding("l", "toggle_liabilities", "Fold liabilities", show=True, priority=True),
     ]
 
     def __init__(
@@ -272,6 +274,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         self._has_static_sections = False
         self._has_breakdown_sections = False
         self._summary_export_rows: list[list[str]] = []
+        self._collapsed_sections: set[str] = set()
 
     # ------------------------------------------------------------------
     # Layout
@@ -429,6 +432,77 @@ class SummaryPane(DataTablePaneMixin, Widget):
         """Reload all summary data."""
         self._load_static_data()
         self._load_breakdown_data()
+
+    def action_toggle_investments(self) -> None:
+        """Collapse or expand the Investments section."""
+        self._toggle_section("portfolio")
+
+    def action_toggle_liabilities(self) -> None:
+        """Collapse or expand the Liabilities section."""
+        self._toggle_section("liabilities")
+
+    _COLLAPSE_TABLES = {
+        "portfolio": "#summary-portfolio-table",
+        "liabilities": "#summary-liabilities-table",
+    }
+
+    def _toggle_section(self, section: str) -> None:
+        """Flip the collapsed state of a section and redraw it.
+
+        Args:
+            section: ``"portfolio"`` or ``"liabilities"``.
+        """
+        if section in self._collapsed_sections:
+            self._collapsed_sections.discard(section)
+        else:
+            self._collapsed_sections.add(section)
+            # Hiding the focused table would strand focus outside the pane
+            # (and its bindings), so park it on the income table first.
+            try:
+                table = self.query_one(
+                    self._COLLAPSE_TABLES[section], DataTable
+                )
+                if table.has_focus:
+                    self.query_one("#summary-income-table", DataTable).focus()
+            except Exception:
+                pass
+        self._apply_collapsed()
+
+    def _apply_collapsed(self) -> None:
+        """Hide collapsed section bodies and mark their titles.
+
+        Only the table (and note/loading line) is hidden so the title
+        stays visible as the expand affordance; the section container
+        itself is left alone so empty sections stay hidden.
+        """
+        configs = (
+            (
+                "portfolio",
+                "Investments",
+                "#summary-portfolio-table",
+                ("#summary-portfolio-loading",),
+                "#summary-portfolio-title",
+            ),
+            (
+                "liabilities",
+                "Liabilities",
+                "#summary-liabilities-table",
+                ("#summary-liabilities-note",),
+                "#summary-liabilities-title",
+            ),
+        )
+        for section, title, table_id, extra_ids, title_id in configs:
+            collapsed = section in self._collapsed_sections
+            try:
+                self.query_one(table_id, DataTable).display = not collapsed
+                for extra_id in extra_ids:
+                    self.query_one(extra_id, Static).display = not collapsed
+                # Expanded sections keep their plain title; collapsed ones
+                # get an expand marker so the title stays an affordance.
+                label = f"▸ {title}" if collapsed else title
+                self.query_one(title_id, Static).update(label)
+            except Exception:
+                continue
 
     @on(DataTable.RowSelected, "#summary-portfolio-table")
     def _on_portfolio_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -668,6 +742,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 self.call_after_refresh(
                     distribute_column_widths, ltable, self._BREAKDOWN_FIXED
                 )
+        self._apply_collapsed()
         self._sync_empty_state()
 
     def _apply_portfolio_eur(
@@ -694,6 +769,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
 
         # Show warning for unconfigured commodities, or clear loading indicator
         self.query_one("#summary-portfolio-loading", Static).update(post_msg)
+        self._apply_collapsed()
 
     def _fill_portfolio_rows(
         self,
