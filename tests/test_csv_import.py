@@ -28,6 +28,7 @@ from hledger_textual.csv_import import (
     preview_import,
     read_csv_preview,
     save_rules_file,
+    validate_field_mapping,
     validate_rules_content,
 )
 
@@ -155,6 +156,44 @@ class TestAutoDetectFieldMapping:
         mapping = auto_detect_field_mapping(names, samples)
         assert mapping[2] == "amount-out"
         assert mapping[3] == "amount-in"
+
+
+class TestValidateFieldMapping:
+    """Tests for validate_field_mapping."""
+
+    def test_valid_mapping_has_no_errors(self) -> None:
+        """A complete mapping with date, description and amount is valid."""
+        assert validate_field_mapping(["date", "description", "amount", ""]) == []
+
+    def test_amount_in_out_pair_is_valid(self) -> None:
+        """Separate credit/debit columns satisfy the amount requirement."""
+        assert validate_field_mapping(
+            ["date", "description", "amount-out", "amount-in"]
+        ) == []
+
+    def test_missing_date_reported(self) -> None:
+        """A mapping without date should fail."""
+        errors = validate_field_mapping(["", "description", "amount"])
+        assert any("'date'" in e for e in errors)
+
+    def test_missing_description_reported(self) -> None:
+        """A mapping without description should fail."""
+        errors = validate_field_mapping(["date", "", "amount"])
+        assert any("'description'" in e for e in errors)
+
+    def test_missing_amount_reported(self) -> None:
+        """A mapping without any amount field should fail."""
+        errors = validate_field_mapping(["date", "description", ""])
+        assert any("'amount'" in e for e in errors)
+
+    def test_duplicate_field_reported(self) -> None:
+        """Mapping 'date' twice should fail and name the columns."""
+        errors = validate_field_mapping(["date", "description", "date"])
+        assert any("mapped twice" in e and "1 and 3" in e for e in errors)
+
+    def test_blank_columns_are_skipped(self) -> None:
+        """Empty entries never count as duplicates or required fields."""
+        assert validate_field_mapping(["date", "description", "amount"]) == []
 
 
 class TestReadCsvPreview:

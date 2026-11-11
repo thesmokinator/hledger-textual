@@ -264,6 +264,46 @@ def auto_detect_field_mapping(
     return mapping
 
 
+def validate_field_mapping(field_mapping: list[str]) -> list[str]:
+    """Check a column-to-field mapping for missing or duplicated fields.
+
+    Required fields are ``date``, ``description`` and an amount field
+    (``amount``, or the ``amount-in``/``amount-out`` pair).  Every mapped
+    field may appear at most once: hledger would silently use only one of
+    two columns mapped to the same field.
+
+    Args:
+        field_mapping: One hledger field name (or ``""`` for skip) per CSV
+            column, in column order.
+
+    Returns:
+        A list of human-readable error messages; empty when valid.
+    """
+    errors: list[str] = []
+    seen: dict[str, int] = {}
+    for idx, field_name in enumerate(field_mapping):
+        if not field_name:
+            continue
+        if field_name in seen:
+            errors.append(
+                f"Field '{field_name}' is mapped twice "
+                f"(columns {seen[field_name] + 1} and {idx + 1})"
+            )
+        else:
+            seen[field_name] = idx
+
+    if "date" not in seen:
+        errors.append("Please map at least one column to 'date'")
+    if "description" not in seen:
+        errors.append("Please map at least one column to 'description'")
+    if not ({"amount", "amount-in", "amount-out"} & seen.keys()):
+        errors.append(
+            "Please map at least one column to 'amount' "
+            "or 'amount-in'/'amount-out'"
+        )
+    return errors
+
+
 def read_csv_preview(
     csv_path: Path, separator: str, skip: int = 0, max_rows: int = 10
 ) -> list[list[str]]:

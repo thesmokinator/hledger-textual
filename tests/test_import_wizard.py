@@ -344,6 +344,127 @@ class TestImportWizardProgress:
             assert screen.state.current_step == 1
 
 
+class TestImportWizardMappingValidation:
+    """Pilot tests for mapping validation and the raw-rules blur check."""
+
+    @pytest.mark.asyncio
+    async def test_next_blocked_until_mapping_valid(self, tmp_path: Path) -> None:
+        """Next must not leave the mapping step while it has errors."""
+        from textual.widgets import Button, Select
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            # Preview -> mapping (auto-detected mapping is valid).
+            screen.query_one("#btn-wizard-next", Button).press()
+            await pilot.pause()
+            assert screen.state.current_step == 1
+
+            # Break the mapping: unmap the date column.
+            screen.query_one("#mapping-select-0", Select).value = ""
+            await pilot.pause()
+
+            screen.query_one("#btn-wizard-next", Button).press()
+            await pilot.pause()
+            assert screen.state.current_step == 1
+            error = str(
+                screen.query_one("#wizard-mapping-error", Static).renderable
+            )
+            assert "date" in error
+
+            # Fix it again: Next advances to settings.
+            screen.query_one("#mapping-select-0", Select).value = "date"
+            await pilot.pause()
+            screen.query_one("#btn-wizard-next", Button).press()
+            await pilot.pause()
+            assert screen.state.current_step == 2
+            assert (
+                str(screen.query_one("#wizard-mapping-error", Static).renderable)
+                == ""
+            )
+
+    @pytest.mark.asyncio
+    async def test_duplicate_mapping_blocked(self, tmp_path: Path) -> None:
+        """Mapping the same field twice must block Next."""
+        from textual.widgets import Button, Select
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            screen.query_one("#btn-wizard-next", Button).press()
+            await pilot.pause()
+            assert screen.state.current_step == 1
+
+            screen.query_one("#mapping-select-3", Select).value = "date"
+            await pilot.pause()
+            screen.query_one("#btn-wizard-next", Button).press()
+            await pilot.pause()
+            assert screen.state.current_step == 1
+            error = str(
+                screen.query_one("#wizard-mapping-error", Static).renderable
+            )
+            assert "mapped twice" in error
+
+    @pytest.mark.asyncio
+    async def test_raw_editor_blur_validates(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Leaving the raw editor validates and shows inline errors."""
+        from textual.widgets import Button, TextArea
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+            screen._show_step(4)
+            await pilot.pause()
+
+            monkeypatch.setattr(
+                "hledger_textual.screens.import_wizard.validate_rules_content",
+                lambda csv_path, content: "hledger failed: line 3: bad field",
+            )
+            editor = screen.query_one("#wizard-raw-editor", TextArea)
+            editor.focus()
+            await pilot.pause()
+            screen.query_one("#btn-wizard-back", Button).focus()
+            await pilot.pause()
+            shown = str(screen.query_one("#wizard-raw-errors", Static).renderable)
+            assert "line 3" in shown
+
+            monkeypatch.setattr(
+                "hledger_textual.screens.import_wizard.validate_rules_content",
+                lambda csv_path, content: None,
+            )
+            editor.focus()
+            await pilot.pause()
+            screen.query_one("#btn-wizard-back", Button).focus()
+            await pilot.pause()
+            assert (
+                str(screen.query_one("#wizard-raw-errors", Static).renderable)
+                == ""
+            )
+
+
 @pytest.mark.skipif(not _has_hledger, reason="hledger not installed")
 class TestImportPreviewScreen:
     """Tests for the ImportPreviewScreen."""
