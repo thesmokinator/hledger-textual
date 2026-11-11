@@ -11,6 +11,32 @@ Built with [Textual](https://textual.textualize.io) and Python.
 
 ![hledger-textual demo](https://raw.githubusercontent.com/thesmokinator/hledger-textual/main/demo.gif)
 
+## ✨ Feature highlights
+
+- 📊 Multi-period reports — monthly, quarterly, yearly, and custom ranges, with charts
+- 🔁 Recurring transaction rules with calendar view and one-shot generation
+- 💰 Budgets with overview screen and per-category drill-down
+- 📥 CSV import wizard with separator/header detection and rule editor
+- 📈 Investment tracking with cost basis and market value conversion
+- 🔄 Git sync and cloud sync support for the journal
+- 🧩 Custom report builder with saved filters
+- 🏦 Account hierarchy with directives (notes, metadata)
+- 📄 PDF / CSV export of every view
+
+## 📸 Screenshots
+
+| Summary | Transactions |
+|---|---|
+| ![Summary pane](docs/screenshots/summary.svg) | ![Transactions pane](docs/screenshots/transactions.svg) |
+
+| Budget | Reports |
+|---|---|
+| ![Budget pane](docs/screenshots/budget.svg) | ![Reports pane](docs/screenshots/reports.svg) |
+
+## Why hledger-textual?
+
+hledger-textual is the most advanced TUI in the hledger ecosystem, with feature parity for budgets, recurring transactions, investments, and reports. Everything lives in plain-text files you already own — the journal, a `budget.journal` for budgets, CSV rules for imports — so no database, no lock-in, and git-friendly versioning of your finances.
+
 ## Stack
 
 - **Python 3.12+**
@@ -79,9 +105,30 @@ To pin a currency via config instead:
 default_commodity = "€"
 ```
 
+## Configuration
+
+Full reference: the [Wiki](https://github.com/thesmokinator/hledger-textual/wiki) documents every option. A minimal `~/.config/hledger-textual/config.toml`:
+
+```toml
+journal_file = "~/finance/all.journal"
+default_commodity = "€"
+theme = "nord"
+
+# Reorder the tabs (any subset; missing tabs keep their default order)
+tab_order = ["summary", "accounts", "transactions", "budget", "recurring", "reports"]
+```
+
 ## Documentation
 
 See the [Wiki](https://github.com/thesmokinator/hledger-textual/wiki) for the full documentation: feature overview, configuration, investment tracking, and per-tab reference.
+
+## Roadmap
+
+Planned work is tracked as [enhancement issues](https://github.com/thesmokinator/hledger-textual/labels/enhancement) — vote, comment, or pick one up.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, test suite, and pull-request flow.
 
 ## Development
 
