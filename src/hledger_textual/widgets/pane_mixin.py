@@ -7,6 +7,22 @@ from textual.widgets import DataTable
 
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.empty_state import EmptyState
+
+
+def set_empty_state_visible(
+    widget, empty_id: str, table_id: str, visible: bool
+) -> None:
+    """Toggle an empty-state message and its DataTable visibility.
+
+    Args:
+        widget: The pane or table widget owning both elements.
+        empty_id: CSS id of the :class:`EmptyState` message.
+        table_id: CSS id of the :class:`DataTable` to hide when empty.
+        visible: Show the empty-state message when True.
+    """
+    widget.query_one(f"#{empty_id}", EmptyState).display = visible
+    widget.query_one(f"#{table_id}", DataTable).display = not visible
 
 
 class DataTablePaneMixin:
