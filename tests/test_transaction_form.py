@@ -72,7 +72,7 @@ class TestFormOpens:
     async def test_add_opens_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -81,7 +81,7 @@ class TestFormOpens:
     async def test_edit_opens_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("e")
             await wait_until(
@@ -95,7 +95,7 @@ class TestFormOpens:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -105,7 +105,7 @@ class TestFormOpens:
     async def test_new_form_has_two_posting_rows(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -117,7 +117,7 @@ class TestFormOpens:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("e")
             await wait_until(
@@ -131,7 +131,7 @@ class TestFormOpens:
     async def test_edit_form_has_correct_posting_count(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, app)
             await pilot.press("e")
             await wait_until(
@@ -147,7 +147,7 @@ class TestFormOpens:
     async def test_escape_cancels_form(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -165,7 +165,7 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -181,7 +181,7 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -198,7 +198,7 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -214,7 +214,7 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -230,7 +230,7 @@ class TestFormValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -252,7 +252,7 @@ class TestFormPostings:
     async def test_add_posting_row(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -267,7 +267,7 @@ class TestFormPostings:
     async def test_remove_posting_row(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -288,7 +288,7 @@ class TestFormPostings:
         """Posting rows can be removed below two (hledger accepts 0+ postings)."""
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -309,7 +309,7 @@ class TestFormSave:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -332,7 +332,7 @@ class TestFormSave:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -363,7 +363,7 @@ class TestBalanceValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -398,7 +398,7 @@ class TestBalanceValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -421,7 +421,7 @@ class TestBalanceValidation:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -476,7 +476,7 @@ class TestEuropeanStylePreservation:
 
         async with european_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await select_first_transaction(pilot, european_app)
             await pilot.press("e")
             await wait_until(
@@ -547,7 +547,7 @@ class TestEuropeanNewTransactionParsing:
 
         async with european_eur_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -581,7 +581,7 @@ class TestEuropeanNewTransactionParsing:
 
         async with european_eur_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -615,7 +615,7 @@ class TestEuropeanNewTransactionParsing:
 
         async with european_eur_app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -816,7 +816,7 @@ class TestDescriptionAutocomplete:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -829,7 +829,7 @@ class TestDescriptionAutocomplete:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -840,7 +840,7 @@ class TestDescriptionAutocomplete:
     async def test_date_uses_date_input(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -892,7 +892,7 @@ class TestAmountInputWidget:
     async def test_amount_uses_amount_input(self, app: HledgerTuiApp):
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -917,7 +917,7 @@ class TestDefaultCommodity:
         )
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1251,7 +1251,7 @@ class TestPostingClipboard:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1282,7 +1282,7 @@ class TestPostingClipboard:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1308,7 +1308,7 @@ class TestRunningBalance:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1337,7 +1337,7 @@ class TestRunningBalance:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1360,7 +1360,7 @@ class TestUnsavedChangesGuard:
         """An untouched form closes immediately."""
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1376,7 +1376,7 @@ class TestUnsavedChangesGuard:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1401,7 +1401,7 @@ class TestUnsavedChangesGuard:
 
         async with app.run_test(size=(100, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1423,7 +1423,7 @@ class TestPostingRowLayout:
         """A 5-posting form at 24 lines keeps every row 2 tall and Save visible."""
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -1445,7 +1445,7 @@ class TestPostingRowLayout:
         """The focused posting input is highlighted at the tighter density."""
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)

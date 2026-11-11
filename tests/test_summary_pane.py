@@ -249,6 +249,78 @@ class TestSummaryPaneMount:
             assert table is not None
 
 
+def _foldable_journal(tmp_path: Path) -> Path:
+    """A journal with visible liabilities and investment sections."""
+    today = date.today()
+    d1 = today.replace(day=1).isoformat()
+    journal = tmp_path / "fold.journal"
+    journal.write_text(
+        "commodity €1,000.00\n"
+        "commodity 0.00000000 BTC\n"
+        "\n"
+        f"{d1} * Salary\n"
+        "    assets:bank:checking   €3500.00\n"
+        "    income:salary\n"
+        "\n"
+        f"{d1} * Credit card\n"
+        "    liabilities:credit-card   €-200.00\n"
+        "    expenses:food\n"
+        "\n"
+        f"{d1} * Gift\n"
+        "    assets:investments:crypto   0.01000000 BTC\n"
+        "    income:gifts\n"
+    )
+    return journal
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestCollapsibleSections:
+    """Pilot tests for the i/l section folding (issue #165)."""
+
+    async def test_liabilities_fold(self, tmp_path: Path):
+        """Pressing l hides the liabilities table, pressing again restores it."""
+        app = _SummaryApp(_foldable_journal(tmp_path))
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot,
+                lambda: _table_row_count(app, "#summary-liabilities-table") >= 1,
+            )
+            table = app.query_one("#summary-liabilities-table", DataTable)
+            title = app.query_one("#summary-liabilities-title", Static)
+            assert table.display is True
+
+            await pilot.press("l")
+            await pilot.pause()
+            assert table.display is False
+            assert str(title.renderable) == "▸ Liabilities"
+
+            await pilot.press("l")
+            await pilot.pause()
+            assert table.display is True
+            assert str(title.renderable) == "Liabilities"
+
+    async def test_investments_fold(self, tmp_path: Path):
+        """Pressing i hides the investments table, pressing again restores it."""
+        app = _SummaryApp(_foldable_journal(tmp_path))
+        async with app.run_test() as pilot:
+            await wait_until(
+                pilot,
+                lambda: _table_row_count(app, "#summary-portfolio-table") >= 1,
+            )
+            table = app.query_one("#summary-portfolio-table", DataTable)
+            title = app.query_one("#summary-portfolio-title", Static)
+
+            await pilot.press("i")
+            await pilot.pause()
+            assert table.display is False
+            assert str(title.renderable) == "▸ Investments"
+
+            await pilot.press("i")
+            await pilot.pause()
+            assert table.display is True
+            assert str(title.renderable) == "Investments"
+
+
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
 class TestSummaryPaneDataLoad:

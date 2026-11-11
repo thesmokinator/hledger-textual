@@ -69,7 +69,7 @@ class TestRecurringPaneRender:
 
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             table = empty_app.query_one("#recurring-table", DataTable)
             assert table is not None
@@ -81,7 +81,7 @@ class TestRecurringPaneAdd:
     async def test_add_opens_form(self, empty_app: HledgerTuiApp) -> None:
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -93,7 +93,7 @@ class TestRecurringPaneAdd:
 
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -105,7 +105,7 @@ class TestRecurringPaneAdd:
     async def test_add_form_escape_dismisses(self, empty_app: HledgerTuiApp) -> None:
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)
@@ -123,7 +123,7 @@ class TestRecurringPaneGenerate:
     ) -> None:
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("g")
             await pilot.pause(delay=0.5)
@@ -140,7 +140,7 @@ class TestRecurringPaneWithRules:
 
         async with rules_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             table = rules_app.query_one("#recurring-table", DataTable)
             assert table.row_count >= 2
@@ -149,7 +149,7 @@ class TestRecurringPaneWithRules:
         """'e' on a loaded rule should open RecurringFormScreen."""
         async with rules_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("e")
             await pilot.pause(delay=0.5)
@@ -159,7 +159,7 @@ class TestRecurringPaneWithRules:
         """'d' on a loaded rule should push the delete confirmation modal."""
         async with rules_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("d")
             await pilot.pause(delay=0.5)
@@ -171,7 +171,7 @@ class TestRecurringPaneWithRules:
         """Cancelling delete should dismiss the modal without changes."""
         async with rules_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("d")
             await pilot.pause(delay=0.5)
@@ -189,7 +189,7 @@ class TestRecurringPaneClone:
 
         async with rules_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("c")
             await pilot.pause(delay=0.5)
@@ -214,7 +214,7 @@ class TestRecurringFormRunningBalance:
 
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("3")
+            await pilot.press("5")
             await pilot.pause(delay=0.5)
             await pilot.press("a")
             await pilot.pause(delay=0.5)

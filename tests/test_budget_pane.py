@@ -93,6 +93,26 @@ class TestBudgetTabSwitch:
             assert table.row_count == 2
 
 
+class TestBudgetOverviewButton:
+    """Tests for the explicit Overview button in the budget toolbar."""
+
+    async def test_overview_button_opens_overview(self, budget_app: HledgerTuiApp):
+        """Pressing the Overview button pushes the BudgetOverviewScreen."""
+        from textual.widgets import Button
+
+        from hledger_textual.screens.budget_overview import BudgetOverviewScreen
+
+        async with budget_app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("4")
+            await pilot.pause(delay=0.5)
+            button = budget_app.screen.query_one("#btn-budget-overview", Button)
+            assert button.display is True
+            button.press()
+            await pilot.pause(delay=0.5)
+            assert isinstance(budget_app.screen, BudgetOverviewScreen)
+
+
 class TestBudgetEmptyState:
     """Tests for the empty budget state."""
 

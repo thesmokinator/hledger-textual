@@ -255,6 +255,13 @@ DateInput.date-error:focus {
     height: 1;
 }
 
+#btn-budget-overview {
+    width: auto;
+    min-width: 0;
+    height: 1;
+    margin: 0 1;
+}
+
 /* --- Transactions Pane --- */
 
 TransactionsPane {

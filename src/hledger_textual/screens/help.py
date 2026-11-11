@@ -68,11 +68,11 @@ def help_sections() -> list[tuple[str, list[tuple[str, str]]]]:
     groups = [
         ("Global", HledgerTuiApp.BINDINGS),
         ("Summary", SummaryPane.BINDINGS),
-        ("Transactions", TransactionsPane.BINDINGS),
-        ("Recurring", RecurringPane.BINDINGS),
-        ("Budget", BudgetPane.BINDINGS),
-        ("Reports", ReportsPane.BINDINGS),
         ("Accounts", AccountsPane.BINDINGS),
+        ("Transactions", TransactionsPane.BINDINGS),
+        ("Budget", BudgetPane.BINDINGS),
+        ("Recurring Txns", RecurringPane.BINDINGS),
+        ("Reports", ReportsPane.BINDINGS),
         ("Transaction form", TransactionFormScreen.BINDINGS),
         ("Recurring form", RecurringFormScreen.BINDINGS),
     ]

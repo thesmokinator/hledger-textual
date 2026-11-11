@@ -12,6 +12,7 @@ from hledger_textual.config import (
     load_default_commodity,
     load_price_tickers,
     load_saved_filters,
+    load_tab_order,
     load_theme,
     parse_args,
     resolve_default_commodity,
@@ -137,6 +138,63 @@ class TestLoadConfigDict:
         config.write_text('theme = "nord"\n')
         monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config)
         assert _load_config_dict() == {"theme": "nord"}
+
+
+class TestLoadTabOrder:
+    """Tests for the tab_order config option (issue #165)."""
+
+    def _write(self, tmp_path, monkeypatch, text: str):
+        """Point the config loader at a temp config file."""
+        config = tmp_path / "config.toml"
+        config.write_text(text)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config)
+
+    def test_missing_file_returns_none(self, tmp_path, monkeypatch):
+        """No config file means the default tab order."""
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        assert load_tab_order() is None
+
+    def test_missing_key_returns_none(self, tmp_path, monkeypatch):
+        """A config without tab_order means the default tab order."""
+        self._write(tmp_path, monkeypatch, 'theme = "nord"\n')
+        assert load_tab_order() is None
+
+    def test_valid_order(self, tmp_path, monkeypatch):
+        """A full custom order is returned as configured."""
+        self._write(
+            tmp_path,
+            monkeypatch,
+            'tab_order = ["reports", "summary", "accounts", "transactions", "budget", "recurring"]\n',
+        )
+        assert load_tab_order() == [
+            "reports",
+            "summary",
+            "accounts",
+            "transactions",
+            "budget",
+            "recurring",
+        ]
+
+    def test_unknown_names_dropped(self, tmp_path, monkeypatch):
+        """Unknown section names are filtered out."""
+        self._write(
+            tmp_path,
+            monkeypatch,
+            'tab_order = ["summary", "nonsense", "reports"]\n',
+        )
+        assert load_tab_order() == ["summary", "reports"]
+
+    def test_non_list_returns_none(self, tmp_path, monkeypatch):
+        """A non-list tab_order falls back to the default."""
+        self._write(tmp_path, monkeypatch, 'tab_order = "summary"\n')
+        assert load_tab_order() is None
+
+    def test_all_unknown_returns_none(self, tmp_path, monkeypatch):
+        """A list with no known sections falls back to the default."""
+        self._write(tmp_path, monkeypatch, 'tab_order = ["nonsense"]\n')
+        assert load_tab_order() is None
 
 
 class TestSaveAndLoadTheme:

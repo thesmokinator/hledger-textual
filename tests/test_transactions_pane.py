@@ -54,7 +54,7 @@ class TestTodayMonth:
         """Resetting to today after navigating away returns to the current month."""
         async with txn_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")  # switch to transactions tab
+            await pilot.press("3")  # switch to transactions tab
             await pilot.pause(delay=1.0)
 
             txn_table = txn_app.screen.query_one(TransactionsTable)
@@ -76,7 +76,7 @@ class TestTodayMonth:
 
         async with txn_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=1.0)
 
             # Navigate away
@@ -144,7 +144,7 @@ class TestTransactionsPaneRender:
     async def test_pane_has_table(self, app3: HledgerTuiApp) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             table = app3.query_one(TransactionsTable)
             assert table is not None
@@ -152,7 +152,7 @@ class TestTransactionsPaneRender:
     async def test_period_label_is_current_month(self, app3: HledgerTuiApp) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             table = app3.query_one(TransactionsTable)
             assert table._period_label() == _TODAY.strftime("%B %Y")
@@ -164,7 +164,7 @@ class TestTransactionsPaneMonthNav:
     async def test_prev_month_decrements(self, app3: HledgerTuiApp) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             table = app3.query_one(TransactionsTable)
             initial = table.current_month
@@ -175,7 +175,7 @@ class TestTransactionsPaneMonthNav:
     async def test_next_month_increments(self, app3: HledgerTuiApp) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             table = app3.query_one(TransactionsTable)
             initial = table.current_month
@@ -192,7 +192,7 @@ class TestTransactionsPaneClone:
     ) -> None:
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("c")
             await pilot.pause(delay=0.5)
@@ -203,7 +203,7 @@ class TestTransactionsPaneClone:
     ) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await select_first_transaction(pilot, app3)
             await pilot.press("c")
@@ -221,7 +221,7 @@ class TestTransactionsPaneMove:
     ) -> None:
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("m")
             await pilot.pause(delay=0.5)
@@ -232,7 +232,7 @@ class TestTransactionsPaneMove:
     ) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await select_first_transaction(pilot, app3)
             await pilot.press("m")
@@ -242,7 +242,7 @@ class TestTransactionsPaneMove:
     async def test_move_cancel_dismisses_modal(self, app3: HledgerTuiApp) -> None:
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await select_first_transaction(pilot, app3)
             await pilot.press("m")
@@ -261,7 +261,7 @@ class TestTransactionsPaneFilter:
 
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             search = app3.query_one("#txn-search-input", Input)
             assert search.disabled
@@ -274,7 +274,7 @@ class TestTransactionsPaneFilter:
 
         async with app3.run_test(size=(120, 60)) as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await pilot.pause(delay=0.5)
             await pilot.press("/")
             await pilot.pause(delay=0.3)
@@ -316,7 +316,7 @@ class TestTransactionsSummaryCommodity:
 
         async with txn_app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("2")
+            await pilot.press("3")
             await _wait_until(pilot, lambda: len(seen) >= 1)
 
         assert seen, "load_period_summary was not called"

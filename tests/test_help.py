@@ -27,7 +27,7 @@ def _section_bindings() -> dict[str, list]:
         "Global": HledgerTuiApp.BINDINGS,
         "Summary": SummaryPane.BINDINGS,
         "Transactions": TransactionsPane.BINDINGS,
-        "Recurring": RecurringPane.BINDINGS,
+        "Recurring Txns": RecurringPane.BINDINGS,
         "Budget": BudgetPane.BINDINGS,
         "Reports": ReportsPane.BINDINGS,
         "Accounts": AccountsPane.BINDINGS,

@@ -66,7 +66,7 @@ async def test_transactions_export_uses_mixin_modal(journal: Path):
     app = HledgerTuiApp(journal_file=journal)
     async with app.run_test() as pilot:
         await pilot.pause()
-        await pilot.press("2")
+        await pilot.press("3")
         await wait_until(pilot, lambda: bool(app.screen.query(TransactionsPane)))
         pane = app.screen.query_one(TransactionsPane)
         await wait_until(pilot, lambda: len(pane.get_export_data().rows) >= 2)

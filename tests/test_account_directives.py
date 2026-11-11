@@ -241,7 +241,7 @@ class TestAccountMetadataScreen:
         app = HledgerTuiApp(journal_file=journal_with_note)
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("enter")
             await pilot.pause(delay=0.5)
@@ -257,7 +257,7 @@ class TestAccountMetadataScreen:
         app = HledgerTuiApp(journal_file=journal_without_note)
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("enter")
             await pilot.pause(delay=0.5)
@@ -273,7 +273,7 @@ class TestAccountMetadataScreen:
         app = HledgerTuiApp(journal_file=journal_without_note)
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press("6")
+            await pilot.press("2")
             await pilot.pause(delay=0.5)
             await pilot.press("enter")
             await pilot.pause(delay=0.5)

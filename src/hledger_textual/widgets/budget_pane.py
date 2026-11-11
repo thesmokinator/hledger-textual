@@ -12,7 +12,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widget import Widget
 from rich.text import Text
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import Button, DataTable, Input, Static
 
 from hledger_textual.dateutil import next_month as _next_month
 from hledger_textual.dateutil import prev_month as _prev_month
@@ -81,6 +81,8 @@ class BudgetPane(DataTablePaneMixin, Widget):
                 yield Static("\u25c4 Prev", id="btn-prev-month", classes="period-btn")
                 yield Static(self._period_label(), id="period-label")
                 yield Static("Next \u25ba", id="btn-next-month", classes="period-btn")
+
+            yield Button("Overview", id="btn-budget-overview", variant="default")
 
             with Horizontal(classes="filter-bar"):
                 yield Input(
@@ -367,6 +369,11 @@ class BudgetPane(DataTablePaneMixin, Widget):
         self.app.push_screen(BudgetOverviewScreen(self.journal_file, self._rules))
 
     # --- Event handlers ---
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle toolbar button presses."""
+        if event.button.id == "btn-budget-overview":
+            self.action_overview()
 
     @on(Input.Changed, "#budget-filter-input")
     def on_filter_changed(self, event: Input.Changed) -> None:

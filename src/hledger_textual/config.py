@@ -334,6 +334,28 @@ def save_accounts_view(view: str) -> None:
     _save_config_dict(data)
 
 
+def load_tab_order() -> list[str] | None:
+    """Return the configured tab order, or ``None`` when not set.
+
+    Reads the ``tab_order`` key from config.toml, e.g.::
+
+        tab_order = ["summary", "accounts", "transactions", "budget", "recurring", "reports"]
+
+    Only known section names are kept, in the configured order; unknown
+    entries are dropped and missing sections are appended by the caller.
+    Returns ``None`` when the key is absent or not a non-empty list.
+
+    Returns:
+        The ordered section names, or ``None`` for the default order.
+    """
+    val = _load_config_dict().get("tab_order", None)
+    if not isinstance(val, list) or not val:
+        return None
+    known = {"summary", "accounts", "transactions", "budget", "recurring", "reports"}
+    ordered = [str(name) for name in val if str(name) in known]
+    return ordered or None
+
+
 def load_auto_generate_recurring() -> bool:
     """Return whether automatic generation of recurring transactions on startup is enabled.
 
