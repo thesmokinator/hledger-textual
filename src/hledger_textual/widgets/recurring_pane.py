@@ -314,26 +314,20 @@ class RecurringPane(DataTablePaneMixin, Widget):
             An ExportData instance with Period, Description, Start, End,
             and Postings columns.
         """
-        from hledger_textual.export import ExportData
+        from hledger_textual.export import ExportData, postings_summary
 
-        headers = ["Period", "Description", "Start", "End", "Postings"]
-        rows: list[list[str]] = []
-
-        for rule in self._rules:
-            postings_summary = ", ".join(
-                p.account for p in rule.postings if p.account
-            )
-            rows.append([
-                rule.period_expr,
-                rule.description,
-                rule.start_date or "",
-                rule.end_date or "",
-                postings_summary,
-            ])
-
-        return ExportData(
-            title="Recurring Rules",
-            headers=headers,
-            rows=rows,
-            pane_name="recurring",
+        return ExportData.from_rows(
+            "Recurring Rules",
+            ["Period", "Description", "Start", "End", "Postings"],
+            (
+                [
+                    rule.period_expr,
+                    rule.description,
+                    rule.start_date or "",
+                    rule.end_date or "",
+                    postings_summary(rule.postings),
+                ]
+                for rule in self._rules
+            ),
+            "recurring",
         )

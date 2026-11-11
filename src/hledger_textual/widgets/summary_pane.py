@@ -938,11 +938,11 @@ class SummaryPane(DataTablePaneMixin, Widget):
         """Return an ExportData with the income/expense breakdown rows."""
         from hledger_textual.export import ExportData
 
-        return ExportData(
-            title="Summary",
-            headers=["Section", "Account", "Amount", "% of total"],
-            rows=[list(row) for row in self._summary_export_rows],
-            pane_name="summary",
+        return ExportData.from_rows(
+            "Summary",
+            ["Section", "Account", "Amount", "% of total"],
+            self._summary_export_rows,
+            "summary",
         )
 
     def _set_note(self, selector: str, text: str) -> None:

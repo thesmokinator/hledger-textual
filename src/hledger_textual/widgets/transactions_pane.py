@@ -267,24 +267,23 @@ class TransactionsPane(DataTablePaneMixin, Widget):
 
     def get_export_data(self):
         """Return an ExportData with the currently loaded transactions."""
-        from hledger_textual.export import ExportData
+        from hledger_textual.export import ExportData, postings_summary
 
-        rows = []
-        for txn in self._table._all_transactions:
-            accounts = " · ".join(p.account for p in txn.postings)
-            rows.append([
-                txn.date,
-                txn.type_indicator,
-                txn.status.symbol,
-                txn.description,
-                accounts,
-                txn.total_amount,
-            ])
-        return ExportData(
-            title=f"Transactions {self._table._period_label()}",
-            headers=["Date", "Type", "Status", "Description", "Accounts", "Amount"],
-            rows=rows,
-            pane_name="transactions",
+        return ExportData.from_rows(
+            f"Transactions {self._table._period_label()}",
+            ["Date", "Type", "Status", "Description", "Accounts", "Amount"],
+            (
+                [
+                    txn.date,
+                    txn.type_indicator,
+                    txn.status.symbol,
+                    txn.description,
+                    postings_summary(txn.postings, separator=" · "),
+                    txn.total_amount,
+                ]
+                for txn in self._table._all_transactions
+            ),
+            "transactions",
         )
 
     # ------------------------------------------------------------------

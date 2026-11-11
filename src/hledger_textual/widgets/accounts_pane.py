@@ -402,17 +402,11 @@ class AccountsPane(DataTablePaneMixin, Widget):
         """
         from hledger_textual.export import ExportData
 
-        headers = ["Account", "Balance"]
-        rows: list[list[str]] = []
-
-        for account, balance in self._filtered_balances():
-            rows.append([account, balance])
-
-        return ExportData(
-            title="Accounts",
-            headers=headers,
-            rows=rows,
-            pane_name="accounts",
+        return ExportData.from_rows(
+            "Accounts",
+            ["Account", "Balance"],
+            ([account, balance] for account, balance in self._filtered_balances()),
+            "accounts",
         )
 
     @on(Input.Changed, "#acc-filter-input")
