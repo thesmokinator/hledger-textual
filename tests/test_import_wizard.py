@@ -572,3 +572,19 @@ class TestImportPreviewScreen:
             summary = app.screen.query_one("#import-preview-summary")
             rendered = str(summary.renderable)
             assert "2 duplicates excluded" in rendered
+
+
+class TestReviewStepClearErrors:
+    """clear_errors tolerates a missing error line (85% push)."""
+
+    def test_clear_errors_without_line_is_noop(self):
+        """No #wizard-raw-errors widget: the exception is swallowed."""
+        from hledger_textual.screens.import_wizard.step_review import ReviewStep
+
+        step = object.__new__(ReviewStep)
+
+        def _raise(*args, **kwargs):
+            raise ValueError("no such widget")
+
+        step.query_one = _raise  # type: ignore[method-assign]
+        step.clear_errors()  # must not raise

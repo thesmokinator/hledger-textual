@@ -116,3 +116,22 @@ class TestSavedFiltersModal:
             await pilot.press("escape")
             await pilot.pause()
             assert not isinstance(app.screen, SavedFiltersModal)
+
+
+class TestSavedFiltersEmptyDelete:
+    """Delete with no rows is a no-op (85% push)."""
+
+    async def test_delete_on_empty_table_does_nothing(
+        self, empty_config: Path
+    ) -> None:
+        """'d' on the placeholder table neither crashes nor writes config."""
+        from hledger_textual.config import load_saved_filters
+
+        app = _SavedApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert isinstance(app.screen, SavedFiltersModal)
+            await pilot.press("d")
+            await pilot.pause()
+            assert isinstance(app.screen, SavedFiltersModal)
+        assert load_saved_filters() == {}

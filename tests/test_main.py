@@ -32,3 +32,23 @@ class TestMain:
         resolve.assert_called_once_with(cli_file=None)
         app_cls.assert_called_once_with(journal_file=journal)
         app.run.assert_called_once_with()
+
+
+class TestMainGuard:
+    """The __main__ guard delegates to main() (85% push)."""
+
+    def test_module_main_guard_calls_main(self, tmp_path, monkeypatch):
+        """Executing the module as __main__ runs the app once."""
+        import runpy
+        import sys
+
+        from hledger_textual.app import HledgerTuiApp
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["hledger-textual", "-f", str(journal)])
+        with patch.object(HledgerTuiApp, "run") as run_mock:
+            runpy.run_module(
+                "hledger_textual.__main__", run_name="__main__", alter_sys=True
+            )
+        run_mock.assert_called_once_with()

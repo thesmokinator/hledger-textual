@@ -212,3 +212,18 @@ class TestDirtyGuardPrimitives:
         guard._discard_armed = True
         guard._disarm_discard()
         assert guard._discard_armed is False
+
+
+class TestAccountNoteSave:
+    """AccountNoteModal._save dismisses with stripped text (85% push)."""
+
+    def test_save_dismisses_stripped_note(self):
+        """The note text is stripped before dismissal."""
+        from types import SimpleNamespace
+
+        modal = AccountNoteModal("expenses:food", "  current  ")
+        dismissed: list = []
+        modal.dismiss = dismissed.append  # type: ignore[method-assign]
+        modal.query_one = lambda *a, **k: SimpleNamespace(text="  new note  ")  # type: ignore[method-assign]
+        modal._save()
+        assert dismissed == ["new note"]
