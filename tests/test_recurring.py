@@ -422,6 +422,116 @@ class TestComputePending:
         assert date(2026, 2, 1) in result
 
 
+class TestComputePendingErrorPaths:
+    """compute_pending invalid-input paths (issue #247, section C)."""
+
+    def test_invalid_start_date_returns_empty(self, sample_rule: RecurringRule):
+        """An unparseable start_date yields no pending dates."""
+        import dataclasses
+
+        rule = dataclasses.replace(sample_rule, start_date="not-a-date")
+        with patch(
+            "hledger_textual.recurring.load_transactions", return_value=[]
+        ):
+            assert (
+                compute_pending(rule, Path("/fake/main.journal"), date(2026, 3, 1))
+                == []
+            )
+
+    def test_invalid_end_date_falls_back_to_month_end(
+        self, sample_rule: RecurringRule
+    ):
+        """An unparseable end_date is ignored; the month end still bounds."""
+        import dataclasses
+
+        rule = dataclasses.replace(sample_rule, end_date="bogus")
+        with patch(
+            "hledger_textual.recurring.load_transactions", return_value=[]
+        ):
+            result = compute_pending(
+                rule, Path("/fake/main.journal"), date(2026, 3, 1)
+            )
+        assert result == [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)]
+
+    def test_end_before_start_returns_empty(self, sample_rule: RecurringRule):
+        """An end_date before start_date yields no pending dates."""
+        import dataclasses
+
+        rule = dataclasses.replace(
+            sample_rule, start_date="2026-03-01", end_date="2026-01-01"
+        )
+        with patch(
+            "hledger_textual.recurring.load_transactions", return_value=[]
+        ):
+            assert (
+                compute_pending(rule, Path("/fake/main.journal"), date(2026, 6, 1))
+                == []
+            )
+
+    def test_custom_period_hledger_failure_returns_empty(
+        self, sample_rule: RecurringRule
+    ):
+        """A failing forecast query for custom periods yields no dates."""
+        import dataclasses
+
+        from hledger_textual.hledger import HledgerError
+
+        rule = dataclasses.replace(sample_rule, period_expr="every 3rd tuesday")
+        with (
+            patch(
+                "hledger_textual.recurring.run_hledger",
+                side_effect=HledgerError("no hledger"),
+            ),
+            patch(
+                "hledger_textual.recurring.load_transactions", return_value=[]
+            ),
+        ):
+            assert (
+                compute_pending(rule, Path("/fake/main.journal"), date(2026, 3, 1))
+                == []
+            )
+
+
+class TestGenerateTransactionsErrors:
+    """generate_transactions failure path (issue #247, section C)."""
+
+    def test_append_failure_raises_recurring_error(
+        self, sample_rule: RecurringRule, tmp_path: Path
+    ):
+        """A JournalError while appending becomes a RecurringError."""
+        from hledger_textual.journal import JournalError
+        from hledger_textual.recurring import generate_transactions
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+        with patch(
+            "hledger_textual.recurring.append_transaction",
+            side_effect=JournalError("disk full"),
+        ):
+            with pytest.raises(RecurringError, match="2026-01-01"):
+                generate_transactions(
+                    sample_rule, [date(2026, 1, 1)], journal
+                )
+
+    def test_generated_transaction_carries_rule_id(
+        self, sample_rule: RecurringRule, tmp_path: Path
+    ):
+        """Generated transactions are tagged so compute_pending can find them."""
+        from hledger_textual.recurring import generate_transactions
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("", encoding="utf-8")
+        appended = []
+        with patch(
+            "hledger_textual.recurring.append_transaction",
+            side_effect=lambda _f, txn: appended.append(txn),
+        ):
+            generate_transactions(sample_rule, [date(2026, 1, 1)], journal)
+        assert len(appended) == 1
+        assert appended[0].comment == f"rule-id:{sample_rule.rule_id}"
+        assert appended[0].date == "2026-01-01"
+
+
 # ---------------------------------------------------------------------------
 # ensure_recurring_file
 # ---------------------------------------------------------------------------

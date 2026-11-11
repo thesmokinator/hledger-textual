@@ -131,6 +131,48 @@ class TestRecurringPaneGenerate:
             assert not isinstance(empty_app.screen, RecurringFormScreen)
 
 
+class TestRecurringGenerateErrorPath:
+    """_do_generate failure path (issue #247, section C)."""
+
+    async def test_generate_error_notifies_and_stops(
+        self, rules_app: HledgerTuiApp
+    ) -> None:
+        """A RecurringError aborts generation: error toast, no success toast."""
+        from unittest.mock import patch
+
+        from hledger_textual.recurring import RecurringError
+        from hledger_textual.widgets.recurring_pane import RecurringPane
+        from tests.conftest import wait_until
+
+        async with rules_app.run_test(size=(120, 60), notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("5")
+            await wait_until(
+                pilot, lambda: bool(rules_app.query(RecurringPane)), timeout=15.0
+            )
+            pane = rules_app.query_one(RecurringPane)
+            await wait_until(pilot, lambda: len(pane._rules) >= 1, timeout=15.0)
+
+            def _raise(rule, dates, journal_file):
+                raise RecurringError("append failed")
+
+            with patch(
+                "hledger_textual.widgets.recurring_pane.generate_transactions",
+                side_effect=_raise,
+            ):
+                pane._do_generate([(pane._rules[0], [])])
+                await wait_until(
+                    pilot,
+                    lambda: any(
+                        "append failed" in str(n.message)
+                        for n in rules_app._notifications
+                    ),
+                    timeout=15.0,
+                )
+            messages = [str(n.message) for n in rules_app._notifications]
+            assert not any("Generated" in m for m in messages)
+
+
 class TestRecurringPaneWithRules:
     """Tests requiring a pre-populated recurring.journal."""
 

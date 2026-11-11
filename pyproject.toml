@@ -44,6 +44,7 @@ addopts = "--cov=src/hledger_textual --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["src/hledger_textual"]
+branch = true
 
 [tool.coverage.report]
 fail_under = 67
