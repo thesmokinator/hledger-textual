@@ -13,6 +13,7 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from hledger_textual.fileutil import short_path
 from hledger_textual.git import git_branch, git_status_summary, is_git_repo
 from hledger_textual.hledger import HledgerError, get_hledger_version, load_journal_stats
 from hledger_textual.prices import get_pricehist_version, has_pricehist
@@ -31,14 +32,6 @@ def _fmt_size(n: int) -> str:
 def _row(label: str, value: str) -> str:
     """Format a key-value row with a fixed-width dim label."""
     return f"  [dim]{label:<14}[/dim]{value}"
-
-
-def _short_path(p: Path) -> str:
-    """Shorten a path by replacing the home directory with ~."""
-    try:
-        return str(Path("~") / p.relative_to(Path.home()))
-    except ValueError:
-        return str(p)
 
 
 def _get_project_metadata() -> tuple[str, str, str, str]:
@@ -190,7 +183,7 @@ class AboutModal(ModalScreen[None]):
 
     def _apply_journal_data(self, stats, size_str: str) -> None:
         """Apply loaded journal data to the UI."""
-        short = _short_path(self.journal_file)
+        short = short_path(self.journal_file)
         lines = [_row("Journal", short)]
         lines.append(_row("Size", size_str))
 

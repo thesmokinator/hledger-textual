@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 from hledger_textual.csv_import import CsvImportError
 from hledger_textual.hledger import HledgerError
@@ -126,10 +125,3 @@ def _last_line(text: str, limit: int = 300) -> str:
             return line if len(line) <= limit else line[: limit - 1] + "\u2026"
     return text.strip() or "Unknown error"
 
-
-def short_path(path: Path) -> str:
-    """Shorten a path by replacing the home directory with ``~``."""
-    try:
-        return str(Path("~") / path.relative_to(Path.home()))
-    except ValueError:
-        return str(path)

@@ -11,6 +11,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static, TabPane, TabbedContent
 
+from hledger_textual.fileutil import short_path
 from hledger_textual.hledger import HledgerError, get_hledger_version, load_journal_stats
 from hledger_textual.widgets.constants import KEY_LABELS
 
@@ -88,14 +89,6 @@ def _build_help_text() -> str:
             parts.append(_row(key, description))
         parts.append("")
     return "\n".join(parts).rstrip()
-
-
-def _short_path(p: Path) -> str:
-    """Shorten a path by replacing the home directory with ~."""
-    try:
-        return str(Path("~") / p.relative_to(Path.home()))
-    except ValueError:
-        return str(p)
 
 
 def _fmt_size(n: int) -> str:
@@ -176,7 +169,7 @@ class HelpScreen(ModalScreen[None]):
 
         # Journal info
         assert self.journal_file is not None
-        short = _short_path(self.journal_file)
+        short = short_path(self.journal_file)
         lines.append(_info_row("Journal", short))
 
         try:

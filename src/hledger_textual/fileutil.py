@@ -77,6 +77,14 @@ def cleanup_backup(backup_path: Path) -> None:
     backup_path.unlink(missing_ok=True)
 
 
+def short_path(path: Path) -> str:
+    """Shorten a path by replacing the home directory with ``~``."""
+    try:
+        return str(Path("~") / Path(path).relative_to(Path.home()))
+    except ValueError:
+        return str(path)
+
+
 def safe_write_with_validation(
     target_file: Path,
     content: str,
