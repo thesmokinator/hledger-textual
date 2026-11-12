@@ -23,6 +23,16 @@ Built with [Textual](https://textual.textualize.io) and Python.
 - 🏦 Account hierarchy with directives (notes, metadata)
 - 📄 PDF / CSV export of every view
 
+## 📸 Screenshots
+
+| Summary | Transactions |
+|---|---|
+| ![Summary pane](docs/screenshots/summary.svg) | ![Transactions pane](docs/screenshots/transactions.svg) |
+
+| Budget | Reports |
+|---|---|
+| ![Budget pane](docs/screenshots/budget.svg) | ![Reports pane](docs/screenshots/reports.svg) |
+
 ## Why hledger-textual?
 
 hledger-textual is the most advanced TUI in the hledger ecosystem, with feature parity for budgets, recurring transactions, investments, and reports. Everything lives in plain-text files you already own — the journal, a `budget.journal` for budgets, CSV rules for imports — so no database, no lock-in, and git-friendly versioning of your finances.
