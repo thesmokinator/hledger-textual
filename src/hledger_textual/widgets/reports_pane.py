@@ -30,8 +30,12 @@ from hledger_textual.widgets.constants import (
     REPORT_TYPES,
 )
 from hledger_textual.widgets.empty_state import EmptyState
-from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
+from hledger_textual.widgets.loading import hide_loading_overlay
+from hledger_textual.widgets.pane_mixin import (
+    DataTablePaneMixin,
+    run_pane_load,
+    set_empty_state_visible,
+)
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
 from hledger_textual.widgets.reports_custom_actions import ReportsCustomActionsMixin
@@ -197,12 +201,11 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @work(thread=True, exclusive=True, group="reports-load")
     def _load_report_data(self) -> None:
         """Load built-in report data in a background thread."""
-        self.app.call_from_thread(show_loading_overlay, self, "Loading report…")
-        begin, end = self._period_range()
-        self._period_begin = date.fromisoformat(begin)
-        commodity = resolve_default_commodity(self.journal_file)
 
-        try:
+        def _load() -> ReportData:
+            begin, end = self._period_range()
+            self._period_begin = date.fromisoformat(begin)
+            commodity = resolve_default_commodity(self.journal_file)
             data = load_report(
                 self.journal_file,
                 self._report_type,
@@ -213,51 +216,50 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
                 cache=self._cache,
                 mode="tree" if self._tree_mode else "flat",
             )
-        except HledgerError as exc:
-            title, body = humanize_error(exc)
-            self.app.call_from_thread(
-                self.notify, body, title=title, severity="error", timeout=10
-            )
-            data = ReportData(title="", period_headers=[], rows=[])
+            if self._show_investments and self._report_type == "is":
+                try:
+                    inv_data = load_investment_report(
+                        self.journal_file,
+                        period_begin=begin,
+                        period_end=end,
+                        commodity=commodity,
+                    )
+                    if inv_data.rows:
+                        data = merge_investments(data, inv_data)
+                except HledgerError:
+                    pass
+            return data
 
-        if self._show_investments and self._report_type == "is":
-            try:
-                inv_data = load_investment_report(
-                    self.journal_file,
-                    period_begin=begin,
-                    period_end=end,
-                    commodity=commodity,
-                )
-                if inv_data.rows:
-                    data = merge_investments(data, inv_data)
-            except HledgerError:
-                pass
+        def _apply(data: ReportData) -> None:
+            self._report_data = data
+            self._apply_report()
 
-        self._report_data = data
-        self.app.call_from_thread(self._apply_report)
+        run_pane_load(
+            self,
+            _load,
+            _apply,
+            loading_message="Loading report…",
+            on_error=lambda _exc: ReportData(title="", period_headers=[], rows=[]),
+        )
 
     @work(thread=True, exclusive=True, group="reports-load")
     def _load_custom_report_data(self) -> None:
         """Load custom report output in a background thread."""
         if self._custom_report_name is None:
             return
-        self.app.call_from_thread(show_loading_overlay, self, "Loading report…")
 
         reports = load_custom_reports()
         command = reports.get(self._custom_report_name)
         if command is None:
             return
 
-        try:
-            output = run_custom_report(self.journal_file, command)
-        except HledgerError as exc:
-            title, body = humanize_error(exc)
-            self.app.call_from_thread(
-                self.notify, body, title=title, severity="error", timeout=10
-            )
-            output = f"Error: {body}"
-
-        self.app.call_from_thread(self._apply_custom_output, output, command)
+        run_pane_load(
+            self,
+            lambda: run_custom_report(self.journal_file, command),
+            lambda output: self._apply_custom_output(output, command),
+            loading_message="Loading report…",
+            on_error=lambda exc: f"Error: {humanize_error(exc)[1]}",
+        )
 
     # --- Apply methods ---
 

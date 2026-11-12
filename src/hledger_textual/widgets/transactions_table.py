@@ -16,14 +16,17 @@ from textual.widgets import DataTable, Input, Static
 from hledger_textual.dateutil import next_month as _next_month
 from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.cache import HledgerCache
-from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
+from hledger_textual.hledger import expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
-from hledger_textual.widgets.pane_mixin import run_mutation
-from hledger_textual.widgets.pane_mixin import set_empty_state_visible
+from hledger_textual.widgets.pane_mixin import (
+    run_mutation,
+    run_pane_load,
+    set_empty_state_visible,
+)
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
-from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
+from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
@@ -418,21 +421,25 @@ class TransactionsTable(Widget):
     @work(thread=True, exclusive=True)
     def _load_transactions(self) -> None:
         """Load transactions from hledger in a background thread."""
-        self.app.call_from_thread(show_loading_overlay, self, "Loading transactions…")
-        parts = [
-            q
-            for q in [self._fixed_query, self._date_query, self._search_query]
-            if q
-        ]
-        query = " ".join(parts) or None
-        try:
-            txns = load_transactions(self.journal_file, query=query, reverse=True, cache=self._cache)
-        except HledgerError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
+
+        def _load() -> list[Transaction]:
+            parts = [
+                q
+                for q in [self._fixed_query, self._date_query, self._search_query]
+                if q
+            ]
+            query = " ".join(parts) or None
+            return load_transactions(
+                self.journal_file, query=query, reverse=True, cache=self._cache
             )
-            txns = []
-        self.app.call_from_thread(self._set_transactions, txns)
+
+        run_pane_load(
+            self,
+            _load,
+            self._set_transactions,
+            loading_message="Loading transactions…",
+            on_error=lambda _exc: [],
+        )
 
     def _set_transactions(self, txns: list[Transaction]) -> None:
         """Store loaded transactions and refresh the table.
