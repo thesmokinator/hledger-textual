@@ -25,14 +25,22 @@ def _relative_links() -> list[str]:
 class TestReadme:
     """README must keep its gallery and local links intact."""
 
-    def test_screenshots_exist(self) -> None:
-        """Every gallery image resolves to a committed file."""
-        shots = sorted((REPO_ROOT / "docs" / "screenshots").glob("*"))
-        assert len(shots) >= 4, "expected at least 4 gallery screenshots"
+    def test_no_orphan_screenshots(self) -> None:
+        """Gallery images, if any, must be referenced from README.md.
+
+        The screenshots gallery was removed in favour of the demo video;
+        this guard fails if orphan images are reintroduced without a
+        matching README reference.
+        """
+        shots_dir = REPO_ROOT / "docs" / "screenshots"
+        shots = sorted(shots_dir.glob("*")) if shots_dir.is_dir() else []
         text = README.read_text(encoding="utf-8")
-        for shot in shots:
-            rel = shot.relative_to(REPO_ROOT).as_posix()
-            assert rel in text, f"{rel} is not referenced from README.md"
+        orphans = [
+            shot.relative_to(REPO_ROOT).as_posix()
+            for shot in shots
+            if shot.relative_to(REPO_ROOT).as_posix() not in text
+        ]
+        assert not orphans, f"unreferenced screenshots: {orphans}"
 
     def test_relative_links_resolve(self) -> None:
         """Every relative README link points at an existing file."""
