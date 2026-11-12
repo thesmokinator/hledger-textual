@@ -16,10 +16,10 @@ from textual.widgets import DataTable, Input, Static
 from hledger_textual.dateutil import next_month as _next_month
 from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.cache import HledgerCache
-from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import HledgerError, expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.pane_mixin import run_mutation
 from hledger_textual.widgets.pane_mixin import set_empty_state_visible
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
@@ -331,15 +331,13 @@ class TransactionsTable(Widget):
         """Replace a transaction in the journal and emit JournalChanged."""
         from hledger_textual.journal import JournalError, replace_transaction
 
-        try:
-            replace_transaction(self.journal_file, original, updated)
-            self.app.call_from_thread(self.notify, "Transaction updated", timeout=3)
-            self.app.call_from_thread(self.post_message, self.JournalChanged())
-        except JournalError as exc:
-            title, body = humanize_error(exc)
-            self.app.call_from_thread(
-                self.notify, body, title=title, severity="error", timeout=10
-            )
+        run_mutation(self, 
+            lambda: replace_transaction(self.journal_file, original, updated),
+            success_message="Transaction updated",
+            error_cls=JournalError,
+            after=lambda: self.post_message(self.JournalChanged()),
+            humanize_errors=True,
+        )
 
     def do_toggle_status(self, target: TransactionStatus) -> None:
         """Toggle the status of the selected transaction.
@@ -377,17 +375,13 @@ class TransactionsTable(Widget):
         """Persist a date move and emit JournalChanged."""
         from hledger_textual.journal import JournalError, replace_transaction
 
-        try:
-            replace_transaction(self.journal_file, original, updated)
-            self.app.call_from_thread(
-                self.notify, f"Moved to {updated.date}", timeout=3
-            )
-            self.app.call_from_thread(self.post_message, self.JournalChanged())
-        except JournalError as exc:
-            title, body = humanize_error(exc)
-            self.app.call_from_thread(
-                self.notify, body, title=title, severity="error", timeout=10
-            )
+        run_mutation(self, 
+            lambda: replace_transaction(self.journal_file, original, updated),
+            success_message=lambda: f"Moved to {updated.date}",
+            error_cls=JournalError,
+            after=lambda: self.post_message(self.JournalChanged()),
+            humanize_errors=True,
+        )
 
     @work(thread=True)
     def _do_toggle_status(
@@ -396,33 +390,26 @@ class TransactionsTable(Widget):
         """Persist a status change and emit JournalChanged."""
         from hledger_textual.journal import JournalError, replace_transaction
 
-        try:
-            replace_transaction(self.journal_file, original, updated)
-            label = updated.status.value.lower()
-            self.app.call_from_thread(
-                self.notify, f"Status set to {label}", timeout=3
-            )
-            self.app.call_from_thread(self.post_message, self.JournalChanged())
-        except JournalError as exc:
-            title, body = humanize_error(exc)
-            self.app.call_from_thread(
-                self.notify, body, title=title, severity="error", timeout=10
-            )
+        run_mutation(self, 
+            lambda: replace_transaction(self.journal_file, original, updated),
+            success_message=lambda: f"Status set to {updated.status.value.lower()}",
+            error_cls=JournalError,
+            after=lambda: self.post_message(self.JournalChanged()),
+            humanize_errors=True,
+        )
 
     @work(thread=True)
     def _do_delete(self, transaction: Transaction) -> None:
         """Delete a transaction from the journal and emit JournalChanged."""
         from hledger_textual.journal import JournalError, delete_transaction
 
-        try:
-            delete_transaction(self.journal_file, transaction)
-            self.app.call_from_thread(self.notify, "Transaction deleted", timeout=3)
-            self.app.call_from_thread(self.post_message, self.JournalChanged())
-        except JournalError as exc:
-            title, body = humanize_error(exc)
-            self.app.call_from_thread(
-                self.notify, body, title=title, severity="error", timeout=10
-            )
+        run_mutation(self, 
+            lambda: delete_transaction(self.journal_file, transaction),
+            success_message="Transaction deleted",
+            error_cls=JournalError,
+            after=lambda: self.post_message(self.JournalChanged()),
+            humanize_errors=True,
+        )
 
     # ------------------------------------------------------------------
     # Internal loading / filtering

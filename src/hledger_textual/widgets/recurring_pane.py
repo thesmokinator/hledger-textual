@@ -251,46 +251,39 @@ class RecurringPane(DataTablePaneMixin, Widget):
     @work(thread=True)
     def _do_add(self, rule: RecurringRule) -> None:
         """Add a recurring rule and reload."""
-        if not self._recurring_path:
-            return
-        try:
-            add_recurring_rule(self._recurring_path, rule, self.journal_file)
-            self.app.call_from_thread(self._load_data)
-            self.app.call_from_thread(self.notify, "Recurring rule added", timeout=3)
-        except RecurringError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
+        self._run_mutation(
+            lambda: add_recurring_rule(self._recurring_path, rule, self.journal_file),
+            success_message="Recurring rule added",
+            error_cls=RecurringError,
+            guard=self._recurring_path,
+            after=self._load_data,
+        )
 
     @work(thread=True)
     def _do_update(self, old_id: str, new_rule: RecurringRule) -> None:
         """Update a recurring rule and reload."""
-        if not self._recurring_path:
-            return
-        try:
-            update_recurring_rule(
+        self._run_mutation(
+            lambda: update_recurring_rule(
                 self._recurring_path, old_id, new_rule, self.journal_file
-            )
-            self.app.call_from_thread(self._load_data)
-            self.app.call_from_thread(self.notify, "Recurring rule updated", timeout=3)
-        except RecurringError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
+            ),
+            success_message="Recurring rule updated",
+            error_cls=RecurringError,
+            guard=self._recurring_path,
+            after=self._load_data,
+        )
 
     @work(thread=True)
     def _do_delete(self, rule_id: str) -> None:
         """Delete a recurring rule and reload."""
-        if not self._recurring_path:
-            return
-        try:
-            delete_recurring_rule(self._recurring_path, rule_id, self.journal_file)
-            self.app.call_from_thread(self._load_data)
-            self.app.call_from_thread(self.notify, "Recurring rule deleted", timeout=3)
-        except RecurringError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
+        self._run_mutation(
+            lambda: delete_recurring_rule(
+                self._recurring_path, rule_id, self.journal_file
+            ),
+            success_message="Recurring rule deleted",
+            error_cls=RecurringError,
+            guard=self._recurring_path,
+            after=self._load_data,
+        )
 
     @work(thread=True)
     def _do_generate(self, pending: list[tuple[RecurringRule, list[date]]]) -> None:

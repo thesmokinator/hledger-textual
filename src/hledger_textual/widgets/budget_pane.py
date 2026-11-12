@@ -381,46 +381,37 @@ class BudgetPane(DataTablePaneMixin, Widget):
     @work(thread=True)
     def _do_add(self, rule: BudgetRule) -> None:
         """Add a budget rule and reload."""
-        if not self._budget_path:
-            return
-        try:
-            add_budget_rule(self._budget_path, rule, self.journal_file)
-            self.app.call_from_thread(self._reload)
-            self.app.call_from_thread(self.notify, "Budget rule added", timeout=3)
-        except BudgetError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
+        self._run_mutation(
+            lambda: add_budget_rule(self._budget_path, rule, self.journal_file),
+            success_message="Budget rule added",
+            error_cls=BudgetError,
+            guard=self._budget_path,
+            after=self._reload,
+        )
 
     @work(thread=True)
     def _do_update(self, old_account: str, new_rule: BudgetRule) -> None:
         """Update a budget rule and reload."""
-        if not self._budget_path:
-            return
-        try:
-            update_budget_rule(
+        self._run_mutation(
+            lambda: update_budget_rule(
                 self._budget_path, old_account, new_rule, self.journal_file
-            )
-            self.app.call_from_thread(self._reload)
-            self.app.call_from_thread(self.notify, "Budget rule updated", timeout=3)
-        except BudgetError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
+            ),
+            success_message="Budget rule updated",
+            error_cls=BudgetError,
+            guard=self._budget_path,
+            after=self._reload,
+        )
 
     @work(thread=True)
     def _do_delete(self, account: str) -> None:
         """Delete a budget rule and reload."""
-        if not self._budget_path:
-            return
-        try:
-            delete_budget_rule(self._budget_path, account, self.journal_file)
-            self.app.call_from_thread(self._reload)
-            self.app.call_from_thread(self.notify, "Budget rule deleted", timeout=3)
-        except BudgetError as exc:
-            self.app.call_from_thread(
-                self.notify, str(exc), severity="error", timeout=8
-            )
+        self._run_mutation(
+            lambda: delete_budget_rule(self._budget_path, account, self.journal_file),
+            success_message="Budget rule deleted",
+            error_cls=BudgetError,
+            guard=self._budget_path,
+            after=self._reload,
+        )
 
     def get_export_data(self):
         """Return an ExportData with budget rows for export.
