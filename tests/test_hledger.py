@@ -1974,6 +1974,66 @@ class TestParseAmountCostAnnotation:
         assert amt.cost.quantity == Decimal("50000")
 
 
+class TestParseAmountCostEdgeCases:
+    """Cost-annotation edge cases (issue #247, section C)."""
+
+    def test_unknown_tag_follows_total_cost_path(self):
+        """A tag that is not UnitCost normalises like TotalCost (abs)."""
+        cost_data = _amount_data("$", -15000, 2)  # -$150.00
+        data = _amount_data(
+            "STK", -1000, 2,  # -10 STK
+            acost={"tag": "SomethingElse", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.cost is not None
+        assert amt.cost.quantity == Decimal("150")
+
+    def test_missing_tag_follows_total_cost_path(self):
+        """An acost dict without a tag normalises like TotalCost (abs)."""
+        cost_data = _amount_data("$", -15000, 2)
+        data = _amount_data(
+            "STK", -1000, 2,
+            acost={"contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.cost is not None
+        assert amt.cost.quantity == Decimal("150")
+
+    def test_empty_acost_dict_is_ignored(self):
+        """An acost dict without contents leaves cost as None."""
+        amt = _parse_amount(_amount_data("€", 5000, 2, acost={}))
+        assert amt.cost is None
+
+    def test_non_dict_acost_is_ignored(self):
+        """A non-dict acost leaves cost as None instead of raising."""
+        data = _amount_data("€", 5000, 2)
+        data["acost"] = "@ €40.00"
+        amt = _parse_amount(data)
+        assert amt.cost is None
+
+    def test_unit_cost_zero_quantity_is_zero(self):
+        """0 STK @ $15.00 — abs(0 * 15) stays zero, not an error."""
+        cost_data = _amount_data("$", 1500, 2)
+        data = _amount_data(
+            "STK", 0, 2,
+            acost={"tag": "UnitCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.cost is not None
+        assert amt.cost.quantity == Decimal("0")
+
+    def test_unit_cost_negative_price_is_normalised(self):
+        """5 STK @ -$15.00 — abs(5 * -15) = 75, always positive."""
+        cost_data = _amount_data("$", -1500, 2)  # -$15.00
+        data = _amount_data(
+            "STK", 500, 2,  # 5 STK
+            acost={"tag": "UnitCost", "contents": cost_data},
+        )
+        amt = _parse_amount(data)
+        assert amt.cost is not None
+        assert amt.cost.quantity == Decimal("75")
+
+
 class TestLoadMultiPeriodBudgetReport:
     """Tests for load_multi_period_budget_report (issue #128)."""
 

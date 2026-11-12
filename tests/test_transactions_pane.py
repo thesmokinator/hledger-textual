@@ -321,3 +321,102 @@ class TestTransactionsSummaryCommodity:
 
         assert seen, "load_period_summary was not called"
         assert seen[-1]["kwargs"].get("commodity") == "€"
+
+
+class TestDoImportPartialFailure:
+    """_do_import partial failure: count-notify + JournalChanged only-on-success."""
+
+    def _txns(self):
+        from decimal import Decimal
+
+        from hledger_textual.models import Amount, Posting, Transaction
+
+        def _txn(desc: str) -> Transaction:
+            return Transaction(
+                index=0,
+                date=date.today().isoformat(),
+                description=desc,
+                postings=[
+                    Posting(
+                        account="expenses:test",
+                        amounts=[Amount(commodity="€", quantity=Decimal("1.00"))],
+                    ),
+                    Posting(account="assets:bank:checking", amounts=[]),
+                ],
+            )
+
+        return _txn("import one"), _txn("import two")
+
+    async def test_partial_failure_notifies_count_and_stops(
+        self, txn_app: HledgerTuiApp
+    ) -> None:
+        """First import ok, second fails: 'Imported 1' + failure toast."""
+        from unittest.mock import patch
+
+        from hledger_textual.journal import JournalError
+        from hledger_textual.widgets.transactions_pane import TransactionsPane
+
+        from tests.conftest import wait_until as _wait
+
+        txn1, txn2 = self._txns()
+        calls = []
+
+        def _append(_file, txn):
+            calls.append(txn.description)
+            if txn.description == "import two":
+                raise JournalError("boom")
+
+        async with txn_app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await _wait_until(pilot, lambda: bool(txn_app.query(TransactionsPane)))
+            pane = txn_app.query_one(TransactionsPane)
+            with patch(
+                "hledger_textual.journal.append_transaction", side_effect=_append
+            ):
+                pane._do_import([txn1, txn2])
+                await _wait(
+                    pilot,
+                    lambda: any(
+                        "Import failed at transaction 2" in str(n.message)
+                        for n in txn_app._notifications
+                    ),
+                    timeout=15.0,
+                )
+            messages = [str(n.message) for n in txn_app._notifications]
+            assert any("Imported 1 transaction" in m for m in messages), messages
+            assert calls == ["import one", "import two"]
+
+    async def test_total_failure_has_no_success_toast(
+        self, txn_app: HledgerTuiApp
+    ) -> None:
+        """Failure on the first transaction: error toast, no 'Imported' toast."""
+        from unittest.mock import patch
+
+        from hledger_textual.journal import JournalError
+        from hledger_textual.widgets.transactions_pane import TransactionsPane
+
+        from tests.conftest import wait_until as _wait
+
+        txn1, txn2 = self._txns()
+
+        async with txn_app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            await pilot.press("3")
+            await _wait_until(pilot, lambda: bool(txn_app.query(TransactionsPane)))
+            pane = txn_app.query_one(TransactionsPane)
+            with patch(
+                "hledger_textual.journal.append_transaction",
+                side_effect=JournalError("boom"),
+            ):
+                pane._do_import([txn1, txn2])
+                await _wait(
+                    pilot,
+                    lambda: any(
+                        "Import failed at transaction 1" in str(n.message)
+                        for n in txn_app._notifications
+                    ),
+                    timeout=15.0,
+                )
+            messages = [str(n.message) for n in txn_app._notifications]
+            assert not any(m.startswith("Imported") for m in messages), messages

@@ -89,3 +89,56 @@ async def test_summary_export_data_after_load(journal: Path):
         data = pane.get_export_data()
         assert data.pane_name == "summary"
         assert {row[0] for row in data.rows} <= {"Income", "Expenses"}
+
+
+class TestRunExportRoundTrip:
+    """_run_export tmp round trip incl. failure branch (issue #247)."""
+
+    async def test_csv_round_trip_writes_rows(
+        self, journal: Path, tmp_path: Path
+    ):
+        """Exported CSV on disk matches the ExportData rows."""
+        from hledger_textual.export import ExportData
+
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            pane = app.screen.query_one(TransactionsPane)
+            data = ExportData.from_rows(
+                "Probe", ["A", "B"], [["1", "2"], ["3", "4"]], "probe"
+            )
+            pane._run_export(data, "csv", "probe.csv", str(tmp_path))
+            target = tmp_path / "probe.csv"
+            await wait_until(pilot, lambda: target.exists(), timeout=15.0)
+            await pilot.pause(delay=0.5)
+            import csv as _csv
+
+            with open(target, encoding="utf-8") as fh:
+                assert list(_csv.reader(fh)) == [["A", "B"], ["1", "2"], ["3", "4"]]
+
+    async def test_export_failure_notifies(
+        self, journal: Path, tmp_path: Path, monkeypatch
+    ):
+        """An export backend failure surfaces as an error toast."""
+        from hledger_textual.export import ExportData
+
+        def _raise(data, path):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("hledger_textual.export.export_csv", _raise)
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test(notifications=True) as pilot:
+            await pilot.pause()
+            pane = app.screen.query_one(TransactionsPane)
+            data = ExportData.from_rows(
+                "Probe", ["A"], [["1"]], "probe"
+            )
+            pane._run_export(data, "csv", "probe.csv", str(tmp_path))
+            await wait_until(
+                pilot,
+                lambda: any(
+                    "Export failed" in str(n.message)
+                    for n in app._notifications
+                ),
+                timeout=15.0,
+            )

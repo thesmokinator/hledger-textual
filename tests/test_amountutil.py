@@ -8,9 +8,12 @@ import pytest
 
 from hledger_textual.amountutil import (
     _normalize_number_string,
+    decimal_places_for_number_string,
     describe_amount_error,
+    normalize_number_string_for_style,
     parse_amount_string,
 )
+from hledger_textual.models import AmountStyle
 
 
 class TestParseAmountString:
@@ -275,3 +278,93 @@ class TestDescribeAmountError:
         message = describe_amount_error("50 ??")
         assert "not a recognised number" in message
         assert "50.00" in message
+
+
+# ---------------------------------------------------------------------------
+# Comma-journal matrix (issue #247): style-aware parsing money-math guard
+# ---------------------------------------------------------------------------
+
+
+EU_STYLE = AmountStyle(decimal_mark=",", digit_group_separator=".")
+US_STYLE = AmountStyle(decimal_mark=".", digit_group_separator=",")
+
+
+class TestCommaJournalMatrix:
+    """Same monetary values in US vs EU notation must agree exactly.
+
+    A comma-decimal journal declares its style once; every notation in the
+    matrix below must normalise to the identical Decimal so budget math
+    never depends on how the number was typed.
+    """
+
+    @pytest.mark.parametrize(
+        ("us", "eu", "expected"),
+        [
+            ("1,000.00", "1.000,00", Decimal("1000.00")),
+            ("1,234,567.89", "1.234.567,89", Decimal("1234567.89")),
+            ("100.00", "100,00", Decimal("100.00")),
+            ("-1,536.75", "-1.536,75", Decimal("-1536.75")),
+            ("0.01", "0,01", Decimal("0.01")),
+            ("3000", "3000", Decimal("3000")),
+        ],
+    )
+    def test_style_aware_normalisation_agrees(
+        self, us: str, eu: str, expected: Decimal
+    ):
+        """US and EU spellings of one value normalise identically."""
+        assert Decimal(normalize_number_string_for_style(us, US_STYLE)) == expected
+        assert Decimal(normalize_number_string_for_style(eu, EU_STYLE)) == expected
+
+    def test_dot_decimal_accepted_in_comma_journal(self):
+        """Users typing dot decimals in a comma journal still parse correctly."""
+        assert normalize_number_string_for_style("150.00", EU_STYLE) == "150.00"
+        assert normalize_number_string_for_style("150.5", EU_STYLE) == "150.5"
+
+    def test_dot_grouping_with_three_trailing_digits(self):
+        """A dot followed by exactly 3 digits is grouping, not decimals."""
+        assert normalize_number_string_for_style("1.000", EU_STYLE) == "1000"
+        assert decimal_places_for_number_string("1.000", EU_STYLE) == 0
+
+    def test_negative_comma_journal(self):
+        """Leading minus survives style-aware normalisation."""
+        assert normalize_number_string_for_style("-1.000,00", EU_STYLE) == "-1000.00"
+
+    def test_no_style_falls_back_to_heuristic(self):
+        """Without a declared style the comma heuristic still applies."""
+        assert normalize_number_string_for_style("100,00") == "100.00"
+        assert normalize_number_string_for_style("1,000") == "1000"
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("1.000,00", 2),
+            ("100,00", 2),
+            ("100,5", 1),
+            ("1,000", 0),
+            ("150.00", 2),
+            ("3000", 0),
+            ("1,000.00", 2),
+            ("0.001", 3),
+        ],
+    )
+    def test_decimal_places_matrix(self, raw: str, expected: int):
+        """Fractional-digit counts across both notations (no style)."""
+        assert decimal_places_for_number_string(raw) == expected
+
+    def test_decimal_places_with_style(self):
+        """With a declared style the style mark wins."""
+        assert decimal_places_for_number_string("1.000,00", EU_STYLE) == 2
+        assert decimal_places_for_number_string("1,000.00", US_STYLE) == 2
+
+    def test_matrix_sums_are_decimal_exact(self):
+        """Parsed parts in either notation sum to the parsed total."""
+        parts_us = ["1,000.00", "234.56", "33.33"]
+        parts_eu = ["1.000,00", "234,56", "33,33"]
+        total = Decimal("1267.89")
+        sum_us = sum(
+            Decimal(normalize_number_string_for_style(p, US_STYLE)) for p in parts_us
+        )
+        sum_eu = sum(
+            Decimal(normalize_number_string_for_style(p, EU_STYLE)) for p in parts_eu
+        )
+        assert sum_us == sum_eu == total
