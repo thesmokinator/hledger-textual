@@ -31,7 +31,7 @@ from hledger_textual.widgets.constants import (
 )
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
 from hledger_textual.widgets.reports_custom_actions import ReportsCustomActionsMixin
@@ -145,7 +145,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         table.cursor_type = "cell"
         self._refresh_custom_report_select()
         self._update_context_bar_builtin()
-        self._set_empty_state_visible(False)
+        set_empty_state_visible(self, "reports-empty-state", "reports-table", False)
         self._load_report_data()
 
     def on_resize(self) -> None:
@@ -301,12 +301,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
             self.query_one("#reports-table", DataTable).display = False
             return
         visible = data is not None and not data.rows
-        self._set_empty_state_visible(visible)
-
-    def _set_empty_state_visible(self, visible: bool) -> None:
-        """Toggle the empty report message and DataTable visibility."""
-        self.query_one("#reports-empty-state", EmptyState).display = visible
-        self.query_one("#reports-table", DataTable).display = not visible
+        set_empty_state_visible(self, "reports-empty-state", "reports-table", visible)
 
     # --- Drill-down helpers ---
 

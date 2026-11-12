@@ -29,7 +29,7 @@ from hledger_textual.models import AccountNode
 from hledger_textual.widgets.constants import TREE_INDENT
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
 
 _EXPANDED = "\u25bc "
 _COLLAPSED = "\u25b6 "
@@ -92,7 +92,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
         table.cursor_type = "row"
         table.add_column("Account", width=20)
         table.add_column("Balance", width=self._fixed_column_widths[1])
-        self._set_empty_state_visible(False)
+        set_empty_state_visible(self, "accounts-empty-state", "accounts-table", False)
         self._load_data()
         table.focus()
 
@@ -139,7 +139,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
                 table.add_row("", "", key=f"{self._SEP_KEY_PREFIX}{sep_idx}")
             prev_group = group
             table.add_row(Text(account), fmt_amount_str(balance, accounting=True), height=None, key=account)
-        self._set_empty_state_visible(table.row_count == 0)
+        set_empty_state_visible(self, "accounts-empty-state", "accounts-table", table.row_count == 0)
 
     def _update_table_tree(self) -> None:
         """Render the tree view with indentation and expand/collapse indicators."""
@@ -151,12 +151,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
         else:
             for root in self._tree_roots:
                 self._render_node(table, root, depth=0)
-        self._set_empty_state_visible(table.row_count == 0)
-
-    def _set_empty_state_visible(self, visible: bool) -> None:
-        """Toggle the no-accounts message and DataTable visibility."""
-        self.query_one("#accounts-empty-state", EmptyState).display = visible
-        self.query_one("#accounts-table", DataTable).display = not visible
+        set_empty_state_visible(self, "accounts-empty-state", "accounts-table", table.row_count == 0)
 
     def _render_node(self, table: DataTable, node: AccountNode, depth: int) -> None:
         """Recursively render a node and its visible children.

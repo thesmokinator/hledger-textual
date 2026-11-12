@@ -30,7 +30,7 @@ from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount, fmt_amount_pretty
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
 
@@ -108,7 +108,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         table.add_column("Actual", width=self._fixed_column_widths[2])
         table.add_column("Remaining", width=self._fixed_column_widths[3])
         table.add_column("% Used", width=self._fixed_column_widths[4])
-        self._set_empty_state_visible(False)
+        set_empty_state_visible(self, "budget-empty-state", "budget-table", False)
         self._load_budget_data()
         table.focus()
 
@@ -152,9 +152,9 @@ class BudgetPane(DataTablePaneMixin, Widget):
         self.query_one("#period-label", Static).update(self._period_label())
 
         if not self._rules:
-            self._set_empty_state_visible(True)
+            set_empty_state_visible(self, "budget-empty-state", "budget-table", True)
             return
-        self._set_empty_state_visible(False)
+        set_empty_state_visible(self, "budget-empty-state", "budget-table", False)
 
         # Build lookup from budget report
         actuals: dict[str, BudgetRow] = {
@@ -241,11 +241,6 @@ class BudgetPane(DataTablePaneMixin, Widget):
             )
         for rule in uncategorized:
             _render_rule(rule)
-
-    def _set_empty_state_visible(self, visible: bool) -> None:
-        """Toggle the no-budget message and DataTable visibility."""
-        self.query_one("#budget-empty-state", EmptyState).display = visible
-        self.query_one("#budget-table", DataTable).display = not visible
 
     def _get_selected_rule(self) -> BudgetRule | None:
         """Return the BudgetRule for the currently highlighted row.
