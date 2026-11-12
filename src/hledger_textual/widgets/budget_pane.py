@@ -429,16 +429,13 @@ class BudgetPane(DataTablePaneMixin, Widget):
         """
         from hledger_textual.export import ExportData
 
-        headers = ["Account", "Budget", "Actual", "Remaining", "% Used"]
-        rows: list[list[str]] = []
-
         actuals: dict[str, BudgetRow] = {
             row.account: row for row in self._budget_rows
         }
 
-        for rule in self._rules:
+        def _row(rule):
             if self.filter_text and self.filter_text.lower() not in rule.account.lower():
-                continue
+                return None
 
             budget_amount = rule.amount.quantity
             commodity = rule.amount.commodity
@@ -448,19 +445,19 @@ class BudgetPane(DataTablePaneMixin, Widget):
             remaining = budget_amount - actual_amount
             usage = float(actual_amount / budget_amount * 100) if budget_amount else 0.0
 
-            rows.append([
+            return [
                 rule.account,
-                f"{commodity}{budget_amount:.2f}",
-                f"{commodity}{actual_amount:.2f}",
-                f"{commodity}{remaining:.2f}",
+                fmt_amount(budget_amount, commodity),
+                fmt_amount(actual_amount, commodity),
+                fmt_amount(remaining, commodity),
                 f"{usage:.0f}%",
-            ])
+            ]
 
-        return ExportData(
-            title=f"Budget {self._period_label()}",
-            headers=headers,
-            rows=rows,
-            pane_name="budget",
+        return ExportData.from_rows(
+            f"Budget {self._period_label()}",
+            ["Account", "Budget", "Actual", "Remaining", "% Used"],
+            (row for rule in self._rules if (row := _row(rule)) is not None),
+            "budget",
         )
 
     def _reload(self) -> None:

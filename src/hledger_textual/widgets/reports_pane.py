@@ -487,12 +487,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
 
         data = self._report_data
         if data is None:
-            return ExportData(
-                title="Report",
-                headers=["Account"],
-                rows=[],
-                pane_name="report",
-            )
+            return ExportData.from_rows("Report", ["Account"], [], "report")
 
         headers = ["Account"] + list(data.period_headers)
         rows: list[list[str]] = []
@@ -507,9 +502,4 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         type_labels = {"is": "Income Statement", "bs": "Balance Sheet", "cf": "Cash Flow"}
         type_label = type_labels.get(self._report_type, self._report_type)
 
-        return ExportData(
-            title=type_label,
-            headers=headers,
-            rows=rows,
-            pane_name="report",
-        )
+        return ExportData.from_rows(type_label, headers, rows, "report")

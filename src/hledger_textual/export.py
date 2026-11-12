@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+from hledger_textual.models import Posting
 
 
 @dataclass
@@ -23,6 +26,46 @@ class ExportData:
     headers: list[str]
     rows: list[list[str]]
     pane_name: str
+
+    @classmethod
+    def from_rows(
+        cls,
+        title: str,
+        headers: Sequence[str],
+        rows: Iterable[Sequence[str]],
+        pane_name: str,
+    ) -> ExportData:
+        """Build an ExportData, normalising headers and rows to string lists.
+
+        Args:
+            title: Human-readable title for the export.
+            headers: Column header names.
+            rows: Table rows (any sequences of already-formatted strings;
+                tuples and other sequences are converted to lists).
+            pane_name: Short pane identifier used in default filenames.
+
+        Returns:
+            An ExportData instance ready for CSV/PDF export.
+        """
+        return cls(
+            title=title,
+            headers=list(headers),
+            rows=[[str(cell) for cell in row] for row in rows],
+            pane_name=pane_name,
+        )
+
+
+def postings_summary(postings: Iterable[Posting], separator: str = ", ") -> str:
+    """Join posting account names into a single summary string.
+
+    Args:
+        postings: The postings to summarise.
+        separator: String placed between account names.
+
+    Returns:
+        Account names joined by *separator*, skipping empty ones.
+    """
+    return separator.join(p.account for p in postings if p.account)
 
 
 def default_export_dir() -> Path:
