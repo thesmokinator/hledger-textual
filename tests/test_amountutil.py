@@ -334,6 +334,36 @@ class TestCommaJournalMatrix:
         assert normalize_number_string_for_style("100,00") == "100.00"
         assert normalize_number_string_for_style("1,000") == "1000"
 
+
+class TestParseAmountInvalidNumbers:
+    """InvalidOperation paths in both commodity positions (85% push)."""
+
+    def test_left_commodity_invalid_number_raises(self):
+        """A left-commodity amount with bad digits raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid amount"):
+            parse_amount_string("€1.2.3")
+
+    def test_right_commodity_invalid_number_raises(self):
+        """A right-commodity amount with bad digits raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid amount"):
+            parse_amount_string("1.2.3 EUR")
+
+
+class TestDescribeCostEdgeCases:
+    """Cost-annotation hint paths (85% push)."""
+
+    def test_double_at_sign_is_unwrapped(self):
+        """'5 @@ €40' parses the cost after the second @."""
+        assert "cost after @" not in describe_amount_error("5 @@ €40")
+
+    def test_bare_at_sign_reports_missing_quantity(self):
+        """'@ €40.00' is missing its quantity."""
+        assert "quantity before @" in describe_amount_error("@ €40.00")
+
+    def test_symbols_besides_currency_rejected(self):
+        """Multiple non-currency symbols are rejected."""
+        assert "only one currency" in describe_amount_error("50 £€")
+
     @pytest.mark.parametrize(
         ("raw", "expected"),
         [
@@ -368,3 +398,16 @@ class TestCommaJournalMatrix:
             Decimal(normalize_number_string_for_style(p, EU_STYLE)) for p in parts_eu
         )
         assert sum_us == sum_eu == total
+
+
+class TestStyleFallbackBranches:
+    """Style-aware fallback branches (85% push)."""
+
+    def test_dot_style_without_separator_falls_back(self):
+        """A dot-decimal style with no grouping delegates to the heuristic."""
+        style = AmountStyle(decimal_mark=".", digit_group_separator=None)
+        assert normalize_number_string_for_style("1000", style) == "1000"
+
+    def test_multiple_non_currency_symbols_rejected(self):
+        """Two non-currency symbols are rejected as two currencies."""
+        assert "only one currency" in describe_amount_error("12 $ab cd")

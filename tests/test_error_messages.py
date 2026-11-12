@@ -97,3 +97,28 @@ class TestOtherErrors:
         assert title == "Unexpected error"
         assert "boom" in body
         assert "open an issue" in body
+
+
+class TestLastLineTruncation:
+    """_last_line truncation and blank-input paths (85% push)."""
+
+    def test_long_last_line_is_truncated(self):
+        """A last line over the limit ends with an ellipsis."""
+        from hledger_textual.error_messages import _last_line
+
+        long_line = "x" * 400
+        result = _last_line(f"header\n{long_line}")
+        assert result.endswith("…")
+        assert len(result) == 300
+
+    def test_blank_lines_are_skipped(self):
+        """Trailing blank lines do not become the message."""
+        from hledger_textual.error_messages import _last_line
+
+        assert _last_line("oops\n   \n\n") == "oops"
+
+    def test_all_blank_returns_unknown_error(self):
+        """Whitespace-only input falls back to 'Unknown error'."""
+        from hledger_textual.error_messages import _last_line
+
+        assert _last_line("   \n  ") == "Unknown error"

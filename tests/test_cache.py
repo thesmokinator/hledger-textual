@@ -116,3 +116,17 @@ def test_none_file():
     args = ("stats",)
     cache.put(args, "stats_result", file=None)
     assert cache.get(args, file=None) == "stats_result"
+
+
+def test_file_mtime_none_returns_zero():
+    """_file_mtime(None) returns 0.0 without touching the filesystem."""
+    from hledger_textual.cache import HledgerCache
+
+    assert HledgerCache()._file_mtime(None) == 0.0
+
+
+def test_file_mtime_missing_file_returns_zero(tmp_path):
+    """_file_mtime of a nonexistent path returns 0.0 (OSError branch)."""
+    from hledger_textual.cache import HledgerCache
+
+    assert HledgerCache()._file_mtime(tmp_path / "nope.journal") == 0.0

@@ -374,3 +374,18 @@ class TestReportsPaneCustomReports:
             await pilot.press("n")
             await pilot.pause(delay=0.5)
             assert isinstance(app.screen, CustomReportFormScreen)
+
+
+class TestCustomReportDeleteConfirmModal:
+    """The delete-confirmation modal carries the report name (85% push)."""
+
+    def test_modal_exposes_report_name(self):
+        """Title, summary and prefix identify the custom report flow."""
+        from hledger_textual.screens.custom_report_delete_confirm import (
+            CustomReportDeleteConfirmModal,
+        )
+
+        modal = CustomReportDeleteConfirmModal("My Report")
+        assert modal._title == "Delete Custom Report?"
+        assert modal._summary == "My Report"
+        assert modal._prefix == "custom-report-delete"
