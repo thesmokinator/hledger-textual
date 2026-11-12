@@ -87,10 +87,7 @@ def _load_config_dict() -> dict:
     if not _CONFIG_PATH.exists():
         return {}
     try:
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            import tomli as tomllib
+        import tomllib
 
         with open(_CONFIG_PATH, "rb") as f:
             return tomllib.load(f)

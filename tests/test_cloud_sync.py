@@ -12,7 +12,6 @@ from hledger_textual.cloud_sync import (
     cloud_sync_download,
     cloud_sync_upload,
     has_rclone,
-    is_cloud_sync_configured,
     run_rclone,
 )
 
@@ -71,26 +70,6 @@ def test_has_rclone_false():
     """has_rclone returns False when rclone is not installed."""
     with patch("subprocess.run", side_effect=FileNotFoundError):
         assert has_rclone() is False
-
-
-def test_is_cloud_sync_configured_none():
-    """is_cloud_sync_configured returns False for None config."""
-    assert is_cloud_sync_configured(None) is False
-
-
-def test_is_cloud_sync_configured_empty():
-    """is_cloud_sync_configured returns False for empty dict."""
-    assert is_cloud_sync_configured({}) is False
-
-
-def test_is_cloud_sync_configured_missing_path():
-    """is_cloud_sync_configured returns False when path is missing."""
-    assert is_cloud_sync_configured({"remote": "gdrive"}) is False
-
-
-def test_is_cloud_sync_configured_valid():
-    """is_cloud_sync_configured returns True for valid config."""
-    assert is_cloud_sync_configured({"remote": "gdrive", "path": "backup"}) is True
 
 
 def test_cloud_sync_upload(tmp_path):

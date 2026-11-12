@@ -61,20 +61,6 @@ def has_rclone() -> bool:
         return False
 
 
-def is_cloud_sync_configured(config: dict | None) -> bool:
-    """Check whether cloud sync is configured.
-
-    Args:
-        config: The cloud_sync config dict with 'remote' and 'path' keys.
-
-    Returns:
-        True if the config contains the required remote and path keys.
-    """
-    if not config:
-        return False
-    return bool(config.get("remote") and config.get("path"))
-
-
 def cloud_sync_upload(journal_file: Path, config: dict) -> str:
     """Upload journal files to the configured rclone remote.
 
@@ -143,34 +129,3 @@ def cloud_sync_download(journal_file: Path, config: dict) -> str:
         raise
 
     return f"Downloaded journal files from {source}"
-
-
-def cloud_sync_status(journal_file: Path, config: dict) -> str:
-    """Check sync status between local and remote.
-
-    Args:
-        journal_file: Path to the hledger journal file.
-        config: Cloud sync config dict with 'remote' and 'path' keys.
-
-    Returns:
-        Status output from rclone check.
-
-    Raises:
-        CloudSyncError: If the check fails.
-    """
-    remote = config["remote"]
-    remote_path = config["path"]
-    journal_dir = str(journal_file.parent)
-    destination = f"{remote}:{remote_path}"
-
-    try:
-        output = run_rclone(
-            "check",
-            journal_dir,
-            destination,
-            "--include", "*.journal",
-        )
-        return output.strip() or "Files are in sync"
-    except CloudSyncError as exc:
-        # rclone check returns non-zero when files differ
-        return str(exc)
