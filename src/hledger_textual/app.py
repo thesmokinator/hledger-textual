@@ -266,6 +266,10 @@ class HledgerTuiApp(App):
         """Handle tab activation (click) — switch content and focus."""
         if not event.tab or not event.tab.id:
             return
+        # Textual can deliver TabActivated before the ContentSwitcher is
+        # mounted; ignore the early event and let the default section stand.
+        if not self.query("#content-switcher"):
+            return
         section = event.tab.id.removeprefix("tab-")
         self.query_one("#content-switcher", ContentSwitcher).current = section
         self.query_one("#footer-bar", Static).update(
