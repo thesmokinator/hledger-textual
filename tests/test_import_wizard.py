@@ -248,6 +248,49 @@ class TestImportWizardProgress:
             assert screen.focused.id == "wizard-separator"
 
     @pytest.mark.asyncio
+    async def test_blank_mapping_value_is_empty_string(self, tmp_path: Path) -> None:
+        """A cleared mapping Select is reported as an empty string."""
+        from textual.widgets import Select
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+
+            screen.query_one("#mapping-select-0", Select).clear()
+            await pilot.pause()
+
+            mapping = screen._current_mapping()
+            assert mapping[0] == ""
+            assert all(isinstance(value, str) for value in mapping)
+
+    @pytest.mark.asyncio
+    async def test_blank_separator_falls_back_to_comma(self, tmp_path: Path) -> None:
+        """A cleared separator uses the comma default in generated rules."""
+        from textual.widgets import Select
+
+        from hledger_textual.screens.import_wizard import ImportWizardScreen
+
+        journal = tmp_path / "test.journal"
+        journal.write_text("")
+        app = _WizardHostApp(SAMPLE_CSV, journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ImportWizardScreen)
+
+            screen.query_one("#wizard-separator", Select).clear()
+            await pilot.pause()
+
+            content = screen._build_rules_content()
+            assert "Select.NULL" not in content
+
+    @pytest.mark.asyncio
     async def test_ctrl_navigates_and_restores_focus(
         self, tmp_path: Path
     ) -> None:

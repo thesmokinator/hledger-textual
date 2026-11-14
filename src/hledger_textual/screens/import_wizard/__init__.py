@@ -347,7 +347,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         date_format = self.query_one("#wizard-date-format", Input).value.strip()
 
         separator = self.query_one("#wizard-separator", Select).value
-        if separator == Select.BLANK:
+        if separator is Select.NULL:
             separator = ","
 
         has_header = self.query_one("#wizard-header", Select).value == "yes"
@@ -359,7 +359,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             try:
                 sel = self.query_one(f"#mapping-select-{i}", Select)
                 val = sel.value
-                field_mapping.append(val if val != Select.BLANK else "")
+                field_mapping.append(val if val is not Select.NULL else "")
             except Exception:
                 field_mapping.append("")
 
@@ -404,7 +404,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             try:
                 sel = self.query_one(f"#mapping-select-{i}", Select)
                 val = sel.value
-                mapping.append(val if val != Select.BLANK else "")
+                mapping.append(val if val is not Select.NULL else "")
             except Exception:
                 mapping.append("")
         return mapping
@@ -494,7 +494,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
     @on(Select.Changed, "#wizard-separator")
     async def _on_separator_changed(self, event: Select.Changed) -> None:
         """Re-detect headers and reload preview when separator changes."""
-        sep = str(event.value) if event.value != Select.BLANK else ","
+        sep = str(event.value) if event.value is not Select.NULL else ","
         self.state.separator = sep
         self.state.has_header, self.state.column_names = detect_header_row(
             self.state.csv_path, self.state.separator
