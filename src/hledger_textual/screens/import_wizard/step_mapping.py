@@ -70,7 +70,7 @@ class MappingStep(VerticalScroll):
                     Static("[suggested]", classes="mapping-suggested",
                            id=f"mapping-suggested-{i}")
                 )
-            container.mount(row)
+            await container.mount(row)
 
     @on(Select.Changed)
     def _on_mapping_select_changed(self, event: Select.Changed) -> None:
