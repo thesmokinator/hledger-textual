@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from pathlib import Path
 
 from textual import work
@@ -90,6 +91,27 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
     }
 
 
+def _resolve_saved_theme(saved_theme: str | None, available: Collection[str]) -> str | None:
+    """Resolve a theme saved in config against Textual's available themes.
+
+    Textual 8 removed the ``textual-ansi`` theme in favour of ``ansi-dark``
+    and ``ansi-light``.  ``ansi-dark`` was added in 8.2.5, so it is only used
+    when the running Textual version provides it.
+
+    Args:
+        saved_theme: Theme name stored in the config file, or None.
+        available: Names of the themes registered with the app.
+
+    Returns:
+        A valid theme name, or None to keep Textual's default theme.
+    """
+    if not saved_theme:
+        return None
+    if saved_theme == "textual-ansi":
+        return "ansi-dark" if "ansi-dark" in available else None
+    return saved_theme if saved_theme in available else None
+
+
 class _NavTab(Tab):
     """Tab that never receives keyboard focus."""
 
@@ -150,9 +172,9 @@ class HledgerTuiApp(App):
                 pass
         self._footer_commands = _build_footer_commands(self._sync_backend is not None)
         self._tab_order = resolve_tab_order(load_tab_order())
-        saved_theme = load_theme()
-        if saved_theme:
-            self.theme = saved_theme
+        theme = _resolve_saved_theme(load_theme(), self.available_themes)
+        if theme:
+            self.theme = theme
 
     def _pane_for_section(self, section: str):
         """Build the pane widget for a tab section."""
