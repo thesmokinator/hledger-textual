@@ -13,7 +13,7 @@ dependencies = [
     "babel>=2.18.0",
     "fpdf2>=2.8.0",
     "pricehist>=1.4.14",
-    "textual>=3.0.0,<4",
+    "textual>=6.0,<7",
     "textual-plotext>=1.0.0",
 ]
 
