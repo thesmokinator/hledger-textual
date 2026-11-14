@@ -79,6 +79,22 @@ class TestSavedFiltersModal:
             modal.on_data_table_row_selected(event)
             assert dismissed == ["expenses:food"]
 
+    async def test_single_click_applies_query(self, filters_config: Path) -> None:
+        """A single click on a row applies the stored query."""
+        app = _SavedApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            modal = app.screen
+            assert isinstance(modal, SavedFiltersModal)
+            dismissed: list = []
+            modal.dismiss = dismissed.append  # type: ignore[method-assign]
+            table = modal.query_one("#saved-filters-table", DataTable)
+
+            await pilot.click(table, offset=(2, 1))
+            await pilot.pause()
+
+            assert dismissed == ["expenses:food"]
+
     async def test_placeholder_row_does_not_apply(self, empty_config: Path) -> None:
         """The placeholder row never dismisses the modal."""
         app = _SavedApp()

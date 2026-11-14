@@ -9,6 +9,7 @@ from textual.screen import ModalScreen
 from textual.widgets import DataTable, Static
 
 from hledger_textual.config import delete_filter, load_saved_filters
+from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
 
 
 class SavedFiltersModal(ModalScreen[str | None]):
@@ -27,7 +28,7 @@ class SavedFiltersModal(ModalScreen[str | None]):
         """Render the browse dialog."""
         with Vertical(id="saved-filters-dialog"):
             yield Static("Saved Filters", id="saved-filters-title")
-            yield DataTable(id="saved-filters-table", show_cursor=True)
+            yield ClickSelectDataTable(id="saved-filters-table", show_cursor=True)
             yield Static(
                 "Enter: apply  ·  d: delete  ·  Escape: close",
                 id="saved-filters-hint",

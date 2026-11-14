@@ -23,6 +23,7 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
 from hledger_textual.widgets.constants import (
     REPORT_LABELS,
     REPORT_PERIOD_LABELS,
@@ -139,7 +140,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
             icon="📭",
             id="reports-empty-state",
         )
-        yield DataTable(id="reports-table")
+        yield ClickSelectDataTable(id="reports-table")
         with VerticalScroll(id="custom-report-output"):
             yield Static("", id="custom-report-text")
 
