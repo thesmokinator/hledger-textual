@@ -248,7 +248,7 @@ class TestAccountMetadataScreen:
 
             meta = app.screen.query_one("#acctxn-note")
             assert meta.display is True
-            assert "Main checking account" in str(meta.renderable)
+            assert "Main checking account" in str(meta.content)
 
     async def test_metadata_hidden_when_absent(self, journal_without_note: Path):
         """Metadata label is hidden when account has no note."""

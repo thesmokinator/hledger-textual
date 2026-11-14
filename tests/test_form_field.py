@@ -32,7 +32,7 @@ async def test_required_field_appends_asterisk_and_class():
         field = app.query(FormField)[0]
         assert "form-field" in field.classes
         assert "form-field--required" in field.classes
-        assert field.query_one(Label).renderable == "Date:*"
+        assert field.query_one(Label).content == "Date:*"
 
 
 async def test_optional_and_plain_field_classes():
@@ -42,7 +42,7 @@ async def test_optional_and_plain_field_classes():
         await pilot.pause()
         fields = list(app.query(FormField))
         assert "form-field--optional" in fields[1].classes
-        assert fields[1].query_one(Label).renderable == "Code:"
+        assert fields[1].query_one(Label).content == "Code:"
         assert "form-field--required" not in fields[2].classes
         assert "form-field--optional" not in fields[2].classes
 

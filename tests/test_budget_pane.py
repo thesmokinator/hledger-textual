@@ -399,7 +399,7 @@ class TestBudgetTodayMonth:
 
             label = budget_app.screen.query_one("#period-label", Static)
             expected = date.today().replace(day=1).strftime("%B %Y")
-            assert str(label.renderable) == expected
+            assert str(label.content) == expected
 
 
 class TestBudgetRefresh:
@@ -428,7 +428,7 @@ class TestBudgetFooter:
             await pilot.pause(delay=0.5)
             from textual.widgets import Static
             footer = budget_app.screen.query_one("#footer-bar", Static)
-            rendered = str(footer.renderable)
+            rendered = str(footer.content)
             assert "Add" in rendered
             assert "Month" in rendered
 

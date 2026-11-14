@@ -140,10 +140,10 @@ class TestPeriodSummaryCardsUpdate:
                 assert widget.value == "--"
 
             note = cards.query_one(".net-note", Static)
-            assert note.renderable == ""
+            assert note.content == ""
 
             rate = cards.query_one(".saving-rate", Static)
-            assert rate.renderable == ""
+            assert rate.content == ""
 
     async def test_saving_rate_shown(self):
         """Saving rate is displayed when income is positive."""
@@ -160,8 +160,8 @@ class TestPeriodSummaryCardsUpdate:
             await pilot.pause()
 
             rate = cards.query_one(".saving-rate", Static)
-            assert "Saving rate:" in rate.renderable
-            assert "60%" in rate.renderable
+            assert "Saving rate:" in rate.content
+            assert "60%" in rate.content
 
     async def test_investment_note_shown(self):
         """Investment note is shown when investments > 0."""
@@ -179,8 +179,8 @@ class TestPeriodSummaryCardsUpdate:
             await pilot.pause()
 
             note = cards.query_one(".net-note", Static)
-            assert "500" in note.renderable
-            assert "invested" in note.renderable
+            assert "500" in note.content
+            assert "invested" in note.content
 
 
 class TestPeriodSummaryCardsMarquee:

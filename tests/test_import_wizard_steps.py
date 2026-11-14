@@ -143,7 +143,7 @@ async def test_mapping_step_shows_suggested_badges(tmp_path):
         await step.populate_mapping()
         await pilot.pause()
         assert "suggested" in str(
-            app.query_one("#mapping-suggested-0", Static).renderable
+            app.query_one("#mapping-suggested-0", Static).content
         )
         assert len(app.query("#mapping-suggested-1")) == 0
 
@@ -182,7 +182,7 @@ async def test_mapping_step_error_line(tmp_path):
         await pilot.pause()
         step.set_error("boom")
         await pilot.pause()
-        assert "boom" in str(app.query_one("#wizard-mapping-error", Static).renderable)
+        assert "boom" in str(app.query_one("#wizard-mapping-error", Static).content)
         step.clear_error()
         await pilot.pause()
-        assert str(app.query_one("#wizard-mapping-error", Static).renderable) == ""
+        assert str(app.query_one("#wizard-mapping-error", Static).content) == ""

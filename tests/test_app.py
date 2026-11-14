@@ -430,7 +430,7 @@ class TestTabNavigation:
             await pilot.press("3")
             await pilot.pause(delay=0.5)
             footer = app.screen.query_one("#footer-bar", Static)
-            rendered = str(footer.renderable)
+            rendered = str(footer.content)
             assert "Add" in rendered
             assert "Search" in rendered
 
@@ -443,5 +443,5 @@ class TestTabNavigation:
                 await pilot.press(key)
                 await pilot.pause()
                 footer = app.screen.query_one("#footer-bar", Static)
-                rendered = str(footer.renderable)
+                rendered = str(footer.content)
                 assert "Help" in rendered, f"Help missing in tab {key}"

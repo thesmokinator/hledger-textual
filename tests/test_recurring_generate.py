@@ -88,7 +88,7 @@ class TestRecurringGenerateScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             summary = app.screen.query_one("#recurring-generate-summary")
-            rendered = str(summary.renderable)
+            rendered = str(summary.content)
             assert "2 transactions" in rendered
 
     async def test_modal_populates_preview_table(
@@ -207,5 +207,5 @@ class TestRecurringGenerateScreen:
             # 1 date for rule_a + 3 dates for rule_b = 4 rows
             assert table.row_count == 4
             summary = app.screen.query_one("#recurring-generate-summary")
-            rendered = str(summary.renderable)
+            rendered = str(summary.content)
             assert "4 transactions" in rendered

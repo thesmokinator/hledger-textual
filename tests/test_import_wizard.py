@@ -224,7 +224,7 @@ class TestImportWizardProgress:
     @staticmethod
     def _indicator(screen) -> str:
         """Return the progress strip as plain text."""
-        return str(screen.query_one("#wizard-step-indicator", Static).renderable)
+        return str(screen.query_one("#wizard-step-indicator", Static).content)
 
     @pytest.mark.asyncio
     async def test_indicator_and_focus_on_mount(self, tmp_path: Path) -> None:
@@ -375,7 +375,7 @@ class TestImportWizardMappingValidation:
             await pilot.pause()
             assert screen.state.current_step == 1
             error = str(
-                screen.query_one("#wizard-mapping-error", Static).renderable
+                screen.query_one("#wizard-mapping-error", Static).content
             )
             assert "date" in error
 
@@ -386,7 +386,7 @@ class TestImportWizardMappingValidation:
             await pilot.pause()
             assert screen.state.current_step == 2
             assert (
-                str(screen.query_one("#wizard-mapping-error", Static).renderable)
+                str(screen.query_one("#wizard-mapping-error", Static).content)
                 == ""
             )
 
@@ -415,7 +415,7 @@ class TestImportWizardMappingValidation:
             await pilot.pause()
             assert screen.state.current_step == 1
             error = str(
-                screen.query_one("#wizard-mapping-error", Static).renderable
+                screen.query_one("#wizard-mapping-error", Static).content
             )
             assert "mapped twice" in error
 
@@ -448,7 +448,7 @@ class TestImportWizardMappingValidation:
             await pilot.pause()
             screen.query_one("#btn-wizard-back", Button).focus()
             await pilot.pause()
-            shown = str(screen.query_one("#wizard-raw-errors", Static).renderable)
+            shown = str(screen.query_one("#wizard-raw-errors", Static).content)
             assert "line 3" in shown
 
             monkeypatch.setattr(
@@ -460,7 +460,7 @@ class TestImportWizardMappingValidation:
             screen.query_one("#btn-wizard-back", Button).focus()
             await pilot.pause()
             assert (
-                str(screen.query_one("#wizard-raw-errors", Static).renderable)
+                str(screen.query_one("#wizard-raw-errors", Static).content)
                 == ""
             )
 
@@ -570,7 +570,7 @@ class TestImportPreviewScreen:
         async with app.run_test() as pilot:
             await pilot.pause()
             summary = app.screen.query_one("#import-preview-summary")
-            rendered = str(summary.renderable)
+            rendered = str(summary.content)
             assert "2 duplicates excluded" in rendered
 
 

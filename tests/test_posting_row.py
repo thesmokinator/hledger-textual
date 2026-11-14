@@ -107,7 +107,7 @@ class TestPostingRowCommoditySuffix:
             row = app.query(PostingRow).first()
             suffixes = list(row.query(".posting-commodity"))
             assert len(suffixes) == 1
-            assert str(suffixes[0].renderable) == "€"
+            assert str(suffixes[0].content) == "€"
 
     async def test_no_suffix_without_commodity(self):
         app = PostingRowApp()

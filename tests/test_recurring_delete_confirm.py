@@ -58,7 +58,7 @@ class TestRecurringDeleteConfirmModal:
         async with app.run_test() as pilot:
             await pilot.pause()
             summary = app.screen.query_one("#recurring-delete-summary")
-            rendered = str(summary.renderable)
+            rendered = str(summary.content)
             assert "monthly" in rendered
             assert "Rent payment" in rendered
 

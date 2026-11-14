@@ -299,7 +299,7 @@ class RecurringFormScreen(
             self.query_one("#recurring-custom-period-error", Label).update("")
         else:
             current = self.query_one("#recurring-custom-period-error", Label)
-            if str(current.renderable):
+            if str(current.content):
                 current.update("")
 
     def _refresh_custom_period_feedback(self, expr: str) -> None:
