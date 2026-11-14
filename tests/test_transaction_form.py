@@ -923,7 +923,7 @@ class TestDefaultCommodity:
             await pilot.pause(delay=0.5)
             form = app.screen
             hint = form.query_one("#default-commodity-hint", Static)
-            assert "\u20ac" in hint.renderable
+            assert "\u20ac" in hint.content
 
 
 class TestParseAmountStr:
@@ -1323,11 +1323,11 @@ class TestRunningBalance:
             await pilot.pause()
 
             summary = form.query_one("#postings-sum", Static)
-            assert "\u2713" in str(summary.renderable)
+            assert "\u2713" in str(summary.content)
 
             rows[1].query_one(".amount-input", AmountInput).value = "-40.00"
             await pilot.pause()
-            text = str(summary.renderable)
+            text = str(summary.content)
             assert "\u2717" in text
             assert "10.00" in text
 
@@ -1350,7 +1350,7 @@ class TestRunningBalance:
             await pilot.pause()
 
             summary = form.query_one("#postings-sum", Static)
-            assert "incomplete" in str(summary.renderable)
+            assert "incomplete" in str(summary.content)
 
 
 class TestUnsavedChangesGuard:

@@ -33,7 +33,7 @@ async def test_show_and_hide_loading_overlay():
         overlays = list(app.query(LoadingOverlay))
         assert len(overlays) == 1
         assert overlays[0].query_one(LoadingIndicator) is not None
-        assert str(overlays[0].query_one(".loading-message", Static).renderable) == "Loading report…"
+        assert str(overlays[0].query_one(".loading-message", Static).content) == "Loading report…"
 
         hide_loading_overlay(host)
         await pilot.pause()

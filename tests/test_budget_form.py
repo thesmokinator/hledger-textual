@@ -289,7 +289,7 @@ class TestBudgetFormUnknownAccountWarning:
             warning = form.query_one("#budget-account-warning", Static)
             # Warning starts hidden with empty content.
             assert warning.has_class("hidden")
-            assert str(warning.renderable) == ""
+            assert str(warning.content) == ""
 
             account_input.value = "Expenses:Groceres"  # typo, not in known list
             account_input.focus()
@@ -298,7 +298,7 @@ class TestBudgetFormUnknownAccountWarning:
             form.query_one("#budget-input-amount", Input).focus()
             await pilot.pause()
 
-            rendered = str(warning.renderable)
+            rendered = str(warning.content)
             assert not warning.has_class("hidden"), "Warning widget should be visible after blur on unknown account"
             assert "Expenses:Groceres" in rendered and "not found" in rendered, (
                 f"Expected unknown-account inline warning, got {rendered!r}"
@@ -326,7 +326,7 @@ class TestBudgetFormUnknownAccountWarning:
             await pilot.pause()
 
             assert warning.has_class("hidden"), "Warning should stay hidden for known accounts"
-            assert str(warning.renderable) == ""
+            assert str(warning.content) == ""
 
     async def test_no_warning_when_journal_has_no_accounts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """If load_accounts returns nothing, blur leaves the warning hidden (fresh journal)."""
@@ -350,7 +350,7 @@ class TestBudgetFormUnknownAccountWarning:
             await pilot.pause()
 
             assert warning.has_class("hidden")
-            assert str(warning.renderable) == ""
+            assert str(warning.content) == ""
 
     async def test_warning_cleared_after_correcting_to_known_account(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -385,7 +385,7 @@ class TestBudgetFormUnknownAccountWarning:
             amount_input.focus()
             await pilot.pause()
             assert warning.has_class("hidden")
-            assert str(warning.renderable) == ""
+            assert str(warning.content) == ""
 
     async def test_warning_is_grouped_with_account_field(self, tmp_path: Path):
         """The inline warning lives in the same field group as the account input."""

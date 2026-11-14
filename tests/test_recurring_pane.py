@@ -243,7 +243,7 @@ class TestRecurringPaneClone:
             description = form.query_one("#recurring-input-description", Input).value
             assert description.strip() != ""
             title = form.query_one("#form-title", Static)
-            assert "Clone" in str(title.renderable)
+            assert "Clone" in str(title.content)
 
 
 class TestRecurringFormRunningBalance:
@@ -271,8 +271,8 @@ class TestRecurringFormRunningBalance:
             await pilot.pause()
 
             summary = form.query_one("#postings-sum", Static)
-            assert "\u2713" in str(summary.renderable)
+            assert "\u2713" in str(summary.content)
 
             rows[1].query_one(".amount-input", Input).value = "abc"
             await pilot.pause()
-            assert "incomplete" in str(summary.renderable)
+            assert "incomplete" in str(summary.content)

@@ -54,7 +54,7 @@ class TestDeleteConfirmModal:
         async with app.run_test() as pilot:
             await pilot.pause()
             summary = app.screen.query_one("#delete-summary")
-            rendered = str(summary.renderable)
+            rendered = str(summary.content)
             assert "Test purchase" in rendered
             assert "expenses:food" in rendered
 

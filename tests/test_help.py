@@ -106,5 +106,5 @@ class TestHelpScreenSmoke:
         async with app.run_test() as pilot:
             await pilot.pause()
             content = app.screen.query_one("#help-content")
-            assert "Global" in str(content.renderable)
-            assert "Reports" in str(content.renderable)
+            assert "Global" in str(content.content)
+            assert "Reports" in str(content.content)

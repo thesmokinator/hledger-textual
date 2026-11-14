@@ -91,7 +91,7 @@ class TestTodayMonth:
 
             label = txn_app.screen.query_one("#txn-period-label", Static)
             expected = date.today().replace(day=1).strftime("%B %Y")
-            assert str(label.renderable) == expected
+            assert str(label.content) == expected
 
 
 _TODAY = date.today()

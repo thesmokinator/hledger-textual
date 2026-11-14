@@ -437,12 +437,12 @@ class TestCollapsibleSections:
             await pilot.press("l")
             await pilot.pause()
             assert table.display is False
-            assert str(title.renderable) == "▸ Liabilities"
+            assert str(title.content) == "▸ Liabilities"
 
             await pilot.press("l")
             await pilot.pause()
             assert table.display is True
-            assert str(title.renderable) == "Liabilities"
+            assert str(title.content) == "Liabilities"
 
     async def test_investments_fold(self, tmp_path: Path):
         """Pressing i hides the investments table, pressing again restores it."""
@@ -458,12 +458,12 @@ class TestCollapsibleSections:
             await pilot.press("i")
             await pilot.pause()
             assert table.display is False
-            assert str(title.renderable) == "▸ Investments"
+            assert str(title.content) == "▸ Investments"
 
             await pilot.press("i")
             await pilot.pause()
             assert table.display is True
-            assert str(title.renderable) == "Investments"
+            assert str(title.content) == "Investments"
 
 
 class TestInvestmentPane:
@@ -697,8 +697,8 @@ class TestSummaryPaneCards:
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             rate_widget = app.query_one(".saving-rate", Static)
-            assert "Saving rate:" in rate_widget.renderable
-            assert "99%" in rate_widget.renderable
+            assert "Saving rate:" in rate_widget.content
+            assert "99%" in rate_widget.content
 
     async def test_saving_rate_cleared_on_error(
         self, summary_journal: Path, monkeypatch
@@ -716,7 +716,7 @@ class TestSummaryPaneCards:
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             rate_widget = app.query_one(".saving-rate", Static)
-            assert rate_widget.renderable == ""
+            assert rate_widget.content == ""
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -729,7 +729,7 @@ class TestSummaryPaneDynamicTitles:
         async with app.run_test() as pilot:
             await pilot.pause(delay=1.0)
             title = app.query_one("#summary-overview-title", Static)
-            assert str(title.renderable) == "Overview"
+            assert str(title.content) == "Overview"
 
     async def test_breakdown_title_contains_month(self, summary_journal: Path):
         """The breakdown title includes the current month name."""
@@ -738,7 +738,7 @@ class TestSummaryPaneDynamicTitles:
             await pilot.pause(delay=1.0)
             title = app.query_one("#summary-breakdown-title", Static)
             month_name = date.today().strftime("%B %Y")
-            assert month_name in str(title.renderable)
+            assert month_name in str(title.content)
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -1223,7 +1223,7 @@ class TestSummaryPaneMulticurrencyBreakdowns:
             assert rows["income:gifts"][2] == "\u2014"
             note = app.query_one("#summary-income-note", Static)
             assert note.display is True
-            assert "BTC" in str(note.renderable)
+            assert "BTC" in str(note.content)
 
     async def test_mixed_currencies_without_default_hide_percentages(
         self, tmp_path: Path, monkeypatch
@@ -1254,7 +1254,7 @@ class TestSummaryPaneMulticurrencyBreakdowns:
             assert {row[2] for row in rows} == {"\u2014"}
             note = app.query_one("#summary-income-note", Static)
             assert note.display is True
-            assert "default_commodity" in str(note.renderable)
+            assert "default_commodity" in str(note.content)
 
 
 @pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
