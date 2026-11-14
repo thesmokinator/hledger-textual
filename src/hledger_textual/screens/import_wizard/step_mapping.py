@@ -86,7 +86,7 @@ class MappingStep(VerticalScroll):
             idx = int(select_id[len("mapping-select-"):])
         except ValueError:
             return
-        new_value = "" if event.value == Select.BLANK else str(event.value)
+        new_value = "" if event.value is Select.NULL else str(event.value)
         if idx < len(self._state.field_mapping):
             if self._state.field_mapping[idx] == new_value:
                 # Mount-time sync of the initial value, not a user change.

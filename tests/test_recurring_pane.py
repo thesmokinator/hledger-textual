@@ -102,6 +102,28 @@ class TestRecurringPaneAdd:
             desc = form.query_one("#recurring-input-description", Input)
             assert desc.value == ""
 
+    async def test_blank_period_is_rejected(self, empty_app: HledgerTuiApp) -> None:
+        """Clearing the period Select blocks saving with a clear message."""
+        from textual.widgets import Input, Select
+
+        async with empty_app.run_test(size=(120, 60)) as pilot:
+            await pilot.pause()
+            await pilot.press("5")
+            await pilot.pause(delay=0.5)
+            await pilot.press("a")
+            await pilot.pause(delay=0.5)
+
+            form = empty_app.screen
+            assert isinstance(form, RecurringFormScreen)
+            form.query_one("#recurring-input-description", Input).value = "Rent"
+            form.query_one("#recurring-select-period", Select).clear()
+
+            notifications: list[str] = []
+            form.notify = lambda message, **kwargs: notifications.append(message)
+            form._save()
+
+            assert any("Period is required" in message for message in notifications)
+
     async def test_add_form_escape_dismisses(self, empty_app: HledgerTuiApp) -> None:
         async with empty_app.run_test(size=(120, 60)) as pilot:
             await pilot.pause()

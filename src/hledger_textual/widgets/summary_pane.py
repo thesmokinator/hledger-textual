@@ -20,6 +20,7 @@ from hledger_textual.cache import HledgerCache
 from hledger_textual.config import load_price_tickers, resolve_default_commodity
 from hledger_textual.formatter import normalize_commodity
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import (
     fmt_amount,
@@ -313,7 +314,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
                     id="summary-portfolio-title",
                     classes="summary-section-title",
                 )
-                yield DataTable(
+                yield ClickSelectDataTable(
                     id="summary-portfolio-table",
                     cursor_type="row",
                 )

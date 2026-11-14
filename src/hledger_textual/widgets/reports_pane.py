@@ -23,6 +23,7 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.widgets import distribute_column_widths
+from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
 from hledger_textual.widgets.constants import (
     REPORT_LABELS,
     REPORT_PERIOD_LABELS,
@@ -139,7 +140,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
             icon="📭",
             id="reports-empty-state",
         )
-        yield DataTable(id="reports-table")
+        yield ClickSelectDataTable(id="reports-table")
         with VerticalScroll(id="custom-report-output"):
             yield Static("", id="custom-report-text")
 
@@ -444,7 +445,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @on(Select.Changed, "#report-type-select")
     def on_report_type_changed(self, event: Select.Changed) -> None:
         """Reload when the report type changes."""
-        if event.value is not Select.BLANK:
+        if event.value is not Select.NULL:
             self._report_type = event.value
             if self._custom_report_name is not None:
                 self._custom_report_name = None
@@ -456,7 +457,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @on(Select.Changed, "#report-period-select")
     def on_period_range_changed(self, event: Select.Changed) -> None:
         """Reload when the period range changes."""
-        if event.value is not Select.BLANK:
+        if event.value is not Select.NULL:
             self._period_months = event.value
             if self._custom_report_name is None:
                 self._update_context_bar_builtin()
@@ -465,7 +466,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @on(Select.Changed, "#custom-report-select")
     def on_custom_report_changed(self, event: Select.Changed) -> None:
         """Load and display the selected custom report."""
-        if event.value is Select.BLANK:
+        if event.value is Select.NULL:
             self._custom_report_name = None
             self._set_custom_view(active=False)
             self._update_context_bar_builtin()

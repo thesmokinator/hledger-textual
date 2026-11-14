@@ -349,7 +349,7 @@ class RecurringFormScreen(
                 )
                 return
             period = custom_expr
-        elif not period or period == Select.BLANK:
+        elif not period or period is Select.NULL:
             self.notify("Period is required", severity="error", timeout=3)
             return
 
