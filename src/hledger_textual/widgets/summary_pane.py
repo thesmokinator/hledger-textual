@@ -12,6 +12,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.widget import Widget
 from rich.text import Text
 from textual.widgets import DataTable, Static
@@ -32,15 +33,15 @@ from hledger_textual.hledger import (
     HledgerError,
     load_expense_breakdown,
     load_income_breakdown,
-    load_investment_cost,
     load_investment_eur_by_account,
-    load_investment_positions,
+    load_investment_portfolio,
     load_liabilities_breakdown,
     load_period_expenses_by_commodity,
     load_period_income_by_commodity,
     load_period_net_by_commodity,
     load_period_summary,
 )
+from hledger_textual.parallel import gather_loads
 from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
 
 
@@ -124,6 +125,11 @@ def _share_cell(pct: float | None, width: int = 12) -> str:
     if pct is None:
         return "\u2014"
     return f"{_progress_bar(pct, width=width)} {pct:.0f}%"
+
+
+def _load_result(value, default):
+    """Return *value* unless the concurrent load raised, then *default*."""
+    return default if isinstance(value, Exception) else value
 
 
 @dataclass
@@ -247,6 +253,9 @@ class SummaryPane(DataTablePaneMixin, Widget):
     current calendar month.
     """
 
+    class Loaded(Message):
+        """Posted once the Summary's static and breakdown sections have loaded."""
+
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
@@ -272,10 +281,12 @@ class SummaryPane(DataTablePaneMixin, Widget):
         self._current_month: date = date.today().replace(day=1)
         self._static_loaded = False
         self._breakdown_loaded = False
+        self._investments_loaded = False
         self._has_static_sections = False
         self._has_breakdown_sections = False
         self._summary_export_rows: list[list[str]] = []
         self._collapsed_sections: set[str] = set()
+        self._loaded_posted = False
 
     # ------------------------------------------------------------------
     # Layout
@@ -399,7 +410,6 @@ class SummaryPane(DataTablePaneMixin, Widget):
 
         self._set_empty_state_visible(False)
         self._load_static_data()
-        self._load_breakdown_data()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -432,7 +442,6 @@ class SummaryPane(DataTablePaneMixin, Widget):
     def action_refresh(self) -> None:
         """Reload all summary data."""
         self._load_static_data()
-        self._load_breakdown_data()
 
     def action_toggle_investments(self) -> None:
         """Collapse or expand the Investments section."""
@@ -531,65 +540,79 @@ class SummaryPane(DataTablePaneMixin, Widget):
 
     @work(thread=True, exclusive=True, group="summary-static")
     def _load_static_data(self) -> None:
-        self.app.call_from_thread(show_loading_overlay, self, "Loading summary…")
-        """Load current-month cards and portfolio data.
+        """Load current-month cards and liabilities.
 
         The cards (Income / Expenses / Net) always show the current calendar
-        month and are not affected by the breakdown period navigation.
+        month and are not affected by the breakdown period navigation.  The
+        investment portfolio loads in its own worker so the first figures do
+        not wait for its two extra queries.
         """
-        # --- All-time period summary for cards ---
+        self.app.call_from_thread(show_loading_overlay, self, "Loading summary…")
+        # The cards, marquee values and liabilities are independent: run them
+        # concurrently and keep the per-loader fallbacks so one failing query
+        # never blanks the whole pane.
         commodity = resolve_default_commodity(self.journal_file)
-        try:
-            summary = load_period_summary(
-                self.journal_file, cache=self._cache, commodity=commodity
-            )
-        except HledgerError:
-            summary = None
 
+        (
+            summary_result,
+            net_result,
+            liabilities_result,
+        ) = gather_loads(
+            [
+                lambda: load_period_summary(
+                    self.journal_file, cache=self._cache, commodity=commodity
+                ),
+                lambda: load_period_net_by_commodity(
+                    self.journal_file, cache=self._cache
+                ),
+                lambda: load_liabilities_breakdown(
+                    self.journal_file, commodity=commodity, cache=self._cache
+                ),
+            ]
+        )
+
+        summary = _load_result(summary_result, None)
         # Per-currency values for the marquee lines under each card.  These are
         # passed alongside the summary rather than attached to it: the summary
         # comes from a cache and must not be mutated.
-        income_by_commodity: list[tuple[str, Decimal]] = []
-        expenses_by_commodity: list[tuple[str, Decimal]] = []
-        net_by_commodity: list[tuple[str, Decimal]] = []
-        if summary is not None:
-            try:
-                net_by_commodity = load_period_net_by_commodity(
-                    self.journal_file, cache=self._cache
-                )
-            except HledgerError:
-                net_by_commodity = []
-            try:
-                income_by_commodity = load_period_income_by_commodity(
-                    self.journal_file, cache=self._cache
-                )
-            except HledgerError:
-                income_by_commodity = []
-            try:
-                expenses_by_commodity = load_period_expenses_by_commodity(
-                    self.journal_file, cache=self._cache
-                )
-            except HledgerError:
-                expenses_by_commodity = []
+        net_by_commodity = _load_result(net_result, [])
+        liabilities = _load_result(liabilities_result, [])
 
-        # --- Liabilities: total outstanding balance ---
+        # The per-side views reuse the raw R/X queries cached by the net
+        # loader, so these calls normally do not start a subprocess.
         try:
-            liabilities = load_liabilities_breakdown(
-                self.journal_file, commodity=commodity
+            income_by_commodity = load_period_income_by_commodity(
+                self.journal_file, cache=self._cache
             )
         except HledgerError:
-            liabilities = []
-
-        # --- Investments: positions + cost (fast hledger) ---
+            income_by_commodity = []
         try:
-            positions = load_investment_positions(self.journal_file)
+            expenses_by_commodity = load_period_expenses_by_commodity(
+                self.journal_file, cache=self._cache
+            )
         except HledgerError:
-            positions = []
+            expenses_by_commodity = []
 
+        self.app.call_from_thread(
+            self._apply_static_data,
+            summary,
+            liabilities,
+            income_by_commodity,
+            expenses_by_commodity,
+            net_by_commodity,
+            commodity,
+        )
+
+    @work(thread=True, exclusive=True, group="summary-investments")
+    def _load_investment_data(self) -> None:
+        """Load investment positions and their book value in the background."""
+        self.app.call_from_thread(self._set_portfolio_loading)
         try:
-            cost_by_account = load_investment_cost(self.journal_file)
+            positions, cost_by_account = load_investment_portfolio(
+                self.journal_file, cache=self._cache
+            )
         except HledgerError:
-            cost_by_account = {}
+            positions, cost_by_account = [], {}
 
         tickers = load_price_tickers()
         pricehist_ok = has_pricehist()
@@ -599,7 +622,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         by_commodity = self._group_positions_by_commodity(positions)
         unconfigured = sorted(set(by_commodity.keys()) - set(tickers.keys()))
 
-        # Determine loading indicator message for the first UI update
+        # Determine loading indicator message for the first portfolio update
         if will_fetch:
             loading_msg = "[dim]\u23f3 Fetching market prices\u2026[/dim]"
         elif pricehist_ok and unconfigured:
@@ -611,17 +634,12 @@ class SummaryPane(DataTablePaneMixin, Widget):
         else:
             loading_msg = ""
 
-        # First UI update: cards + basic investments + liabilities
         self.app.call_from_thread(
-            self._apply_static_data,
-            summary,
-            positions, cost_by_account,
-            tickers, loading_msg,
-            liabilities,
-            income_by_commodity,
-            expenses_by_commodity,
-            net_by_commodity,
-            commodity,
+            self._apply_investment_data,
+            positions,
+            cost_by_account,
+            tickers,
+            loading_msg,
         )
 
         if not will_fetch:
@@ -633,7 +651,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
             prices_file = get_prices_file(tickers)
             if prices_file is not None:
                 eur_by_account = load_investment_eur_by_account(
-                    self.journal_file, prices_file
+                    self.journal_file, prices_file, cache=self._cache
                 )
         except (HledgerError, PriceError):
             pass
@@ -659,17 +677,13 @@ class SummaryPane(DataTablePaneMixin, Widget):
     def _apply_static_data(
         self,
         summary,
-        positions: list[tuple[str, Decimal, str]],
-        cost_by_account: dict[str, tuple[Decimal, str]],
-        tickers: dict[str, str],
-        loading_msg: str,
         liabilities: list[tuple[str, Decimal, str]] | None = None,
         income_by_commodity: list[tuple[str, Decimal]] | None = None,
         expenses_by_commodity: list[tuple[str, Decimal]] | None = None,
         net_by_commodity: list[tuple[str, Decimal]] | None = None,
         commodity: str | None = None,
     ) -> None:
-        """Apply card values, basic investments, and liabilities."""
+        """Apply card values and liabilities."""
         hide_loading_overlay(self)
         if not self.is_attached:
             return
@@ -694,28 +708,8 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 summary is not None
                 and (summary.income or summary.expenses or summary.investments)
             )
-            or positions
             or liabilities
         )
-
-        # Investments table — columns are fixed; clear rows only
-        ptable = self.query_one("#summary-portfolio-table", DataTable)
-        ptable.clear()
-
-        by_commodity = self._group_positions_by_commodity(positions)
-        portfolio_section = self.query_one("#summary-portfolio")
-
-        if not by_commodity:
-            portfolio_section.display = False
-        else:
-            portfolio_section.display = True
-            self._fill_portfolio_rows(ptable, by_commodity, cost_by_account, tickers)
-            self.call_after_refresh(
-                distribute_column_widths, ptable, self._PORTFOLIO_FIXED
-            )
-
-        # Loading / hint message
-        self.query_one("#summary-portfolio-loading", Static).update(loading_msg)
 
         # Liabilities table
         if liabilities is not None:
@@ -745,6 +739,58 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 )
         self._apply_collapsed()
         self._sync_empty_state()
+        # Secondary sections load only once the cards are on screen, so the
+        # first figures never queue behind the portfolio and breakdown
+        # queries.  Refreshes re-enter here and reload them too.
+        self._load_breakdown_data()
+        self._load_investment_data()
+
+    def _set_portfolio_loading(self) -> None:
+        """Show a hint while the investment positions are being loaded."""
+        try:
+            self.query_one("#summary-portfolio-loading", Static).update(
+                "[dim]Loading investments…[/dim]"
+            )
+        except NoMatches:
+            return
+
+    def _apply_investment_data(
+        self,
+        positions: list[tuple[str, Decimal, str]],
+        cost_by_account: dict[str, tuple[Decimal, str]],
+        tickers: dict[str, str],
+        loading_msg: str,
+    ) -> None:
+        """Apply the basic investment portfolio (without market prices)."""
+        if (
+            not self.is_attached
+            or not self.query("#summary-portfolio-table")
+            or not self.query("#summary-portfolio-loading")
+        ):
+            self._investments_loaded = True
+            self._sync_empty_state()
+            return
+        ptable = self.query_one("#summary-portfolio-table", DataTable)
+        ptable.clear()
+
+        by_commodity = self._group_positions_by_commodity(positions)
+        portfolio_section = self.query_one("#summary-portfolio")
+
+        if not by_commodity:
+            portfolio_section.display = False
+        else:
+            portfolio_section.display = True
+            self._fill_portfolio_rows(ptable, by_commodity, cost_by_account, tickers)
+            self.call_after_refresh(
+                distribute_column_widths, ptable, self._PORTFOLIO_FIXED
+            )
+
+        # Loading / hint message
+        self.query_one("#summary-portfolio-loading", Static).update(loading_msg)
+        self._has_static_sections = self._has_static_sections or bool(positions)
+        self._investments_loaded = True
+        self._apply_collapsed()
+        self._sync_empty_state()
 
     def _apply_portfolio_eur(
         self,
@@ -755,7 +801,11 @@ class SummaryPane(DataTablePaneMixin, Widget):
         post_msg: str,
     ) -> None:
         """Rebuild the investments table with actual Value (€) data from pricehist."""
-        if not self.is_attached or not self.query("#summary-portfolio-table"):
+        if (
+            not self.is_attached
+            or not self.query("#summary-portfolio-table")
+            or not self.query("#summary-portfolio-loading")
+        ):
             return
         ptable = self.query_one("#summary-portfolio-table", DataTable)
         ptable.clear()
@@ -826,25 +876,24 @@ class SummaryPane(DataTablePaneMixin, Widget):
     @work(thread=True, exclusive=True, group="summary-breakdown")
     def _load_breakdown_data(self) -> None:
         """Load income and expense breakdowns for the selected month."""
-        self.app.call_from_thread(show_loading_overlay, self, "Loading summary…")
+        self.app.call_from_thread(show_loading_overlay, self, "Loading breakdown…")
         period = self._period_str()
         # Convert both sides to the default commodity so that percentages are
         # computed on comparable amounts (mirrors the cards and Accounts view).
         commodity = resolve_default_commodity(self.journal_file)
 
-        try:
-            income_breakdown = load_income_breakdown(
-                self.journal_file, period, commodity=commodity
-            )
-        except HledgerError:
-            income_breakdown = []
-
-        try:
-            breakdown = load_expense_breakdown(
-                self.journal_file, period, commodity=commodity
-            )
-        except HledgerError:
-            breakdown = []
+        income_result, expense_result = gather_loads(
+            [
+                lambda: load_income_breakdown(
+                    self.journal_file, period, commodity=commodity, cache=self._cache
+                ),
+                lambda: load_expense_breakdown(
+                    self.journal_file, period, commodity=commodity, cache=self._cache
+                ),
+            ]
+        )
+        income_breakdown = _load_result(income_result, [])
+        breakdown = _load_result(expense_result, [])
 
         self.app.call_from_thread(
             self._apply_breakdown_data, income_breakdown, breakdown, commodity
@@ -955,6 +1004,11 @@ class SummaryPane(DataTablePaneMixin, Widget):
     def _sync_empty_state(self) -> None:
         """Show the summary empty state once all summary sections have loaded."""
         if not (self._static_loaded and self._breakdown_loaded):
+            return
+        if not self._loaded_posted:
+            self._loaded_posted = True
+            self.post_message(self.Loaded())
+        if not self._investments_loaded:
             return
         self._set_empty_state_visible(
             not (self._has_static_sections or self._has_breakdown_sections)

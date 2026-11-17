@@ -22,6 +22,7 @@ from hledger_textual.config import (
 )
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
+from hledger_textual.parallel import gather_loads
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
 from hledger_textual.widgets.constants import (
@@ -34,6 +35,7 @@ from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    request_initial_load,
     run_pane_load,
     set_empty_state_visible,
 )
@@ -110,6 +112,13 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         self._period_begin: date | None = None
         self._table_rows: list[ReportRow | None] = []
         self._row_full_paths: list[str] = []
+        # Incremental rendering state: rebuild columns only when the period
+        # headers change, and skip a full redraw when the same cached report
+        # is applied again.
+        self._rendered_headers: tuple[str, ...] | None = None
+        self._rendered_data: ReportData | None = None
+        self._rendered_tree: bool = False
+        self._rendered_stacked: bool = True
 
     def compose(self) -> ComposeResult:
         """Create the pane layout."""
@@ -151,7 +160,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         self._refresh_custom_report_select()
         self._update_context_bar_builtin()
         set_empty_state_visible(self, "reports-empty-state", "reports-table", False)
-        self._load_report_data()
+        request_initial_load(self, "reports", self._load_report_data)
 
     def on_resize(self) -> None:
         """Recalculate column widths when the pane is resized."""
@@ -207,28 +216,48 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
             begin, end = self._period_range()
             self._period_begin = date.fromisoformat(begin)
             commodity = resolve_default_commodity(self.journal_file)
-            data = load_report(
-                self.journal_file,
-                self._report_type,
-                period_begin=begin,
-                period_end=end,
-                commodity=commodity,
-                sort_amount=self._sort_amount,
-                cache=self._cache,
-                mode="tree" if self._tree_mode else "flat",
-            )
-            if self._show_investments and self._report_type == "is":
-                try:
-                    inv_data = load_investment_report(
-                        self.journal_file,
-                        period_begin=begin,
-                        period_end=end,
-                        commodity=commodity,
-                    )
-                    if inv_data.rows:
-                        data = merge_investments(data, inv_data)
-                except HledgerError:
-                    pass
+            show_investments = self._show_investments and self._report_type == "is"
+
+            def _load_report() -> ReportData:
+                return load_report(
+                    self.journal_file,
+                    self._report_type,
+                    period_begin=begin,
+                    period_end=end,
+                    commodity=commodity,
+                    sort_amount=self._sort_amount,
+                    cache=self._cache,
+                    mode="tree" if self._tree_mode else "flat",
+                )
+
+            def _load_investments() -> ReportData:
+                return load_investment_report(
+                    self.journal_file,
+                    period_begin=begin,
+                    period_end=end,
+                    commodity=commodity,
+                    cache=self._cache,
+                )
+
+            if show_investments:
+                report_result, inv_result = gather_loads(
+                    [_load_report, _load_investments]
+                )
+            else:
+                report_result = _load_report()
+                inv_result = None
+
+            if isinstance(report_result, Exception):
+                raise report_result
+            data = report_result
+
+            if show_investments and inv_result is not None:
+                if isinstance(inv_result, HledgerError):
+                    pass  # no investment data available
+                elif isinstance(inv_result, Exception):
+                    raise inv_result
+                elif inv_result.rows:
+                    data = merge_investments(data, inv_result)
             return data
 
         def _apply(data: ReportData) -> None:
@@ -265,21 +294,41 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     # --- Apply methods ---
 
     def _apply_report(self) -> None:
-        """Apply loaded report data to the DataTable."""
+        """Apply loaded report data to the DataTable.
+
+        Columns are only rebuilt when the period headers change, and applying
+        the same cached report twice is a no-op.  This keeps period navigation
+        and tab switches from tearing down the whole table.
+        """
         hide_loading_overlay(self)
+        if not self.is_attached or not self.query("#reports-table"):
+            return
         table = self.query_one("#reports-table", DataTable)
         data = self._report_data
 
         if data is None:
             return
 
-        table.clear(columns=True)
-        table.add_column("Account", key="account")
-        self._fixed_widths = {}
-        for i, header in enumerate(data.period_headers):
-            col_idx = i + 1
-            table.add_column(header, key=f"period-{i}")
-            self._fixed_widths[col_idx] = 18
+        if (
+            data is self._rendered_data
+            and self._tree_mode == self._rendered_tree
+            and self._stacked_currency == self._rendered_stacked
+        ):
+            self._sync_empty_state()
+            return
+
+        headers = tuple(data.period_headers)
+        if headers != self._rendered_headers:
+            table.clear(columns=True)
+            table.add_column("Account", key="account")
+            self._fixed_widths = {}
+            for i, header in enumerate(data.period_headers):
+                col_idx = i + 1
+                table.add_column(header, key=f"period-{i}")
+                self._fixed_widths[col_idx] = 18
+            self._rendered_headers = headers
+        else:
+            table.clear()
 
         rows, self._table_rows, self._row_full_paths = build_report_rows(
             data, tree_mode=self._tree_mode, stacked_currency=self._stacked_currency
@@ -293,6 +342,9 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         if self._fixed_widths:
             distribute_column_widths(table, self._fixed_widths)
 
+        self._rendered_data = data
+        self._rendered_tree = self._tree_mode
+        self._rendered_stacked = self._stacked_currency
         self._update_context_bar_builtin()
         self._sync_empty_state()
 
@@ -446,6 +498,10 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     def on_report_type_changed(self, event: Select.Changed) -> None:
         """Reload when the report type changes."""
         if event.value is not Select.NULL:
+            # Select emits Changed for its initial value while mounting; the
+            # deferred initial load already covers that case.
+            if event.value == self._report_type and self._custom_report_name is None:
+                return
             self._report_type = event.value
             if self._custom_report_name is not None:
                 self._custom_report_name = None
@@ -458,6 +514,8 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     def on_period_range_changed(self, event: Select.Changed) -> None:
         """Reload when the period range changes."""
         if event.value is not Select.NULL:
+            if event.value == self._period_months:
+                return
             self._period_months = event.value
             if self._custom_report_name is None:
                 self._update_context_bar_builtin()

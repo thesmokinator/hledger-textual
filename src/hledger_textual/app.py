@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 
-from textual import work
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
@@ -160,6 +160,11 @@ class HledgerTuiApp(App):
         self.journal_file = journal_file
         self._cache = HledgerCache()
         self._stale_panes: set[str] = set()
+        # Non-visible panes defer their initial hledger load until the Summary
+        # has painted, so the first screen is not queued behind transactions
+        # import/parse.  Switching to a pane early flushes its queued loads.
+        self._deferred_loads: list[tuple[str, Callable[[], None]]] = []
+        self._preload_started = False
         self._sync_backend: SyncBackend | None = None
         sync_config = load_sync_config()
         if sync_config:
@@ -192,8 +197,28 @@ class HledgerTuiApp(App):
             return AccountsPane(self.journal_file, cache=self._cache, id="accounts")
         return RecurringPane(self.journal_file, id="recurring")
 
+    def _ensure_auxiliary_journals(self) -> None:
+        """Add the budget/recurring ``include`` lines before any pane loads.
+
+        Panes used to insert these lines from their own workers while other
+        panes were already running hledger.  A reader could then load source
+        positions from the journal *before* the include lines shifted them,
+        making a later edit point at the wrong lines.  Doing both inserts once
+        during composition keeps the source line numbers stable for the rest
+        of the session.
+        """
+        from hledger_textual.budget import ensure_budget_file
+        from hledger_textual.recurring import ensure_recurring_file
+
+        for ensure in (ensure_budget_file, ensure_recurring_file):
+            try:
+                ensure(self.journal_file)
+            except Exception:
+                continue
+
     def compose(self) -> ComposeResult:
         """Create the app layout, with tabs in the configured order."""
+        self._ensure_auxiliary_journals()
         yield _NavTabs(
             *[
                 _NavTab(f"{i + 1}. {TAB_LABELS[section]}", id=f"tab-{section}")
@@ -212,8 +237,58 @@ class HledgerTuiApp(App):
         """Focus the default section after mount."""
         self._focus_section("summary")
         self._check_for_updates()
+        # Safety net: if the Summary never reports loaded, still preload the
+        # other panes rather than leaving them empty forever.
+        self.set_timer(30.0, self._start_deferred_loads)
         if load_auto_generate_recurring():
             self._auto_generate_recurring()
+
+    # ------------------------------------------------------------------
+    # Startup pane preloading
+    # ------------------------------------------------------------------
+
+    def request_initial_load(
+        self, section: str, loader: Callable[[], None]
+    ) -> None:
+        """Run a pane's initial load, or queue it until the Summary is ready.
+
+        Args:
+            section: Tab section owning the loader (``"accounts"``, ...).
+            loader: Zero-argument callable starting the pane's load.
+        """
+        if self._preload_started or section == "summary":
+            loader()
+        else:
+            self._deferred_loads.append((section, loader))
+
+    @on(SummaryPane.Loaded)
+    def _on_summary_loaded(self, event: SummaryPane.Loaded) -> None:
+        """Kick off the deferred pane loads once the Summary has painted."""
+        self._start_deferred_loads()
+
+    def _start_deferred_loads(self) -> None:
+        """Start every queued initial pane load exactly once."""
+        if self._preload_started:
+            return
+        self._preload_started = True
+        queued = self._deferred_loads
+        self._deferred_loads = []
+        for _section, loader in queued:
+            loader()
+
+    def _flush_deferred_section(self, section: str) -> None:
+        """Start this section's queued loads now (early tab switch).
+
+        Args:
+            section: Tab section being activated.
+        """
+        remaining: list[tuple[str, Callable[[], None]]] = []
+        for queued_section, loader in self._deferred_loads:
+            if queued_section == section:
+                loader()
+            else:
+                remaining.append((queued_section, loader))
+        self._deferred_loads = remaining
 
     @work(thread=True, exclusive=True, group="startup-update-check")
     def _check_for_updates(self) -> None:
@@ -297,6 +372,7 @@ class HledgerTuiApp(App):
         self.query_one("#footer-bar", Static).update(
             self._footer_commands.get(section, "")
         )
+        self._flush_deferred_section(section)
         if section in self._stale_panes:
             self._stale_panes.discard(section)
             self._refresh_pane(section)
@@ -335,7 +411,6 @@ class HledgerTuiApp(App):
         if section == "summary":
             pane = self.query_one(SummaryPane)
             pane._load_static_data()
-            pane._load_breakdown_data()
         elif section == "transactions":
             self.query_one(TransactionsPane).reload()
         elif section == "accounts":

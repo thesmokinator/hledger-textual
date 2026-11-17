@@ -1134,3 +1134,63 @@ class TestReportsCommodityResolution:
 
         assert seen, "load_report was not called"
         assert seen[-1]["kwargs"].get("commodity") is None
+
+
+class TestIncrementalRendering:
+    """ReportsPane avoids rebuilding the DataTable unnecessarily (issue #162)."""
+
+    async def test_same_headers_reuse_columns(self, reports_journal: Path, monkeypatch):
+        """Applying a report with unchanged headers keeps the column objects."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        first = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: first,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: app.query_one(ReportsPane)._report_data is not None)
+            pane = app.query_one(ReportsPane)
+            table = app.query_one("#reports-table", DataTable)
+            original_columns = list(table.ordered_columns)
+
+            second = _parse_report_csv(
+                _SAMPLE_IS_CSV.replace("€3000.00", "€3100.00")
+            )
+            pane._report_data = second
+            pane._apply_report()
+
+            assert table.ordered_columns == original_columns
+            assert table.row_count > 0
+
+    async def test_same_cached_data_skips_rebuild(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Applying the same ReportData object twice does not rebuild rows."""
+        from hledger_textual.hledger import _parse_report_csv
+
+        calls = 0
+        real_build = None
+
+        def _counting_build(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return real_build(*args, **kwargs)
+
+        import hledger_textual.widgets.reports_pane as rp
+
+        real_build = rp.build_report_rows
+        monkeypatch.setattr(rp, "build_report_rows", _counting_build)
+        data = _parse_report_csv(_SAMPLE_IS_CSV)
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report",
+            lambda *args, **kwargs: data,
+        )
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: app.query_one(ReportsPane)._report_data is not None)
+            pane = app.query_one(ReportsPane)
+            before = calls
+            pane._apply_report()
+            assert calls == before

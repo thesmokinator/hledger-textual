@@ -397,12 +397,15 @@ def _mock_market(monkeypatch, tmp_path: Path, market: Decimal) -> None:
         lambda _tickers: prices,
     )
     monkeypatch.setattr(
-        "hledger_textual.widgets.summary_pane.load_investment_cost",
-        lambda _file: {"assets:investments:crypto": (Decimal("500"), "€")},
+        "hledger_textual.widgets.summary_pane.load_investment_portfolio",
+        lambda _file, **kwargs: (
+            [("assets:investments:crypto", Decimal("0.01000000"), "BTC")],
+            {"assets:investments:crypto": (Decimal("500"), "€")},
+        ),
     )
     monkeypatch.setattr(
         "hledger_textual.widgets.summary_pane.load_investment_eur_by_account",
-        lambda _file, _prices: {
+        lambda _file, _prices, **kwargs: {
             "assets:investments:crypto": (market, "€")
         },
     )
@@ -562,7 +565,7 @@ class TestSummaryPaneDataLoad:
             raise HledgerError("investments failed")
 
         monkeypatch.setattr(
-            "hledger_textual.widgets.summary_pane.load_investment_positions", _raise
+            "hledger_textual.widgets.summary_pane.load_investment_portfolio", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:
@@ -579,7 +582,7 @@ class TestSummaryPaneDataLoad:
             raise HledgerError("cost failed")
 
         monkeypatch.setattr(
-            "hledger_textual.widgets.summary_pane.load_investment_cost", _raise
+            "hledger_textual.widgets.summary_pane.load_investment_portfolio", _raise
         )
         app = _SummaryApp(summary_journal)
         async with app.run_test() as pilot:

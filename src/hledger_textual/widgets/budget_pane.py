@@ -30,8 +30,10 @@ from hledger_textual.hledger import HledgerError, load_budget_report
 from hledger_textual.models import BudgetRow, BudgetRule
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount, fmt_amount_pretty
+from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    request_initial_load,
     run_pane_load,
     set_empty_state_visible,
 )
@@ -113,7 +115,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         table.add_column("Remaining", width=self._fixed_column_widths[3])
         table.add_column("% Used", width=self._fixed_column_widths[4])
         set_empty_state_visible(self, "budget-empty-state", "budget-table", False)
-        self._load_budget_data()
+        request_initial_load(self, "budget", self._load_budget_data)
         table.focus()
 
     def _period_label(self) -> str:
@@ -140,7 +142,13 @@ class BudgetPane(DataTablePaneMixin, Widget):
             self._rules = []
             self._load_budget_rows()
 
-        run_pane_load(self, _load, lambda _result: self._update_table(), on_error=_on_error)
+        run_pane_load(
+            self,
+            _load,
+            lambda _result: self._update_table(),
+            loading_message="Loading budget…",
+            on_error=_on_error,
+        )
 
     def _load_budget_rows(self) -> None:
         """Load actual spending rows, falling back to empty on failure."""
@@ -153,6 +161,9 @@ class BudgetPane(DataTablePaneMixin, Widget):
 
     def _update_table(self) -> None:
         """Refresh the DataTable with current budget data, grouped by category."""
+        hide_loading_overlay(self)
+        if not self.is_attached or not self.query("#budget-table"):
+            return
         table = self.query_one("#budget-table", DataTable)
         table.clear()
 

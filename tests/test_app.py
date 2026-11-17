@@ -445,3 +445,52 @@ class TestTabNavigation:
                 footer = app.screen.query_one("#footer-bar", Static)
                 rendered = str(footer.content)
                 assert "Help" in rendered, f"Help missing in tab {key}"
+
+
+class TestStartupPreloading:
+    """Non-visible panes defer their first hledger load (issue #162)."""
+
+    def test_non_visible_loads_are_queued(self, app_journal: Path):
+        """Loaders queue until the Summary reports ready."""
+        app = HledgerTuiApp(journal_file=app_journal)
+        called: list[str] = []
+
+        app.request_initial_load("accounts", lambda: called.append("accounts"))
+        app.request_initial_load("budget", lambda: called.append("budget"))
+        assert called == []
+        assert [section for section, _ in app._deferred_loads] == [
+            "accounts",
+            "budget",
+        ]
+
+        app.request_initial_load("summary", lambda: called.append("summary"))
+        assert called == ["summary"]
+
+        app._start_deferred_loads()
+        assert called == ["summary", "accounts", "budget"]
+        assert app._deferred_loads == []
+
+        # After startup, new loads run immediately.
+        app.request_initial_load("reports", lambda: called.append("reports"))
+        assert called[-1] == "reports"
+
+    def test_flush_starts_only_the_requested_section(self, app_journal: Path):
+        """Switching to a tab early starts just that tab's queued loads."""
+        app = HledgerTuiApp(journal_file=app_journal)
+        called: list[str] = []
+
+        app.request_initial_load("accounts", lambda: called.append("accounts"))
+        app.request_initial_load("reports", lambda: called.append("reports"))
+        app._flush_deferred_section("accounts")
+        assert called == ["accounts"]
+        assert [section for section, _ in app._deferred_loads] == ["reports"]
+
+    def test_auxiliary_includes_added_before_panes_load(self, tmp_path: Path):
+        """Budget/recurring includes exist before the first hledger call."""
+        journal = tmp_path / "j.journal"
+        journal.write_text("2026-01-01 * x\n    a  €1\n    b\n")
+        app = HledgerTuiApp(journal_file=journal)
+        app._ensure_auxiliary_journals()
+        text = journal.read_text()
+        assert "include budget.journal" in text
+        assert "include recurring.journal" in text

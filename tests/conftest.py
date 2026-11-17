@@ -31,6 +31,17 @@ def _fixed_number_locale():
     _number_locale.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _disable_disk_cache(monkeypatch):
+    """Keep the persistent hledger cache out of ordinary tests.
+
+    Tests that exercise the disk cache explicitly clear this variable and use
+    a temporary cache directory.
+    """
+    monkeypatch.setenv("HLEDGER_TEXTUAL_NO_DISK_CACHE", "1")
+    yield
+
+
 @pytest.fixture
 def sample_journal_path() -> Path:
     """Path to the sample journal fixture."""

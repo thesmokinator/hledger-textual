@@ -118,15 +118,88 @@ def test_none_file():
     assert cache.get(args, file=None) == "stats_result"
 
 
-def test_file_mtime_none_returns_zero():
-    """_file_mtime(None) returns 0.0 without touching the filesystem."""
+def test_file_mtime_none_returns_empty_signature():
+    """A None journal produces an empty signature without touching the filesystem."""
     from hledger_textual.cache import HledgerCache
 
-    assert HledgerCache()._file_mtime(None) == 0.0
+    assert HledgerCache()._signature(None) == ()
 
 
-def test_file_mtime_missing_file_returns_zero(tmp_path):
-    """_file_mtime of a nonexistent path returns 0.0 (OSError branch)."""
+def test_file_mtime_missing_file_returns_negative(tmp_path):
+    """Missing files get a stable -1 signature entry (OSError branch)."""
     from hledger_textual.cache import HledgerCache
 
-    assert HledgerCache()._file_mtime(tmp_path / "nope.journal") == 0.0
+    missing = tmp_path / "nope.journal"
+    assert HledgerCache()._signature(missing) == ((str(missing), -1, -1),)
+
+
+def test_included_file_change_invalidates(tmp_path):
+    """Editing a file reached through ``include`` invalidates cached values."""
+    main = tmp_path / "main.journal"
+    child = tmp_path / "child.journal"
+    child.write_text("2025-01-01 first\n", encoding="utf-8")
+    main.write_text("include child.journal\n", encoding="utf-8")
+
+    cache = HledgerCache()
+    cache.put(("print",), "old", file=main)
+    assert cache.get(("print",), file=main) == "old"
+
+    # Change the size as well as the mtime so coarse filesystems still differ.
+    child.write_text("2025-01-02 second\n" * 10, encoding="utf-8")
+    assert cache.get(("print",), file=main) is None
+
+
+def test_nested_include_change_invalidates(tmp_path):
+    """Includes are followed recursively."""
+    main = tmp_path / "main.journal"
+    middle = tmp_path / "middle.journal"
+    leaf = tmp_path / "leaf.journal"
+    leaf.write_text("2025-01-01 leaf\n", encoding="utf-8")
+    middle.write_text("include leaf.journal\n", encoding="utf-8")
+    main.write_text("include middle.journal\n", encoding="utf-8")
+
+    cache = HledgerCache()
+    cache.put(("print",), "old", file=main)
+    leaf.write_text("2025-01-02 changed leaf\n" * 5, encoding="utf-8")
+    assert cache.get(("print",), file=main) is None
+
+
+def test_glob_include_change_invalidates(tmp_path):
+    """Glob include targets are part of the journal signature."""
+    (tmp_path / "sub").mkdir()
+    child = tmp_path / "sub" / "2025.journal"
+    child.write_text("2025-01-01 first\n", encoding="utf-8")
+    main = tmp_path / "main.journal"
+    main.write_text("include sub/*.journal\n", encoding="utf-8")
+
+    cache = HledgerCache()
+    cache.put(("print",), "old", file=main)
+    child.write_text("2025-01-02 second\n" * 4, encoding="utf-8")
+    assert cache.get(("print",), file=main) is None
+
+
+def test_extra_file_change_invalidates(tmp_path):
+    """Extra files (e.g. a price database) participate in invalidation."""
+    journal = tmp_path / "main.journal"
+    journal.write_text("2025-01-01 x\n", encoding="utf-8")
+    prices = tmp_path / "prices.journal"
+    prices.write_text("P 2025-01-01 EUR 1\n", encoding="utf-8")
+
+    cache = HledgerCache()
+    cache.put(("bal",), "old", file=journal, extra_files=[prices])
+    assert cache.get(("bal",), file=journal, extra_files=[prices]) == "old"
+
+    prices.write_text("P 2025-01-02 EUR 1.1\n" * 3, encoding="utf-8")
+    assert cache.get(("bal",), file=journal, extra_files=[prices]) is None
+
+
+def test_include_cycle_does_not_loop(tmp_path):
+    """Mutually including journals terminate."""
+    first = tmp_path / "a.journal"
+    second = tmp_path / "b.journal"
+    first.write_text("include b.journal\n", encoding="utf-8")
+    second.write_text("include a.journal\n", encoding="utf-8")
+
+    cache = HledgerCache()
+    cache.put(("print",), "value", file=first)
+    assert cache.get(("print",), file=first) == "value"

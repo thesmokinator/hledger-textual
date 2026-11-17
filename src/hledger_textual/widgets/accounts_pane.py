@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from textual import on
+from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -19,9 +19,7 @@ from hledger_textual.config import (
     resolve_default_commodity,
     save_accounts_view,
 )
-from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import (
-    HledgerError,
     load_account_balances,
     load_account_tree_balances,
 )
@@ -29,7 +27,13 @@ from hledger_textual.models import AccountNode
 from hledger_textual.widgets.constants import TREE_INDENT
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, set_empty_state_visible
+from hledger_textual.widgets.loading import hide_loading_overlay
+from hledger_textual.widgets.pane_mixin import (
+    DataTablePaneMixin,
+    request_initial_load,
+    run_pane_load,
+    set_empty_state_visible,
+)
 
 _EXPANDED = "\u25bc "
 _COLLAPSED = "\u25b6 "
@@ -93,36 +97,69 @@ class AccountsPane(DataTablePaneMixin, Widget):
         table.add_column("Account", width=20)
         table.add_column("Balance", width=self._fixed_column_widths[1])
         set_empty_state_visible(self, "accounts-empty-state", "accounts-table", False)
-        self._load_data()
+        request_initial_load(self, "accounts", self._load_data)
         table.focus()
 
+    @work(thread=True, exclusive=True, group="accounts-load")
     def _load_data(self) -> None:
-        """Load account data from hledger for the active view only."""
-        if self._tree_mode:
-            try:
-                self._tree_roots = load_account_tree_balances(
-                    self.journal_file, commodity=self._commodity
-                )
-            except HledgerError as exc:
-                self._tree_roots = []
-                title, body = humanize_error(exc)
-                self.notify(body, title=title, severity="error", timeout=10)
-        else:
-            try:
-                self._balances = load_account_balances(
-                    self.journal_file, cache=self._cache, commodity=self._commodity
-                )
-            except HledgerError as exc:
-                title, body = humanize_error(exc)
-                self.notify(body, title=title, severity="error", timeout=10)
-                self._balances = []
+        """Load account data from hledger in a background thread."""
 
+        def _load() -> tuple[str, list]:
+            if self._tree_mode:
+                return (
+                    "tree",
+                    load_account_tree_balances(
+                        self.journal_file,
+                        commodity=self._commodity,
+                        cache=self._cache,
+                    ),
+                )
+            return (
+                "flat",
+                load_account_balances(
+                    self.journal_file,
+                    cache=self._cache,
+                    commodity=self._commodity,
+                ),
+            )
+
+        def _on_error(_exc: Exception) -> tuple[str, list]:
+            return ("tree" if self._tree_mode else "flat", [])
+
+        run_pane_load(
+            self,
+            _load,
+            self._apply_accounts_data,
+            loading_message="Loading accounts…",
+            on_error=_on_error,
+        )
+
+    def _apply_accounts_data(self, payload: tuple[str, list]) -> None:
+        """Store loaded balances and redraw the table.
+
+        Results from a superseded view mode are ignored: toggling flat/tree
+        starts a fresh load, so applying the older payload would show the
+        wrong dataset.
+
+        Args:
+            payload: ``(mode, data)`` returned by the loader.
+        """
+        hide_loading_overlay(self)
+        mode, data = payload
+        if mode != ("tree" if self._tree_mode else "flat"):
+            return
+        if mode == "tree":
+            self._tree_roots = data
+        else:
+            self._balances = data
         self._update_table()
 
     _SEP_KEY_PREFIX = "__sep_"
 
     def _update_table(self) -> None:
         """Refresh the DataTable based on current view mode and filter."""
+        if not self.is_attached or not self.query("#accounts-table"):
+            return
         if self._tree_mode:
             self._update_table_tree()
         else:

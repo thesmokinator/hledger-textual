@@ -1,5 +1,6 @@
 """Tests for hledger CLI reader."""
 
+import json
 import subprocess
 from datetime import date
 from decimal import Decimal
@@ -16,12 +17,14 @@ from hledger_textual.hledger import (
     expand_search_query,
     get_hledger_version,
     load_account_balances,
+    load_account_tree_balances,
     load_accounts,
     load_descriptions,
     load_expense_breakdown,
     load_income_breakdown,
     load_investment_cost,
     load_investment_eur_by_account,
+    load_investment_portfolio,
     load_investment_positions,
     load_investment_report,
     load_journal_stats,
@@ -811,6 +814,23 @@ class TestLoadInvestmentFunctions:
         """A journal with no investments should return an empty dict."""
         cost = load_investment_cost(empty_journal)
         assert cost == {}
+
+    def test_portfolio_from_real_hledger_json(self, tmp_path: Path):
+        """The combined loader reads lots and costs from hledger's JSON."""
+        journal = tmp_path / "invest.journal"
+        journal.write_text(
+            "2026-01-01 buy\n"
+            "    assets:investments:etf    10 XDWD @ 100.00 EUR\n"
+            "    assets:bank:checking\n"
+            "2026-02-01 buy more\n"
+            "    assets:investments:etf    5 XDWD @ 110.00 EUR\n"
+            "    assets:bank:checking\n"
+        )
+        positions, costs = load_investment_portfolio(journal)
+        assert positions == [
+            ("assets:investments:etf", Decimal("15"), "XDWD")
+        ]
+        assert costs["assets:investments:etf"] == (Decimal("1550.00"), "EUR")
 
     def test_eur_with_empty_prices_file(self, empty_journal: Path, tmp_path: Path):
         """An empty prices file should yield an empty dict."""
@@ -2252,3 +2272,307 @@ class TestParseAmountPrecision:
         assert amt.cost is not None
         assert amt.cost.commodity == "EUR"
         assert amt.cost.quantity == Decimal("10000.00")
+
+
+class TestReadOnlyLoaderCaching:
+    """Cached loaders skip the hledger subprocess on a repeat call (issue #162)."""
+
+    def test_liabilities_cached(self, monkeypatch, tmp_path: Path):
+        """load_liabilities_breakdown returns the cached rows on a second call."""
+        calls = 0
+
+        def _fake(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return '"account","balance"\n"liabilities:card","€-10.00"\n'
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        first = load_liabilities_breakdown(journal, commodity="€", cache=cache)
+        second = load_liabilities_breakdown(journal, commodity="€", cache=cache)
+        assert first == second
+        assert calls == 1
+
+    def test_investment_positions_and_cost_cached(self, monkeypatch, tmp_path: Path):
+        """Positions and cost share the single underlying balance query."""
+        calls: list[tuple] = []
+
+        def _fake(*args, **kwargs):
+            calls.append(args)
+            return _investment_balance_json([
+                ("assets:investments:etf", _investment_amount("XDWD", 10, 0)),
+            ])
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        load_investment_positions(journal, cache=cache)
+        load_investment_positions(journal, cache=cache)
+        load_investment_cost(journal, cache=cache)
+        load_investment_cost(journal, cache=cache)
+        assert len(calls) == 1
+
+    def test_investment_market_value_cached_with_prices_file(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """The price database is tracked as an extra cache input."""
+        calls = 0
+
+        def _fake(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return '"account","balance"\n"assets:investments:etf","100.00 €"\n'
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        prices = tmp_path / "prices.journal"
+        prices.write_text("P 2026-01-01 XDWD 10 EUR\n")
+        cache = HledgerCache()
+        load_investment_eur_by_account(journal, prices, cache=cache)
+        load_investment_eur_by_account(journal, prices, cache=cache)
+        assert calls == 1
+        prices.write_text("P 2026-01-02 XDWD 11 EUR\n" * 3)
+        load_investment_eur_by_account(journal, prices, cache=cache)
+        assert calls == 2
+
+    def test_income_and_expense_breakdowns_cached(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """Both breakdown loaders cache their parsed rows."""
+        calls: list[tuple] = []
+
+        def _fake(*args, **kwargs):
+            calls.append(args)
+            return '"account","balance"\n"expenses:food","€10.00"\n'
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        load_income_breakdown(journal, "2026-01", cache=cache)
+        load_income_breakdown(journal, "2026-01", cache=cache)
+        load_expense_breakdown(journal, "2026-01", cache=cache)
+        load_expense_breakdown(journal, "2026-01", cache=cache)
+        assert len(calls) == 2
+
+    def test_account_tree_cached(self, monkeypatch, tmp_path: Path):
+        """Tree balances are cached per commodity."""
+        calls = 0
+
+        def _fake(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return '"account","balance"\n"assets","€10.00"\n'
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        first = load_account_tree_balances(journal, cache=cache)
+        second = load_account_tree_balances(journal, cache=cache)
+        assert first is second
+        assert calls == 1
+
+    def test_investment_report_cached(self, monkeypatch, tmp_path: Path):
+        """Investment reports are cached by period and commodity."""
+        calls = 0
+
+        def _fake(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return (
+                '"Monthly Balance Sheet 2026","",""\n'
+                '"Account","Jan","Feb"\n'
+                '"assets:investments","€10.00","€11.00"\n'
+            )
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        load_investment_report(journal, cache=cache)
+        load_investment_report(journal, cache=cache)
+        assert calls == 1
+
+    def test_multi_period_budget_cached(self, monkeypatch, tmp_path: Path):
+        """Multi-period budget data is cached."""
+        calls = 0
+
+        def _fake(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return (
+                '"Account","2026-01","2026-01 budget"\n'
+                '"expenses:food","€10.00","€20.00"\n'
+            )
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        load_multi_period_budget_report(journal, "2026-01", "2026-01", cache=cache)
+        load_multi_period_budget_report(journal, "2026-01", "2026-01", cache=cache)
+        assert calls == 1
+
+
+def _investment_amount(
+    commodity: str,
+    mantissa: int,
+    places: int,
+    *,
+    cost_mantissa: int | None = None,
+    cost_places: int = 2,
+    cost_commodity: str = "EUR",
+) -> dict:
+    """Build one hledger balance JSON amount, optionally with a unit cost."""
+    data = {
+        "acommodity": commodity,
+        "acost": None,
+        "acostbasis": None,
+        "aquantity": {
+            "decimalMantissa": mantissa,
+            "decimalPlaces": places,
+            "floatingPoint": mantissa / (10 ** places),
+        },
+        "astyle": {},
+    }
+    if cost_mantissa is not None:
+        data["acost"] = {
+            "tag": "UnitCost",
+            "contents": {
+                "acommodity": cost_commodity,
+                "acost": None,
+                "acostbasis": None,
+                "aquantity": {
+                    "decimalMantissa": cost_mantissa,
+                    "decimalPlaces": cost_places,
+                    "floatingPoint": cost_mantissa / (10 ** cost_places),
+                },
+                "astyle": {},
+            },
+        }
+    return data
+
+
+def _investment_balance_json(rows: list[tuple[str, dict]]) -> str:
+    """Build hledger's balance JSON envelope for investment rows."""
+    account_rows = [
+        [account, account, 0, [amount]] for account, amount in rows
+    ]
+    return json.dumps([account_rows, []])
+
+
+class TestInvestmentPortfolio:
+    """One JSON query yields both positions and book values (issue #162)."""
+
+    def test_lots_are_summed_and_costed(self, monkeypatch, tmp_path: Path):
+        """Two lots in the same account sum to one position and one book value."""
+        rows = [
+            ("assets:investments:etf", _investment_amount(
+                "XDWD", 10, 0, cost_mantissa=10000
+            )),
+            ("assets:investments:etf", _investment_amount(
+                "XDWD", 5, 0, cost_mantissa=11000
+            )),
+        ]
+
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: _investment_balance_json(rows),
+        )
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        positions, costs = load_investment_portfolio(journal)
+        assert positions == [("assets:investments:etf", Decimal("15"), "XDWD")]
+        assert costs == {"assets:investments:etf": (Decimal("1550.00"), "EUR")}
+
+    def test_currency_balances_are_not_positions(self, monkeypatch, tmp_path: Path):
+        """Cash under investments contributes to book value but not units."""
+        rows = [
+            ("assets:investments:cash", _investment_amount("€", 50000, 2)),
+            ("assets:investments:etf", _investment_amount(
+                "XDWD", 10, 0, cost_mantissa=10000
+            )),
+        ]
+
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: _investment_balance_json(rows),
+        )
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        positions, costs = load_investment_portfolio(journal)
+        assert [p[2] for p in positions] == ["XDWD"]
+        assert costs["assets:investments:cash"] == (Decimal("500.00"), "€")
+
+    def test_negative_position_has_negative_book_value(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """A short position keeps the sign of its cost basis."""
+        rows = [
+            ("assets:investments:etf", _investment_amount(
+                "XDWD", -10, 0, cost_mantissa=10000
+            )),
+        ]
+
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: _investment_balance_json(rows),
+        )
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        _, costs = load_investment_portfolio(journal)
+        assert costs["assets:investments:etf"] == (Decimal("-1000.00"), "EUR")
+
+    def test_one_query_serves_portfolio_and_individual_loaders(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """Portfolio, positions and cost share the JSON balance query."""
+        calls: list[tuple] = []
+
+        def _fake(*args, **kwargs):
+            calls.append(args)
+            return _investment_balance_json([
+                ("assets:investments:etf", _investment_amount(
+                    "XDWD", 10, 0, cost_mantissa=10000
+                )),
+            ])
+
+        from hledger_textual.cache import HledgerCache
+
+        monkeypatch.setattr("hledger_textual.hledger.run_hledger", _fake)
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        cache = HledgerCache()
+        load_investment_portfolio(journal, cache=cache)
+        load_investment_positions(journal, cache=cache)
+        load_investment_cost(journal, cache=cache)
+        assert len(calls) == 1
+        assert all("-O" in args and "json" in args for args in calls)
+
+    def test_empty_output_returns_empty(self, monkeypatch, tmp_path: Path):
+        """An empty hledger response yields no positions or costs."""
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger", lambda *args, **kwargs: ""
+        )
+        journal = tmp_path / "j.journal"
+        journal.write_text("; empty\n")
+        assert load_investment_portfolio(journal) == ([], {})
