@@ -40,6 +40,23 @@ async def test_show_and_hide_loading_overlay():
         assert list(app.query(LoadingOverlay)) == []
 
 
+async def test_loading_overlay_shows_elapsed_seconds():
+    """After a second the overlay message gains an elapsed-time suffix."""
+    app = _HostApp()
+    async with app.run_test() as pilot:
+        host = app.query_one("#host")
+        show_loading_overlay(host, "Loading report…")
+        await pilot.pause()
+        overlay = app.query_one(LoadingOverlay)
+        overlay._started -= 3
+        overlay._update_elapsed()
+        assert (
+            str(overlay.query_one(".loading-message", Static).content)
+            == "Loading report… 3s"
+        )
+        hide_loading_overlay(host)
+
+
 async def test_hide_without_show_is_noop():
     """Hiding without a matching show does nothing."""
     app = _HostApp()

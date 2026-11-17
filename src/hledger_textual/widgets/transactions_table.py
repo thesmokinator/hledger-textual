@@ -20,6 +20,7 @@ from hledger_textual.hledger import expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.pane_mixin import (
+    request_initial_load,
     run_mutation,
     run_pane_load,
     set_empty_state_visible,
@@ -168,12 +169,8 @@ class TransactionsTable(Widget):
         table.add_column("Description", width=20)
         table.add_column("Accounts", width=20)
         table.add_column("Amount", width=self._TXN_FIXED[5])
-        table.add_row(
-            Text("Loading transactions…", style="dim italic"),
-            "", "", "", "", "",
-        )
         set_empty_state_visible(self, "transactions-empty-state", "transactions-table", False)
-        self._load_transactions()
+        request_initial_load(self, "transactions", self._load_transactions)
         table.focus()
 
     def on_show(self) -> None:

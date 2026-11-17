@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
+from textual.css.query import NoMatches
 from textual.widget import Widget
 from textual.widgets import LoadingIndicator, Static
 
@@ -22,11 +24,28 @@ class LoadingOverlay(Horizontal):
         """
         super().__init__(classes="loading-overlay")
         self._message = message
+        self._started = time.monotonic()
 
     def compose(self) -> ComposeResult:
         """Create the indicator and message layout."""
         yield LoadingIndicator()
         yield Static(self._message, classes="loading-message")
+
+    def on_mount(self) -> None:
+        """Start ticking the elapsed-time suffix."""
+        self.set_interval(1.0, self._update_elapsed)
+
+    def _update_elapsed(self) -> None:
+        """Append the number of elapsed seconds to the message."""
+        elapsed = int(time.monotonic() - self._started)
+        if elapsed < 1 or not self.is_attached:
+            return
+        try:
+            self.query_one(".loading-message", Static).update(
+                f"{self._message} {elapsed}s"
+            )
+        except NoMatches:
+            return
 
 
 def show_loading_overlay(host: Widget, message: str) -> None:

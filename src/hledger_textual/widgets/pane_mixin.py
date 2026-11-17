@@ -75,6 +75,26 @@ def run_mutation(
             )
 
 
+def request_initial_load(
+    widget, section: str, loader: Callable[[], None]
+) -> None:
+    """Start a pane's initial load, deferring it on the main app if requested.
+
+    Panes mounted outside :class:`~hledger_textual.app.HledgerTuiApp` (for
+    example in tests) load immediately.
+
+    Args:
+        widget: Pane or table widget owning the load.
+        section: Tab section the widget belongs to.
+        loader: Zero-argument callable starting the load.
+    """
+    request = getattr(widget.app, "request_initial_load", None)
+    if request is None:
+        loader()
+    else:
+        request(section, loader)
+
+
 def run_pane_load(
     widget,
     load: Callable[[], object],

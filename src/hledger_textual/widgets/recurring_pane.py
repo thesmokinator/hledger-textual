@@ -26,6 +26,7 @@ from hledger_textual.recurring import (
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    request_initial_load,
     run_pane_load,
     set_empty_state_visible,
 )
@@ -84,7 +85,7 @@ class RecurringPane(DataTablePaneMixin, Widget):
         table.add_column("End", width=10)
         table.add_column("Postings", width=20)
         set_empty_state_visible(self, "recurring-empty-state", "recurring-table", False)
-        self._load_data()
+        request_initial_load(self, "recurring", self._load_data)
         table.focus()
 
     @work(thread=True, exclusive=True)
@@ -106,6 +107,8 @@ class RecurringPane(DataTablePaneMixin, Widget):
 
     def _update_table(self) -> None:
         """Refresh the DataTable with current rules."""
+        if not self.is_attached or not self.query("#recurring-table"):
+            return
         table = self.query_one("#recurring-table", DataTable)
         table.clear()
 

@@ -9,6 +9,7 @@ All write operations follow a safe pattern:
 
 from __future__ import annotations
 
+import functools
 import re
 from enum import Enum, auto
 from pathlib import Path
@@ -16,6 +17,7 @@ from pathlib import Path
 from hledger_textual.fileutil import atomic_write_text as _atomic_write_text
 from hledger_textual.fileutil import backup as _backup
 from hledger_textual.fileutil import cleanup_backup as _cleanup_backup
+from hledger_textual.fileutil import journal_write_lock
 from hledger_textual.fileutil import restore as _restore
 from hledger_textual.formatter import format_transaction
 from hledger_textual.hledger import HledgerError, check_journal
@@ -428,6 +430,18 @@ def _append_to_new_glob_year(
         raise JournalError(f"Failed to append transaction: {exc}")
 
 
+def _serialized_mutation(fn):
+    """Serialize a journal mutation so concurrent edits cannot be lost."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with journal_write_lock:
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
+@_serialized_mutation
 def append_transaction(file: str | Path, transaction: Transaction) -> None:
     """Append a new transaction to the journal.
 
@@ -476,6 +490,7 @@ def append_transaction(file: str | Path, transaction: Transaction) -> None:
         _append_to_new_glob_year(main_journal, target_file, year, transaction)
 
 
+@_serialized_mutation
 def replace_transaction(
     file: str | Path,
     transaction: Transaction,
@@ -528,6 +543,7 @@ def replace_transaction(
         raise JournalError(f"Failed to replace transaction: {exc}")
 
 
+@_serialized_mutation
 def delete_transaction(
     file: str | Path,
     transaction: Transaction,

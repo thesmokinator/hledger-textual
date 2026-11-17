@@ -13,6 +13,11 @@ from typing import Callable
 # concurrent pane loads (budget + recurring) cannot clobber each other.
 journal_include_lock = threading.Lock()
 
+# Serialise journal mutations (append/replace/delete).  Two edits fired in
+# quick succession used to read the same pre-edit snapshot, so the second
+# write could silently undo the first.
+journal_write_lock = threading.Lock()
+
 
 def atomic_write_text(path: Path, content: str, encoding: str = "utf-8") -> None:
     """Write *content* to *path* atomically (temp file + ``os.replace``).
