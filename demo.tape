@@ -1,5 +1,8 @@
 # hledger-textual demo
-# Generates demo.gif for the README
+# Generates demo.gif for the README.
+#
+# Requires vhs: https://github.com/charmbracelet/vhs
+# Record from the repository root with: vhs demo.tape
 
 Output demo.gif
 
@@ -10,124 +13,57 @@ Set Width 1400
 Set Height 800
 Set Padding 10
 
-# Launch the app with the demo journal
-Type "uv run hledger-textual -f examples/demo.journal"
+# Isolated HOME with demo prices, so the investments table shows market values
+# without touching the network or the recorder's real config.
+Hide
+Type "scripts/demo_env.sh"
 Enter
-Sleep 3s
+Sleep 0.5s
+Type "clear"
+Enter
+Show
 
-# --- 1. Summary tab ---
-Sleep 1s
+Type@10ms "HOME=/tmp/hledger-textual-demo .venv/bin/hledger-textual -f examples/demo.journal"
+Enter
+Sleep 4s
 
-# --- 2. Transactions tab ---
+# --- Accounts: drill into the checking account ---
 Type "2"
-Sleep 1s
-
-# Scroll down
-Down
-Down
-Down
-Sleep 0.5s
-
-# Navigate to previous month
-Left
-Sleep 1s
-
-# Back to current month
-Type "t"
-Sleep 1s
-
-# Search
-Type "/"
-Sleep 0.3s
-Type "ac:expenses:food"
-Sleep 1s
+Sleep 1.2s
+Enter
+Sleep 2.5s
 Escape
-Sleep 0.5s
+Sleep 0.8s
 
-# --- CSV Import ---
-Type "i"
-Sleep 1s
-
-# File picker: clear default ~/Downloads/ (13 chars) and type the CSV path
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Backspace
-Type "examples/bank-export.csv"
-Sleep 1s
-Enter
-Sleep 2s
-
-# Rules Manager opens (no existing rules): Tab to + New and confirm
-Tab
-Sleep 0.3s
-Enter
-Sleep 2s
-
-# Wizard Step 1 — CSV Preview with auto-detected columns
-Sleep 1s
-
-# Tab to Next button and advance to Step 2
-Tab
-Sleep 0.2s
-Tab
-Sleep 0.2s
-Enter
-Sleep 1s
-
-# Close wizard
-Escape
-Sleep 0.5s
-
-# --- 3. Recurring tab ---
+# --- Transactions: search across the journal ---
 Type "3"
-Sleep 1s
-
-# --- 4. Budget tab ---
-Type "4"
-Sleep 1s
-
-# Navigate months in budget
-Left
-Sleep 1s
-Left
-Sleep 1s
-Type "t"
-Sleep 1s
-
-# --- 5. Reports tab ---
-Type "5"
-Sleep 1s
-
-# Toggle chart
-Type "c"
-Sleep 1s
-
-# --- 6. Accounts tab ---
-Type "6"
-Sleep 1s
-
-# Drill into an account
-Down
-Down
+Sleep 1.2s
+Type "/"
+Sleep 0.4s
+Type "food"
 Enter
-Sleep 1s
+Sleep 2s
 Escape
-Sleep 0.5s
+Sleep 0.6s
 
-# --- Back to summary ---
+# --- Budget: monthly table and multi-month overview ---
+Type "4"
+Sleep 1.5s
+Type "o"
+Sleep 2s
+Escape
+Sleep 0.8s
+
+# --- Reports: income statement with chart ---
+Type "6"
+Sleep 1.5s
+Type "c"
+Sleep 2.5s
+Escape
+Sleep 0.8s
+
+# --- Back to the Summary ---
 Type "1"
-Sleep 1s
-
-# Quit
+Sleep 2s
 Type "q"
 Sleep 0.5s
