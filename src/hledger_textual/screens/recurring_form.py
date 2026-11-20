@@ -21,6 +21,7 @@ from hledger_textual.recurring import SUPPORTED_PERIODS, validate_period_expr
 from hledger_textual.screens._form_account_suggestions import FormAccountSuggestionsMixin
 from hledger_textual.screens._dirty_guard import DirtyGuardMixin
 from hledger_textual.screens.form_base import FormScreenBase
+from hledger_textual.textual_compat import is_no_selection
 from hledger_textual.widgets.constants import RECURRING_PERIOD_OPTIONS
 from hledger_textual.widgets.date_input import DateInput
 from hledger_textual.widgets.form_field import FormField
@@ -349,7 +350,7 @@ class RecurringFormScreen(
                 )
                 return
             period = custom_expr
-        elif not period or period is Select.NULL:
+        elif not period or is_no_selection(period):
             self.notify("Period is required", severity="error", timeout=3)
             return
 

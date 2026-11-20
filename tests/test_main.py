@@ -5,6 +5,39 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+class TestTextualVersionGuard:
+    """main() refuses to start on an unsupported Textual version."""
+
+    def test_unsupported_version_exits_with_actionable_message(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Textual 7.x aborts with the required and installed versions."""
+        from hledger_textual import __main__ as main_module
+
+        monkeypatch.setattr("textual.__version__", "7.4.0")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main_module._check_textual_version()
+
+        assert exc_info.value.code == 1
+        stderr = capsys.readouterr().err
+        assert "Textual >= 8.0" in stderr
+        assert "7.4.0" in stderr
+        assert "upgrade" in stderr.lower()
+
+    def test_supported_version_does_not_exit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Textual 8.x passes the guard silently."""
+        from hledger_textual import __main__ as main_module
+
+        monkeypatch.setattr("textual.__version__", "8.2.8")
+        main_module._check_textual_version()
+
+
 
 class TestMain:
     """main() wires CLI parsing, journal resolution and app startup."""
