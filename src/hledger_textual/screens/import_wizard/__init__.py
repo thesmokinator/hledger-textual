@@ -35,6 +35,7 @@ from hledger_textual.screens.import_wizard.step_preview import PreviewStep
 from hledger_textual.screens.import_wizard.step_review import ReviewStep
 from hledger_textual.screens.import_wizard.step_rules import RulesStep
 from hledger_textual.screens.import_wizard.step_settings import SettingsStep
+from hledger_textual.textual_compat import is_no_selection
 from hledger_textual.widgets.autocomplete_input import AutocompleteInput
 from hledger_textual.widgets.constants import SEPARATOR_OPTIONS
 
@@ -347,7 +348,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
         date_format = self.query_one("#wizard-date-format", Input).value.strip()
 
         separator = self.query_one("#wizard-separator", Select).value
-        if separator is Select.NULL:
+        if is_no_selection(separator):
             separator = ","
 
         has_header = self.query_one("#wizard-header", Select).value == "yes"
@@ -359,7 +360,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             try:
                 sel = self.query_one(f"#mapping-select-{i}", Select)
                 val = sel.value
-                field_mapping.append(val if val is not Select.NULL else "")
+                field_mapping.append(val if not is_no_selection(val) else "")
             except Exception:
                 field_mapping.append("")
 
@@ -404,7 +405,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
             try:
                 sel = self.query_one(f"#mapping-select-{i}", Select)
                 val = sel.value
-                mapping.append(val if val is not Select.NULL else "")
+                mapping.append(val if not is_no_selection(val) else "")
             except Exception:
                 mapping.append("")
         return mapping
@@ -494,7 +495,7 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
     @on(Select.Changed, "#wizard-separator")
     async def _on_separator_changed(self, event: Select.Changed) -> None:
         """Re-detect headers and reload preview when separator changes."""
-        sep = str(event.value) if event.value is not Select.NULL else ","
+        sep = "," if is_no_selection(event.value) else str(event.value)
         self.state.separator = sep
         self.state.has_header, self.state.column_names = detect_header_row(
             self.state.csv_path, self.state.separator
