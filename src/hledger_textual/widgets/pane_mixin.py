@@ -8,9 +8,59 @@ from textual import work
 from textual.widgets import DataTable
 
 from hledger_textual.error_messages import humanize_error
+from hledger_textual.period import PeriodSelection, current_month_selection
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.loading import show_loading_overlay
+
+
+def get_period(widget) -> PeriodSelection:
+    """Return the shared period selection *widget* should display.
+
+    Widgets mounted inside :class:`~hledger_textual.app.HledgerTuiApp` read
+    the app-owned reactive; anything else (standalone widgets, tests with a
+    bare ``App``) falls back to a widget-local period, and finally to the
+    current calendar month.
+
+    Args:
+        widget: The pane or table widget asking for its period.
+    """
+    try:
+        app = widget.app
+    except Exception:
+        app = None
+    shared = getattr(app, "period_selection", None)
+    if shared is not None:
+        return shared
+    fallback = getattr(widget, "_period_fallback", None)
+    return fallback if fallback is not None else current_month_selection()
+
+
+def set_period(widget, selection: PeriodSelection) -> bool:
+    """Apply a new shared period selection.
+
+    When the app owns the shared state (``HledgerTuiApp``), the reactive is
+    updated and its watcher refreshes the visible pane; the caller must not
+    reload itself.  Otherwise the widget-local fallback is updated and the
+    caller is responsible for refreshing.
+
+    Args:
+        widget: The widget initiating the period change.
+        selection: The new selection.
+
+    Returns:
+        ``True`` when the app watcher will refresh the pane, ``False`` when
+        the caller must refresh locally.
+    """
+    try:
+        app = widget.app
+    except Exception:
+        app = None
+    if getattr(app, "period_selection", None) is not None:
+        app.period_selection = selection
+        return True
+    widget._period_fallback = selection
+    return False
 
 
 def set_empty_state_visible(
