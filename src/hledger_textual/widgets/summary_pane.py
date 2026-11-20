@@ -27,7 +27,7 @@ from hledger_textual.widgets.formatting import (
     fmt_amount,
 )
 from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, get_period
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (
     HledgerError,
@@ -278,7 +278,6 @@ class SummaryPane(DataTablePaneMixin, Widget):
         super().__init__(**kwargs)
         self.journal_file = journal_file
         self._cache = cache
-        self._current_month: date = date.today().replace(day=1)
         self._static_loaded = False
         self._breakdown_loaded = False
         self._investments_loaded = False
@@ -416,8 +415,20 @@ class SummaryPane(DataTablePaneMixin, Widget):
     # ------------------------------------------------------------------
 
     def _period_str(self) -> str:
-        """Return the hledger period query string for the current month."""
+        """Return the hledger period query string for the selected month.
+
+        The month comes from the app's shared period selection (issue #263);
+        widgets mounted outside the main app fall back to the current month.
+        """
         return self._current_month.strftime("%Y-%m")
+
+    @property
+    def _current_month(self) -> date:
+        """Return the first day of the anchor month of the shared period."""
+        period = get_period(self)
+        if period.begin is not None:
+            return period.begin.replace(day=1)
+        return date.today().replace(day=1)
 
     def _group_positions_by_commodity(
         self, positions: list[tuple[str, Decimal, str]]

@@ -16,6 +16,7 @@ from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, load_multi_period_budget_report
 from hledger_textual.models import BudgetRule
 from hledger_textual.widgets.constants import BUDGET_OVERVIEW_PERIOD_OPTIONS
+from hledger_textual.widgets.pane_mixin import get_period
 
 
 def _months_range(end: date, n: int) -> tuple[str, str]:
@@ -85,8 +86,13 @@ class BudgetOverviewScreen(ModalScreen[None]):
 
     @work(thread=True, exclusive=True)
     def _load_data(self) -> None:
-        """Load multi-period budget data and populate the table."""
-        end = date.today().replace(day=1)
+        """Load multi-period budget data and populate the table.
+
+        The window ends at the anchor month of the app's shared period
+        selection (issue #263), so the overview follows the pane's month.
+        """
+        period = get_period(self)
+        end = period.begin.replace(day=1) if period.begin else date.today().replace(day=1)
         start_str, end_str = _months_range(end, self._num_periods)
         try:
             periods, rows = load_multi_period_budget_report(
