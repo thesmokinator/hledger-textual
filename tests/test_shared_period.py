@@ -35,9 +35,15 @@ def multi_month_app(tmp_path: Path) -> HledgerTuiApp:
 
 
 @pytest.fixture
-def sample_app(tmp_path: Path, tmp_journal: Path) -> HledgerTuiApp:
-    """App over a copy of the sample journal."""
-    return HledgerTuiApp(journal_file=tmp_journal)
+def fresh_app(tmp_path: Path) -> HledgerTuiApp:
+    """App over a journal with current-month data (no startup landing)."""
+    journal = tmp_path / "fresh.journal"
+    journal.write_text(
+        f"{date.today().replace(day=1).isoformat()} * Fresh groceries\n"
+        "    expenses:food          20.00\n"
+        "    assets:checking\n"
+    )
+    return HledgerTuiApp(journal_file=journal)
 
 
 class TestSharedPeriodUnit:
@@ -73,12 +79,12 @@ class TestSharedPeriodIntegration:
     """Panes derive their scope from the app's shared period selection."""
 
     async def test_app_starts_on_current_month(
-        self, sample_app: HledgerTuiApp
+        self, fresh_app: HledgerTuiApp
     ):
         """The default selection is the current calendar month."""
-        async with sample_app.run_test() as pilot:
+        async with fresh_app.run_test() as pilot:
             await pilot.pause()
-            assert sample_app.period_selection == current_month_selection()
+            assert fresh_app.period_selection == current_month_selection()
 
     async def test_transactions_follow_the_shared_period(
         self, multi_month_app: HledgerTuiApp
@@ -154,35 +160,35 @@ class TestSharedPeriodIntegration:
             assert budget._current_month == date(2024, 3, 1)
 
     async def test_budget_navigation_updates_the_app_period(
-        self, sample_app: HledgerTuiApp
+        self, fresh_app: HledgerTuiApp
     ):
         """Budget month steps move the shared selection, not a private anchor."""
         from hledger_textual.widgets.budget_pane import BudgetPane
 
-        async with sample_app.run_test() as pilot:
+        async with fresh_app.run_test() as pilot:
             await pilot.pause()
-            sample_app._activate_section("budget")
+            fresh_app._activate_section("budget")
             await pilot.pause(delay=0.5)
             await pilot.press("h")
             await pilot.pause(delay=0.5)
             expected = shift_months(current_month_selection(), -1)
-            assert sample_app.period_selection == expected
-            budget = sample_app.query_one(BudgetPane)
+            assert fresh_app.period_selection == expected
+            budget = fresh_app.query_one(BudgetPane)
             assert budget._current_month == expected.begin
 
     async def test_transactions_navigation_updates_the_app_period(
-        self, sample_app: HledgerTuiApp
+        self, fresh_app: HledgerTuiApp
     ):
         """Transactions month steps move the shared selection."""
         from hledger_textual.widgets.transactions_table import TransactionsTable
 
-        async with sample_app.run_test() as pilot:
+        async with fresh_app.run_test() as pilot:
             await pilot.pause()
-            sample_app._activate_section("transactions")
+            fresh_app._activate_section("transactions")
             await pilot.pause(delay=0.5)
             await pilot.press("right")
             await pilot.pause(delay=0.5)
             expected = shift_months(current_month_selection(), 1)
-            assert sample_app.period_selection == expected
-            table = sample_app.query_one(TransactionsTable)
+            assert fresh_app.period_selection == expected
+            table = fresh_app.query_one(TransactionsTable)
             assert table._period == expected

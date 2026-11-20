@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
@@ -228,6 +229,10 @@ class JournalStats:
     transaction_count: int
     account_count: int
     commodities: list[str] = field(default_factory=list)
+    #: First transaction date, or None for an empty journal.
+    first_date: date | None = None
+    #: Last transaction date, or None for an empty journal.
+    last_date: date | None = None
 
 
 @dataclass

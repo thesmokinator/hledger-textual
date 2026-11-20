@@ -8,6 +8,7 @@ import json
 import shlex
 import subprocess
 import threading
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -903,7 +904,10 @@ def load_multi_period_budget_report(
 def load_journal_stats(file: str | Path) -> JournalStats:
     """Load journal statistics (transaction count, account count, commodities).
 
-    Runs ``hledger stats`` for counts and ``hledger commodities`` for the list.
+    Runs ``hledger stats`` for counts and the transaction date span, and
+    ``hledger commodities`` for the list.  When the span line is absent but
+    transactions exist (older hledger output formats), the span is derived
+    from ``print -O json`` as a fallback.
 
     Args:
         file: Path to the journal file.
@@ -918,6 +922,8 @@ def load_journal_stats(file: str | Path) -> JournalStats:
 
     txn_count = 0
     acct_count = 0
+    first_date: date | None = None
+    last_date: date | None = None
     for line in output.splitlines():
         if re.match(r"^Txns\s+:", line):
             # "Txns                : 3 (1.0 per day)"
@@ -928,6 +934,26 @@ def load_journal_stats(file: str | Path) -> JournalStats:
             match = re.search(r":\s*(\d+)", line)
             if match:
                 acct_count = int(match.group(1))
+        elif re.match(r"^Txns span\s+:", line):
+            # "Txns span           : 2026-01-15 to 2026-01-18 (3 days)"
+            # The end is exclusive (hledger counts days between the bounds).
+            match = re.search(
+                r":\s*(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})", line
+            )
+            if match:
+                try:
+                    first_date = date.fromisoformat(match.group(1))
+                    last_date = date.fromisoformat(match.group(2)) - timedelta(days=1)
+                except ValueError:
+                    first_date = last_date = None
+
+    if txn_count > 0 and last_date is None:
+        # Fallback: derive the span from the transaction list itself.
+        txns = load_transactions(file)
+        dates = [t.date for t in txns if t.date]
+        if dates:
+            first_date = date.fromisoformat(min(dates))
+            last_date = date.fromisoformat(max(dates))
 
     commodities_output = run_hledger("commodities", file=file)
     commodities = [
@@ -940,6 +966,8 @@ def load_journal_stats(file: str | Path) -> JournalStats:
         transaction_count=txn_count,
         account_count=acct_count,
         commodities=commodities,
+        first_date=first_date,
+        last_date=last_date,
     )
 
 
