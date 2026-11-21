@@ -199,10 +199,15 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     def _window_display_range(self) -> str:
         """Return the month span the report window covers, e.g. ``2024-07 → 2024-12``.
 
-        Derived from the shared period anchor (issue #263) and the window
-        length, so it always matches the data that would be loaded now.
+        Derived from the shared period selection: a range selection names
+        itself, ``all`` says "All time", and a month anchor produces the
+        window given the current length setting.
         """
         period = get_period(self)
+        if period.kind == "all":
+            return "All time"
+        if period.kind == "range":
+            return period.label
         anchor = period.begin or date.today()
         anchor = anchor.replace(day=1)
         if self._period_months == 0:
@@ -269,19 +274,29 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
             callback=on_result,
         )
 
-    def _period_range(self) -> tuple[str, str]:
+    def _period_range(self) -> tuple[str | None, str | None]:
         """Calculate begin and end dates for the report window.
 
-        The window ends at the *anchor month* of the app's shared period
-        selection (issue #263) instead of always ending today: this is what
-        lets a 2024 window be displayed at all.  The window length still
-        comes from ``_period_months``.
+        A shared selection of kind ``range`` (including year spans) is used
+        directly as the window.  ``all`` reports on the whole journal.
+        Otherwise the window ends at the anchor month of the shared period
+        selection (issue #263) with the length from ``_period_months``.
 
         Returns:
             A ``(begin, end)`` tuple of date strings in ``YYYY-MM-DD``
-            format, where *end* is exclusive (hledger ``-e``).
+            format, where *end* is exclusive (hledger ``-e``).  Both are
+            ``None`` for the whole journal.
         """
         period = get_period(self)
+        if period.kind == "all":
+            return None, None
+        if (
+            period.kind == "range"
+            and period.begin is not None
+            and period.end is not None
+        ):
+            return period.begin.isoformat(), period.end.isoformat()
+
         anchor = period.begin or date.today()
         anchor = anchor.replace(day=1)
 
@@ -308,7 +323,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
 
         def _load() -> ReportData:
             begin, end = self._period_range()
-            self._period_begin = date.fromisoformat(begin)
+            self._period_begin = date.fromisoformat(begin) if begin else None
             commodity = resolve_default_commodity(self.journal_file)
             show_investments = self._show_investments and self._report_type == "is"
 

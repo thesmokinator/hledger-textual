@@ -158,14 +158,25 @@ class HledgerTuiApp(App):
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, journal_file: Path) -> None:
+    def __init__(
+        self,
+        journal_file: Path,
+        initial_period: PeriodSelection | None = None,
+    ) -> None:
         """Initialize the app.
 
         Args:
             journal_file: Path to the hledger journal file.
+            initial_period: Period the app starts on (from ``-p``/``-b``/``-e``
+                flags or the ``default_period`` config key); None means the
+                current month, with the landing heuristic of #267 allowed to
+                move to the latest activity when the current month is empty.
         """
         super().__init__()
         self.journal_file = journal_file
+        # An explicit period (CLI/config) must not be overridden by the
+        # startup landing heuristic.
+        self._period_explicit = initial_period is not None
         self._cache = HledgerCache()
         self._stale_panes: set[str] = set()
         # Non-visible panes defer their initial hledger load until the Summary
@@ -193,7 +204,7 @@ class HledgerTuiApp(App):
         theme = _resolve_saved_theme(load_theme(), self.available_themes)
         if theme:
             self.theme = theme
-        self.period_selection = current_month_selection()
+        self.period_selection = initial_period or current_month_selection()
 
     # ------------------------------------------------------------------
     # Shared period state (issue #263)
@@ -326,8 +337,8 @@ class HledgerTuiApp(App):
         latest = stats.last_date
         if (latest.year, latest.month) >= (today.year, today.month):
             return
-        if self.period_selection != current_month_selection():
-            return  # user (or a future CLI flag) already chose a period
+        if self._period_explicit or self.period_selection != current_month_selection():
+            return  # user, CLI flag or config already chose a period
         self.period_selection = month_selection(latest)
         self.notify(
             f"Showing {latest.strftime('%b %Y')} — latest activity in this journal",
