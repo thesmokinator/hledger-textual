@@ -83,7 +83,7 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
     global_part = f"\\[x] Export  {sync_part}\\[?] Help  \\[q] Quit"
     global_no_export = f"{sync_part}\\[?] Help  \\[q] Quit"
     return {
-        "summary": f"\\[r] Reload  \\[i]/\\[l] Fold  {global_no_export}",
+        "summary": f"\\[◄/►] Month  \\[r] Reload  \\[i]/\\[l] Fold  {global_no_export}",
         "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
         "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
         "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  \\[o] Overview  {global_part}",
@@ -215,7 +215,7 @@ class HledgerTuiApp(App):
         # panes scoped by time need refreshing.
         period_sections = {"summary", "transactions", "budget", "reports"}
         self._stale_panes |= period_sections - {visible}
-        self._refresh_pane(visible)
+        self._refresh_pane(visible, period_only=True)
 
     def _pane_for_section(self, section: str):
         """Build the pane widget for a tab section."""
@@ -453,7 +453,12 @@ class HledgerTuiApp(App):
     def _focus_section(self, section: str) -> None:
         """Move keyboard focus to the main widget in the given section."""
         if section == "summary":
-            self.query_one("#summary-breakdown-table", DataTable).focus()
+            # On an empty month the breakdown section is hidden; focus the
+            # pane itself so its period-navigation bindings stay reachable.
+            if self.query_one("#summary-breakdown").display:
+                self.query_one("#summary-breakdown-table", DataTable).focus()
+            else:
+                self.query_one(SummaryPane).focus()
         elif section == "transactions":
             self.query_one(TransactionsTable).query_one(DataTable).focus()
         elif section == "accounts":
@@ -474,11 +479,20 @@ class HledgerTuiApp(App):
         self._stale_panes = all_sections - {visible}
         self._refresh_pane(visible)
 
-    def _refresh_pane(self, section: str) -> None:
-        """Refresh a single pane by name."""
+    def _refresh_pane(self, section: str, period_only: bool = False) -> None:
+        """Refresh a single pane by name.
+
+        Args:
+            section: Tab section to refresh.
+            period_only: When True, only reload the period-dependent parts
+                (the Summary keeps its all-time sections untouched).
+        """
         if section == "summary":
             pane = self.query_one(SummaryPane)
-            pane._load_static_data()
+            if period_only:
+                pane.reload_month()
+            else:
+                pane._load_static_data()
         elif section == "transactions":
             self.query_one(TransactionsPane).reload()
         elif section == "accounts":
