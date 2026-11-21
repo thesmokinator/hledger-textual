@@ -353,6 +353,26 @@ def load_tab_order() -> list[str] | None:
     return ordered or None
 
 
+def load_default_period() -> str | None:
+    """Return the configured startup period, or ``None`` when not set.
+
+    Reads the ``default_period`` key from config.toml, e.g.::
+
+        default_period = "last month"
+
+    Accepts any period expression supported by the period picker (#266).
+    A CLI ``-p/--period`` (or ``-b``/``-e``) always takes precedence over
+    this value.
+
+    Returns:
+        The configured period expression, or ``None`` when absent.
+    """
+    val = _load_config_dict().get("default_period", None)
+    if not isinstance(val, str) or not val.strip():
+        return None
+    return val.strip()
+
+
 def load_auto_generate_recurring() -> bool:
     """Return whether automatic generation of recurring transactions on startup is enabled.
 
@@ -540,7 +560,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         argv: Arguments to parse. Defaults to sys.argv[1:].
 
     Returns:
-        Parsed namespace with 'file' attribute.
+        Parsed namespace with 'file', 'period', 'begin' and 'end' attributes.
     """
     parser = argparse.ArgumentParser(
         prog="hledger-textual",
@@ -550,6 +570,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "-f",
         "--file",
         help="Path to the hledger journal file.",
+        default=None,
+    )
+    parser.add_argument(
+        "-p",
+        "--period",
+        help=(
+            "Initial period, as an hledger period expression "
+            "(e.g. 2024, 2024-03, 'last month', ytd). Overrides default_period."
+        ),
+        default=None,
+    )
+    parser.add_argument(
+        "-b",
+        "--begin",
+        help="Start date of the initial period (YYYY-MM-DD). Overrides --period bounds.",
+        default=None,
+    )
+    parser.add_argument(
+        "-e",
+        "--end",
+        help="Inclusive end date of the initial period (YYYY-MM-DD). Overrides --period bounds.",
         default=None,
     )
     return parser.parse_args(argv)

@@ -10,6 +10,7 @@ from hledger_textual.config import (
     delete_filter,
     load_configured_default_commodity,
     load_default_commodity,
+    load_default_period,
     load_price_tickers,
     load_saved_filters,
     load_tab_order,
@@ -36,6 +37,19 @@ class TestParseArgs:
     def test_no_args(self):
         args = parse_args([])
         assert args.file is None
+        assert args.period is None
+        assert args.begin is None
+        assert args.end is None
+
+    def test_period_flags(self):
+        """-p/--period, -b/--begin and -e/--end are parsed."""
+        args = parse_args(["-p", "2024"])
+        assert args.period == "2024"
+        args = parse_args(["--period", "last month"])
+        assert args.period == "last month"
+        args = parse_args(["-b", "2024-01-01", "-e", "2024-06-30"])
+        assert args.begin == "2024-01-01"
+        assert args.end == "2024-06-30"
 
 
 class TestResolveJournalFile:
@@ -138,6 +152,34 @@ class TestLoadConfigDict:
         config.write_text('theme = "nord"\n')
         monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config)
         assert _load_config_dict() == {"theme": "nord"}
+
+
+class TestLoadDefaultPeriod:
+    """Tests for the default_period config option (issue #268)."""
+
+    def _write(self, tmp_path, monkeypatch, text: str):
+        """Point the config loader at a temp config file."""
+        config = tmp_path / "config.toml"
+        config.write_text(text)
+        monkeypatch.setattr("hledger_textual.config._CONFIG_PATH", config)
+
+    def test_missing_file_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "nonexistent.toml"
+        )
+        assert load_default_period() is None
+
+    def test_missing_key_returns_none(self, tmp_path, monkeypatch):
+        self._write(tmp_path, monkeypatch, 'theme = "nord"\n')
+        assert load_default_period() is None
+
+    def test_valid_period(self, tmp_path, monkeypatch):
+        self._write(tmp_path, monkeypatch, 'default_period = "last month"\n')
+        assert load_default_period() == "last month"
+
+    def test_non_string_returns_none(self, tmp_path, monkeypatch):
+        self._write(tmp_path, monkeypatch, "default_period = 2024\n")
+        assert load_default_period() is None
 
 
 class TestLoadTabOrder:

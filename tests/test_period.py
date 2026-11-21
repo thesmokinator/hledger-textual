@@ -11,6 +11,7 @@ from hledger_textual.period import (
     month_range_selection,
     month_selection,
     parse_period,
+    period_from_flags,
     range_selection,
     shift_months,
     shift_years,
@@ -311,3 +312,69 @@ class TestFormatBound:
 
     def test_other_days_keep_full_form(self):
         assert PeriodSelection._format_bound(date(2024, 3, 17)) == "2024-03-17"
+
+
+class TestPeriodFromFlags:
+    """period_from_flags builds the startup period from -p/-b/-e (issue #268)."""
+
+    def test_period_only(self):
+        selection = period_from_flags("2024-03", None, None)
+        assert selection.query() == "date:2024-03"
+
+    def test_period_relative(self):
+        selection = period_from_flags("last month", None, None)
+        assert selection == parse_period("last month")
+
+    def test_begin_and_end_dates(self):
+        selection = period_from_flags(None, "2024-01-01", "2024-06-30")
+        assert selection.begin == date(2024, 1, 1)
+        # --end is exclusive, like hledger: June 30 itself is excluded.
+        assert selection.end == date(2024, 6, 30)
+        assert selection.query() == "date:2024-01-01..2024-06-29"
+
+    def test_bounds_override_period(self):
+        selection = period_from_flags("2024-03", "2024-01-01", "2024-06-30")
+        assert selection.begin == date(2024, 1, 1)
+
+    def test_begin_only(self):
+        selection = period_from_flags(None, "2024-03-05", None)
+        assert selection.begin == date(2024, 3, 5)
+        assert selection.end is None
+        assert selection.query() == "date:2024-03-05.."
+
+    def test_end_only(self):
+        selection = period_from_flags(None, None, "2024-06-30")
+        assert selection.begin is None
+        # --end is exclusive: June 30 itself is excluded.
+        assert selection.end == date(2024, 6, 30)
+        assert selection.query() == "date:..2024-06-29"
+
+    def test_month_bound_end(self):
+        selection = period_from_flags(None, None, "2024-04")
+        # Like hledger -e, a month bound is exclusive at its first day:
+        # the period runs through March 2024.
+        assert selection.query() == "date:..2024-03"
+
+    def test_year_month_bounds_label(self):
+        selection = period_from_flags(None, "2024-01-01", "2024-04-01")
+        assert selection.label == "Jan 2024 → Mar 2024"
+
+    def test_swapped_bounds_are_ordered(self):
+        selection = period_from_flags(None, "2024-06-30", "2024-01-01")
+        assert selection.begin == date(2024, 1, 1)
+
+    def test_invalid_period_raises(self):
+        with pytest.raises(ValueError):
+            period_from_flags("banana", None, None)
+
+    def test_invalid_begin_raises(self):
+        with pytest.raises(ValueError):
+            period_from_flags(None, "banana", None)
+
+    def test_invalid_end_raises(self):
+        with pytest.raises(ValueError):
+            period_from_flags(None, None, "2024-02-30")
+
+    def test_no_flags_raises(self):
+        with pytest.raises(ValueError):
+            period_from_flags(None, None, None)
