@@ -298,11 +298,25 @@ class BudgetPane(DataTablePaneMixin, Widget):
 
     def action_add(self) -> None:
         """Open the form to add a new budget rule."""
+        from hledger_textual.budget import include_insert_plans
         from hledger_textual.screens.budget_form import BudgetFormScreen
+        from hledger_textual.screens.directive_confirm import (
+            confirm_directive_writes,
+        )
 
         def on_save(result: BudgetRule | None) -> None:
-            if result is not None:
-                self._do_add(result)
+            if result is None:
+                return
+            # The first rule creates budget.journal and inserts the include
+            # line; preview those directive writes before touching anything.
+            plans = include_insert_plans(self.journal_file)
+            confirm_directive_writes(
+                self,
+                plans,
+                "Budget rules live in budget.journal; hledger needs the "
+                "include directive to see them.",
+                on_ok=lambda: self._do_add(result),
+            )
 
         self.app.push_screen(
             BudgetFormScreen(journal_file=self.journal_file),

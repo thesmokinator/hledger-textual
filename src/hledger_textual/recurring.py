@@ -23,7 +23,14 @@ from hledger_textual.fileutil import (
 )
 from hledger_textual.hledger import HledgerError, check_journal, load_transactions, run_hledger
 from hledger_textual.journal import JournalError, append_transaction
-from hledger_textual.models import Amount, AmountStyle, Posting, RecurringRule, Transaction
+from hledger_textual.models import (
+    Amount,
+    AmountStyle,
+    DirectiveWritePlan,
+    Posting,
+    RecurringRule,
+    Transaction,
+)
 
 RECURRING_FILENAME = "recurring.journal"
 
@@ -54,6 +61,58 @@ _POSTING_RE = re.compile(r"^\s{4,}(\S.+?)\s{2,}(\S+)\s*$")
 
 class RecurringError(Exception):
     """Raised when a recurring file operation fails."""
+
+
+def include_insert_plans(journal_file: Path) -> list[DirectiveWritePlan]:
+    """Plan the writes needed to make recurring rules visible (issue #273).
+
+    Creates recurring.journal when missing and prepends the include line
+    to the main journal.  Computed without writing, so the confirmation
+    modal can preview the exact diff before the user accepts.
+
+    Args:
+        journal_file: Path to the main hledger journal file.
+
+    Returns:
+        The planned writes; empty when nothing needs to change.
+    """
+    recurring_file = journal_file.parent / RECURRING_FILENAME
+    plans: list[DirectiveWritePlan] = []
+    if not recurring_file.exists():
+        plans.append(
+            DirectiveWritePlan(
+                target_file=recurring_file,
+                content="",
+                creates_file=True,
+            )
+        )
+    try:
+        journal_text = journal_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return plans
+    new_content = _include_insert_content(journal_text, RECURRING_FILENAME)
+    if new_content is None:
+        return plans
+    added = [line for line in new_content.splitlines()[:3] if line.strip()]
+    plans.append(
+        DirectiveWritePlan(
+            target_file=journal_file,
+            content=new_content,
+            added=added,
+        )
+    )
+    return plans
+
+
+def _include_insert_content(journal_text: str, filename: str) -> str | None:
+    """Return the journal text with the include line prepended, or None."""
+    pattern = re.compile(rf"^\s*include\s+{re.escape(filename)}\s*$", re.MULTILINE)
+    if pattern.search(journal_text):
+        return None
+    include_line = f"include {filename}\n"
+    if journal_text and not journal_text.startswith("\n"):
+        include_line += "\n"
+    return include_line + journal_text
 
 
 def ensure_recurring_file(journal_file: Path, *, create: bool = False) -> Path:
@@ -88,13 +147,11 @@ def ensure_recurring_file(journal_file: Path, *, create: bool = False) -> Path:
             journal_text = journal_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             return recurring_file
-        if not _INCLUDE_RE.search(journal_text):
-            include_line = f"include {RECURRING_FILENAME}\n"
-            if journal_text and not journal_text.startswith("\n"):
-                include_line += "\n"
+        new_content = _include_insert_content(journal_text, RECURRING_FILENAME)
+        if new_content is not None:
             safe_write_with_validation(
                 target_file=journal_file,
-                content=include_line + journal_text,
+                content=new_content,
                 journal_file=journal_file,
                 validate=check_journal,
                 error_cls=RecurringError,

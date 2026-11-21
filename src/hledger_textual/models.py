@@ -349,6 +349,28 @@ class AccountDirective:
 
 
 @dataclass
+class DirectiveWritePlan:
+    """A previewed directive write: target file and the exact line changes.
+
+    Produced before any directive touches the journal so the confirmation
+    modal can show a precise diff (issue #273).
+    """
+
+    #: File that would be written (absolute).
+    target_file: Path
+    #: Full new content of the target file.
+    content: str
+    #: Lines added by the write.
+    added: list[str] = field(default_factory=list)
+    #: Lines removed by the write.
+    removed: list[str] = field(default_factory=list)
+    #: True when the write creates a brand-new file.
+    creates_file: bool = False
+    #: True when the target was chosen by fallback (account not located).
+    fell_back: bool = False
+
+
+@dataclass
 class CsvRulesFile:
     """Metadata for an hledger CSV rules file used by the import wizard.
 

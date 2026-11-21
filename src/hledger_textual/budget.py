@@ -18,7 +18,7 @@ from hledger_textual.fileutil import (
     safe_write_with_validation,
 )
 from hledger_textual.hledger import check_journal
-from hledger_textual.models import Amount, AmountStyle, BudgetRule
+from hledger_textual.models import Amount, AmountStyle, BudgetRule, DirectiveWritePlan
 
 BUDGET_FILENAME = "budget.journal"
 
@@ -35,6 +35,68 @@ class BudgetError(Exception):
 def _budget_path(journal_file: Path) -> Path:
     """Return the path to budget.journal next to the main journal."""
     return journal_file.parent / BUDGET_FILENAME
+
+
+def _include_insert_content(journal_text: str, filename: str) -> str | None:
+    """Return the journal text with the include line prepended, or None.
+
+    Args:
+        journal_text: Current content of the main journal.
+        filename: Name of the auxiliary file to include.
+
+    Returns:
+        The new journal content with the include block at the top, or
+        ``None`` when the include is already present.
+    """
+    pattern = re.compile(rf"^\s*include\s+{re.escape(filename)}\s*$", re.MULTILINE)
+    if pattern.search(journal_text):
+        return None
+    include_line = f"include {filename}\n"
+    if journal_text and not journal_text.startswith("\n"):
+        include_line += "\n"
+    return include_line + journal_text
+
+
+def include_insert_plans(journal_file: Path) -> list[DirectiveWritePlan]:
+    """Plan the writes needed to make budget rules visible (issue #273).
+
+    Creates budget.journal when missing and prepends the include line to
+    the main journal.  Computed without writing, so the confirmation
+    modal can preview the exact diff before the user accepts.
+
+    Args:
+        journal_file: Path to the main hledger journal file.
+
+    Returns:
+        The planned writes; empty when nothing needs to change.
+    """
+
+    budget_file = _budget_path(journal_file)
+    plans: list[DirectiveWritePlan] = []
+    if not budget_file.exists():
+        plans.append(
+            DirectiveWritePlan(
+                target_file=budget_file,
+                content="",
+                creates_file=True,
+            )
+        )
+    try:
+        journal_text = journal_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return plans
+    new_content = _include_insert_content(journal_text, BUDGET_FILENAME)
+    if new_content is None:
+        return plans
+    added = [line for line in new_content.splitlines()[:3] if line.strip()]
+    plans.append(
+        DirectiveWritePlan(
+            target_file=journal_file,
+            content=new_content,
+            added=added,
+        )
+    )
+    return plans
 
 
 def ensure_budget_file(journal_file: Path, *, create: bool = False) -> Path:
@@ -69,13 +131,11 @@ def ensure_budget_file(journal_file: Path, *, create: bool = False) -> Path:
             journal_text = journal_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             return budget_file
-        if not _INCLUDE_RE.search(journal_text):
-            include_line = f"include {BUDGET_FILENAME}\n"
-            if journal_text and not journal_text.startswith("\n"):
-                include_line += "\n"
+        new_content = _include_insert_content(journal_text, BUDGET_FILENAME)
+        if new_content is not None:
             safe_write_with_validation(
                 target_file=journal_file,
-                content=include_line + journal_text,
+                content=new_content,
                 journal_file=journal_file,
                 validate=check_journal,
                 error_cls=BudgetError,
