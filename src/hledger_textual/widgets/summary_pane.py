@@ -27,7 +27,7 @@ from hledger_textual.widgets.formatting import (
     fmt_amount,
 )
 from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, get_period
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, get_period, set_period
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (
     HledgerError,
@@ -43,6 +43,7 @@ from hledger_textual.hledger import (
     load_period_summary,
 )
 from hledger_textual.parallel import gather_loads
+from hledger_textual.period import current_month_selection, month_selection, shift_months
 from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
 from hledger_textual.models import JournalStats
 
@@ -275,6 +276,14 @@ class SummaryPane(DataTablePaneMixin, Widget):
         Binding("x", "export", "Export", show=False, priority=True),
         Binding("i", "toggle_investments", "Fold investments", show=True, priority=True),
         Binding("l", "toggle_liabilities", "Fold liabilities", show=True, priority=True),
+        # Period navigation (issue #265): arrows move the shared anchor;
+        # l keeps its fold-liabilities meaning.
+        Binding("left", "prev_month", "Prev month", show=False, priority=True),
+        Binding("right", "next_month", "Next month", show=False, priority=True),
+        Binding("shift+left", "prev_year", "Prev year", show=False, priority=True),
+        Binding("shift+right", "next_year", "Next year", show=False, priority=True),
+        Binding("t", "today_month", "Today", show=False, priority=True),
+        Binding("J", "jump_to_latest", "Jump to latest activity", show=False, priority=True),
     ]
 
     def __init__(
@@ -322,6 +331,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 classes="summary-section-title",
             )
             yield PeriodSummaryCards(id="summary-cards")
+            yield Static("", id="summary-month-hint", classes="summary-note")
 
             # Liabilities section (total outstanding balance)
             with Vertical(id="summary-liabilities"):
@@ -356,7 +366,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 yield DataTable(id="summary-income-table")
                 yield Static("", id="summary-income-note", classes="summary-note")
 
-            # Expense breakdown — current month only
+            # Expense breakdown — selected month only
             with Vertical(id="summary-breakdown"):
                 yield Static(
                     "Expenses",
@@ -382,6 +392,9 @@ class SummaryPane(DataTablePaneMixin, Widget):
         "summary-breakdown-table": _BREAKDOWN_FIXED,
     }
     _focus_on_show = False
+    # The pane itself can hold focus when its tables hide (empty month),
+    # so period-navigation bindings keep working (issue #265).
+    can_focus = True
 
     def on_mount(self) -> None:
         """Set up data tables and start loading data."""
@@ -567,18 +580,18 @@ class SummaryPane(DataTablePaneMixin, Widget):
 
     @work(thread=True, exclusive=True, group="summary-static")
     def _load_static_data(self) -> None:
-        """Load current-month cards and liabilities.
+        """Load the selected month's cards and the all-time liabilities.
 
-        The cards (Income / Expenses / Net) always show the current calendar
-        month and are not affected by the breakdown period navigation.  The
-        investment portfolio loads in its own worker so the first figures do
-        not wait for its two extra queries.
+        The cards (Income / Expenses / Net) follow the shared period anchor
+        (issue #265).  The investment portfolio loads in its own worker so the
+        first figures do not wait for its two extra queries.
         """
         self.app.call_from_thread(show_loading_overlay, self, "Loading summary…")
         # The cards, marquee values and liabilities are independent: run them
         # concurrently and keep the per-loader fallbacks so one failing query
         # never blanks the whole pane.
         commodity = resolve_default_commodity(self.journal_file)
+        period = self._period_str()
 
         (
             summary_result,
@@ -588,10 +601,10 @@ class SummaryPane(DataTablePaneMixin, Widget):
         ) = gather_loads(
             [
                 lambda: load_period_summary(
-                    self.journal_file, cache=self._cache, commodity=commodity
+                    self.journal_file, period, cache=self._cache, commodity=commodity
                 ),
                 lambda: load_period_net_by_commodity(
-                    self.journal_file, cache=self._cache
+                    self.journal_file, period, cache=self._cache
                 ),
                 lambda: load_liabilities_breakdown(
                     self.journal_file, commodity=commodity, cache=self._cache
@@ -615,13 +628,13 @@ class SummaryPane(DataTablePaneMixin, Widget):
         # loader, so these calls normally do not start a subprocess.
         try:
             income_by_commodity = load_period_income_by_commodity(
-                self.journal_file, cache=self._cache
+                self.journal_file, period, cache=self._cache
             )
         except HledgerError:
             income_by_commodity = []
         try:
             expenses_by_commodity = load_period_expenses_by_commodity(
-                self.journal_file, cache=self._cache
+                self.journal_file, period, cache=self._cache
             )
         except HledgerError:
             expenses_by_commodity = []
@@ -734,13 +747,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
             return
 
         # Income / Expenses / Net cards — delegated to PeriodSummaryCards
-        self.query_one(PeriodSummaryCards).update_summary(
-            summary,
-            income_by_commodity=income_by_commodity,
-            expenses_by_commodity=expenses_by_commodity,
-            net_by_commodity=net_by_commodity,
-        )
-        self._static_loaded = True
+        self._apply_cards(summary, income_by_commodity, expenses_by_commodity, net_by_commodity)
         self._has_static_sections = bool(
             (
                 summary is not None
@@ -782,6 +789,142 @@ class SummaryPane(DataTablePaneMixin, Widget):
         # queries.  Refreshes re-enter here and reload them too.
         self._load_breakdown_data()
         self._load_investment_data()
+
+    def _apply_cards(
+        self,
+        summary,
+        income_by_commodity: list[tuple[str, Decimal]] | None = None,
+        expenses_by_commodity: list[tuple[str, Decimal]] | None = None,
+        net_by_commodity: list[tuple[str, Decimal]] | None = None,
+    ) -> None:
+        """Update the Income / Expenses / Net cards for the selected month.
+
+        Shared by the full static load and the month-only reload so period
+        navigation never rebuilds the all-time sections (issue #265).
+        """
+        self.query_one(PeriodSummaryCards).update_summary(
+            summary,
+            income_by_commodity=income_by_commodity,
+            expenses_by_commodity=expenses_by_commodity,
+            net_by_commodity=net_by_commodity,
+        )
+        self._static_loaded = True
+        # Sticky: a month-only reload must not clear the flag while
+        # liabilities or other all-time sections still have content.
+        self._has_static_sections = self._has_static_sections or bool(
+            summary is not None
+            and (summary.income or summary.expenses or summary.investments)
+        )
+
+    # ------------------------------------------------------------------
+    # Month-only reload and period navigation (issue #265)
+    # ------------------------------------------------------------------
+
+    def reload_month(self) -> None:
+        """Reload only the month-dependent sections (cards and breakdown)."""
+        self._load_month_data()
+
+    @work(thread=True, exclusive=True, group="summary-month")
+    def _load_month_data(self) -> None:
+        """Load cards and breakdown for the shared period anchor.
+
+        All-time sections (liabilities, portfolio) are untouched, so a month
+        step costs only the month-scoped queries.
+        """
+        commodity = resolve_default_commodity(self.journal_file)
+        period = self._period_str()
+
+        summary_result, net_result = gather_loads(
+            [
+                lambda: load_period_summary(
+                    self.journal_file, period, cache=self._cache, commodity=commodity
+                ),
+                lambda: load_period_net_by_commodity(
+                    self.journal_file, period, cache=self._cache
+                ),
+            ]
+        )
+        summary = _load_result(summary_result, None)
+        net_by_commodity = _load_result(net_result, [])
+        try:
+            income_by_commodity = load_period_income_by_commodity(
+                self.journal_file, period, cache=self._cache
+            )
+        except HledgerError:
+            income_by_commodity = []
+        try:
+            expenses_by_commodity = load_period_expenses_by_commodity(
+                self.journal_file, period, cache=self._cache
+            )
+        except HledgerError:
+            expenses_by_commodity = []
+
+        self.app.call_from_thread(
+            self._apply_month_data,
+            summary,
+            income_by_commodity,
+            expenses_by_commodity,
+            net_by_commodity,
+        )
+
+    def _apply_month_data(
+        self,
+        summary,
+        income_by_commodity: list[tuple[str, Decimal]],
+        expenses_by_commodity: list[tuple[str, Decimal]],
+        net_by_commodity: list[tuple[str, Decimal]],
+    ) -> None:
+        """Apply the month-scoped cards and reload the breakdown."""
+        hide_loading_overlay(self)
+        if not self.is_attached or not self.query("#summary-overview-title"):
+            return
+        self._apply_cards(summary, income_by_commodity, expenses_by_commodity, net_by_commodity)
+        self._load_breakdown_data()
+
+    def _navigate_month(self, months: int) -> None:
+        """Move the shared period anchor by *months* and reload the month sections.
+
+        Args:
+            months: Number of months to shift (negative = backwards).
+        """
+        if not set_period(self, shift_months(get_period(self), months)):
+            # Standalone widget without shared state: refresh locally.
+            self.reload_month()
+
+    def action_prev_month(self) -> None:
+        """Navigate to the previous month."""
+        self._navigate_month(-1)
+
+    def action_next_month(self) -> None:
+        """Navigate to the next month."""
+        self._navigate_month(1)
+
+    def action_prev_year(self) -> None:
+        """Navigate to the previous year."""
+        self._navigate_month(-12)
+
+    def action_next_year(self) -> None:
+        """Navigate to the next year."""
+        self._navigate_month(12)
+
+    def action_today_month(self) -> None:
+        """Jump back to the current calendar month."""
+        if not set_period(self, current_month_selection()):
+            self.reload_month()
+
+    def action_jump_to_latest(self) -> None:
+        """Jump to the month of the journal's latest transaction."""
+        stats = self.journal_stats or getattr(self.app, "journal_stats", None)
+        if stats is None or stats.last_date is None:
+            self.notify("No activity to jump to", severity="warning", timeout=3)
+            return
+        if not set_period(self, month_selection(stats.last_date)):
+            self.reload_month()
+
+    def on_click(self, event) -> None:
+        """Handle a click on the empty-month hint."""
+        if getattr(event.widget, "id", None) == "summary-month-hint":
+            self.action_jump_to_latest()
 
     def _set_portfolio_loading(self) -> None:
         """Show a hint while the investment positions are being loaded."""
@@ -996,10 +1139,12 @@ class SummaryPane(DataTablePaneMixin, Widget):
 
         self._breakdown_loaded = True
         self._has_breakdown_sections = bool(income_breakdown or breakdown)
+        self._update_month_hint(income_breakdown, breakdown)
 
         if not breakdown:
             expense_section.display = False
             self._set_note("#summary-breakdown-note", "")
+            self._ensure_focus()
             self._sync_empty_state()
             return
 
@@ -1020,7 +1165,54 @@ class SummaryPane(DataTablePaneMixin, Widget):
         self.call_after_refresh(
             distribute_column_widths, table, self._BREAKDOWN_FIXED
         )
+        self._ensure_focus()
         self._sync_empty_state()
+
+    def _ensure_focus(self) -> None:
+        """Keep focus inside the pane when a section hides under it.
+
+        Hiding the focused breakdown table on an empty month would strand
+        focus outside the pane and disable its navigation bindings.  The
+        check walks the focused widget's ancestors because Textual may blur
+        a hidden widget asynchronously.
+        """
+        if not self.display:
+            return
+        focused = self.app.focused
+        if focused is None:
+            self.focus()
+            return
+        node = focused
+        while node is not None and node is not self:
+            if not node.display:
+                self.focus()
+                return
+            node = node.parent
+
+    def _update_month_hint(self, income_breakdown: list, breakdown: list) -> None:
+        """Show the empty-month hint with a jump-to-latest action when needed.
+
+        Instead of silent zeros, an empty month offers a one-click jump to the
+        journal's latest activity (issue #265).  Fully empty journals show the
+        global empty state instead, so no hint is offered there.
+        """
+        # Tolerate teardown: a pending breakdown worker can apply after the
+        # pane's children have started being removed.
+        hints = self.query("#summary-month-hint")
+        if not hints:
+            return
+        hint = hints.first()
+        stats = self.journal_stats
+        if income_breakdown or breakdown or stats is None or stats.last_date is None:
+            hint.update("")
+            hint.display = False
+            return
+        month_name = self._current_month.strftime("%B %Y")
+        hint.update(
+            f"[dim]No transactions in {month_name}. [/dim]"
+            "[bold]Jump to latest activity[/bold][dim] (click or press J)[/dim]"
+        )
+        hint.display = True
 
     def get_export_data(self):
         """Return an ExportData with the income/expense breakdown rows."""
