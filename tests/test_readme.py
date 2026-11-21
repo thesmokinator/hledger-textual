@@ -83,3 +83,38 @@ class TestNavigatingTimeDocs:
             "default_period",
         ):
             assert needle in text, f"missing from README: {needle}"
+
+
+class TestFilesWrittenDocs:
+    """The "Files hledger-textual writes" section is complete (issue #274)."""
+
+    def _readme(self) -> str:
+        """Return the README text."""
+        return README.read_text(encoding="utf-8")
+
+    def test_section_exists(self) -> None:
+        """The section (and its anchor used by the read-only docs) exists."""
+        text = self._readme()
+        assert "## Files hledger-textual writes" in text
+        assert "#files-hledger-textual-writes" in text
+
+    def test_table_covers_every_write(self) -> None:
+        """Every documented write target is in the table."""
+        text = self._readme()
+        for needle in (
+            "budget.journal",
+            "recurring.journal",
+            "`include` lines",
+            "`account` directives",
+            "CSV rules files",
+            "Export directory",
+            "Disk cache",
+            "Config file",
+        ):
+            assert needle in text, f"missing from the files table: {needle}"
+
+    def test_never_claims(self) -> None:
+        """The section states what the app never does."""
+        text = self._readme()
+        assert "never writes on launch" in text
+        assert "no database" in text.lower()
