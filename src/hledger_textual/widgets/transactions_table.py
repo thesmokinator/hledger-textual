@@ -104,7 +104,13 @@ class TransactionsTable(Widget):
     # ------------------------------------------------------------------
 
     def _period_label(self) -> str:
-        """Return a human-readable label for the selected period."""
+        """Return a human-readable label for the selected period.
+
+        When a search query is active (the filter searches the whole
+        journal), the label says so instead of showing the period.
+        """
+        if self._search_query:
+            return f"Filter: {self._search_query}"
         return self._period.label
 
     def _update_period_label(self) -> None:
@@ -138,6 +144,22 @@ class TransactionsTable(Widget):
         """Jump to the current calendar month and reload."""
         self._navigate(current_month_selection())
 
+    def prev_year(self) -> None:
+        """Navigate to the same month one year back."""
+        self._navigate(shift_months(self._period, -12))
+
+    def next_year(self) -> None:
+        """Navigate to the same month one year forward."""
+        self._navigate(shift_months(self._period, 12))
+
+    def goto_period(self, selection: PeriodSelection) -> None:
+        """Jump to an arbitrary period selection and reload.
+
+        Args:
+            selection: The validated selection from the period picker.
+        """
+        self._navigate(selection)
+
     # ------------------------------------------------------------------
     # Composition
     # ------------------------------------------------------------------
@@ -156,7 +178,10 @@ class TransactionsTable(Widget):
                     )
             with Vertical(classes="filter-bar"):
                 yield Input(
-                    placeholder="Search... (e.g. d:grocery, ac:food, am:>100, t:tag, st:*)",
+                    placeholder=(
+                        "Search... (date:2024, desc:grocery, acct:food, "
+                        "amt:>100, tag:x, status:*)"
+                    ),
                     id="txn-search-input",
                     disabled=True,
                 )

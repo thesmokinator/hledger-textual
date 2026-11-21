@@ -60,6 +60,7 @@ class BudgetPane(DataTablePaneMixin, Widget):
         Binding("left,h", "prev_month", "Prev month", show=False, priority=True),
         Binding("right,l", "next_month", "Next month", show=False, priority=True),
         Binding("t", "today_month", "Today", show=False, priority=True),
+        Binding("g", "go_to_period", "Go to period", show=True, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
     ]
@@ -382,6 +383,23 @@ class BudgetPane(DataTablePaneMixin, Widget):
         self._alerted_accounts.clear()
         set_period(self, current_month_selection())
         self._load_budget_data()
+
+    def action_go_to_period(self) -> None:
+        """Open the period picker and jump to the chosen selection."""
+        from hledger_textual.screens.period_picker import PeriodPickerModal
+
+        stats = getattr(self.app, "journal_stats", None)
+
+        def on_result(selection) -> None:
+            if selection is not None:
+                self._alerted_accounts.clear()
+                set_period(self, selection)
+                self._load_budget_data()
+
+        self.app.push_screen(
+            PeriodPickerModal(journal_stats=stats, current=get_period(self)),
+            callback=on_result,
+        )
 
     def _shift_anchor(self, months: int) -> None:
         """Move the shared period anchor by *months* and reload.

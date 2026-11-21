@@ -136,6 +136,34 @@ class TestContains:
         assert not selection.overlaps_months(date(2024, 2, 28))
 
 
+class TestOverlapsSpan:
+    """overlaps_span rejects selections outside the journal's data."""
+
+    def test_inside_span(self):
+        selection = month_selection(date(2024, 3, 1))
+        assert selection.overlaps_span(date(2024, 1, 1), date(2024, 6, 30))
+
+    def test_before_span(self):
+        assert not month_selection(date(2023, 1, 1)).overlaps_span(
+            date(2024, 1, 1), date(2024, 6, 30)
+        )
+
+    def test_after_span(self):
+        assert not month_selection(date(2025, 1, 1)).overlaps_span(
+            date(2024, 1, 1), date(2024, 6, 30)
+        )
+
+    def test_partially_overlapping(self):
+        selection = month_range_selection(date(2024, 5, 1), date(2024, 8, 1))
+        assert selection.overlaps_span(date(2024, 1, 1), date(2024, 6, 30))
+
+    def test_all_selection(self):
+        assert all_selection().overlaps_span(date(2024, 1, 1), date(2024, 6, 30))
+
+    def test_unknown_span_never_rejects(self):
+        assert month_selection(date(2020, 1, 1)).overlaps_span(None, None)
+
+
 class TestShiftMonths:
     """shift_months moves month-aligned selections by whole months."""
 

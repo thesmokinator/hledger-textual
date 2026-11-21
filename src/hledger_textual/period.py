@@ -147,6 +147,27 @@ class PeriodSelection:
             return False
         return True
 
+    def overlaps_span(self, first_date: date | None, last_date: date | None) -> bool:
+        """Return True if this period can contain transactions in the journal span.
+
+        Used by the period picker to reject selections that would show an
+        empty view (issue #266).  Unbounded sides (and an unknown span) are
+        treated as "possibly contains", never as an error.
+
+        Args:
+            first_date: First transaction date of the journal, or None.
+            last_date: Last transaction date of the journal, or None.
+        """
+        if self.kind == "all":
+            return True
+        if first_date is None or last_date is None:
+            return True
+        if self.end is not None and self.end <= first_date:
+            return False
+        if self.begin is not None and self.begin > last_date:
+            return False
+        return True
+
 
 def month_selection(month: date) -> PeriodSelection:
     """Build a selection covering the calendar month containing *month*.
@@ -201,10 +222,28 @@ def month_range_selection(first_month: date, last_month: date) -> PeriodSelectio
     begin = first_month.replace(day=1)
     end_last = last_month.replace(day=1)
     exclusive_end = next_month(end_last)
-    label = f"{begin.strftime('%b %Y')} \u2192 {end_last.strftime('%b %Y')}"
     return PeriodSelection(
-        kind="range", begin=begin, end=exclusive_end, label=label
+        kind="range",
+        begin=begin,
+        end=exclusive_end,
+        label=_month_range_label(begin, exclusive_end),
     )
+
+
+def _month_range_label(begin: date, end_exclusive: date) -> str:
+    """Return the human label for a month-aligned range.
+
+    A Jan–Dec span of one calendar year is labelled ``2024``; any other span
+    names its first and last inclusive months.
+
+    Args:
+        begin: First day of the first month of the span.
+        end_exclusive: Exclusive end bound (first day after the last month).
+    """
+    last_month = prev_month(end_exclusive)
+    if begin.month == 1 and last_month.month == 12 and begin.year == last_month.year:
+        return str(begin.year)
+    return f"{begin.strftime('%b %Y')} \u2192 {last_month.strftime('%b %Y')}"
 
 
 def year_selection(year: int) -> PeriodSelection:
@@ -251,10 +290,13 @@ def shift_months(selection: PeriodSelection, months: int) -> PeriodSelection:
             kind="range", begin=begin, end=None, label=selection.label
         )
     length = (selection.end - selection.begin).days
-    return PeriodSelection(
-        kind="range", begin=begin, end=begin + timedelta(days=length),
-        label=selection.label,
-    )
+    end = begin + timedelta(days=length)
+    if selection.begin.day == 1 and selection.end.day == 1:
+        # Month-aligned: recompute the label so the shifted window stays honest.
+        label = _month_range_label(begin, end)
+    else:
+        label = selection.label
+    return PeriodSelection(kind="range", begin=begin, end=end, label=label)
 
 
 def shift_years(selection: PeriodSelection, years: int) -> PeriodSelection:
