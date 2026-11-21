@@ -187,7 +187,7 @@ class TransactionsTable(Widget):
                 )
         yield EmptyState(
             "No transactions",
-            "Press `a` to add one or `/` to search.",
+            "Press `a` to add one, `/` to search, or `g` to jump to a period.",
             icon="📭",
             id="transactions-empty-state",
         )
