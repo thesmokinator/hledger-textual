@@ -485,12 +485,19 @@ class TestStartupPreloading:
         assert called == ["accounts"]
         assert [section for section, _ in app._deferred_loads] == ["reports"]
 
-    def test_auxiliary_includes_added_before_panes_load(self, tmp_path: Path):
-        """Budget/recurring includes exist before the first hledger call."""
+    async def test_startup_writes_nothing(self, tmp_path: Path):
+        """Launching the app never creates budget/recurring files or includes (issue #270)."""
+        from tests.conftest import wait_until
+
         journal = tmp_path / "j.journal"
         journal.write_text("2026-01-01 * x\n    a  €1\n    b\n")
+        before = journal.read_bytes()
+
         app = HledgerTuiApp(journal_file=journal)
-        app._ensure_auxiliary_journals()
-        text = journal.read_text()
-        assert "include budget.journal" in text
-        assert "include recurring.journal" in text
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: app.journal_stats is not None)
+            await pilot.pause(delay=0.5)
+            assert journal.read_bytes() == before
+            assert not (tmp_path / "budget.journal").exists()
+            assert not (tmp_path / "recurring.journal").exists()
+            assert "include" not in journal.read_text()

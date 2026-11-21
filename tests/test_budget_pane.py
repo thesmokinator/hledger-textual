@@ -672,24 +672,27 @@ class TestBudgetDeleteError:
 class TestBudgetLoadErrors:
     """Tests for error handling inside _load_budget_data worker."""
 
-    async def test_ensure_budget_file_error_handled(
-        self, budget_app: HledgerTuiApp, monkeypatch
-    ):
-        """BudgetError from ensure_budget_file is caught without crashing."""
-        from hledger_textual.budget import BudgetError
+    async def test_budget_load_does_not_create_file(self, tmp_path: Path):
+        """Loading the Budget pane never creates budget.journal (issue #270)."""
+        from hledger_textual.app import HledgerTuiApp
 
-        def _raise(*args, **kwargs):
-            raise BudgetError("no budget file")
-
-        monkeypatch.setattr(
-            "hledger_textual.widgets.budget_pane.ensure_budget_file", _raise
+        journal = tmp_path / "plain.journal"
+        journal.write_text(
+            f"{date.today().replace(day=1).isoformat()} * Shopping\n"
+            "    Expenses:Groceries                   €40.80\n"
+            "    assets:bank:checking\n"
         )
-        async with budget_app.run_test() as pilot:
+        before = journal.read_bytes()
+        app = HledgerTuiApp(journal_file=journal)
+
+        async with app.run_test() as pilot:
             await pilot.pause()
             await pilot.press("4")
             await pilot.pause(delay=1.0)
-            # App must not crash
-            assert budget_app.screen.query_one("#budget-table") is not None
+            assert journal.read_bytes() == before
+            assert not (tmp_path / "budget.journal").exists()
+            # App must not crash and shows the empty state
+            assert app.screen.query_one("#budget-table") is not None
 
     async def test_load_budget_report_hledger_error_handled(
         self, budget_app: HledgerTuiApp, monkeypatch

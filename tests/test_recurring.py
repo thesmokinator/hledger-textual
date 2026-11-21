@@ -538,23 +538,32 @@ class TestGenerateTransactionsErrors:
 
 
 class TestEnsureRecurringFile:
-    """Tests for ensure_recurring_file."""
+    """Tests for ensure_recurring_file (create=False never writes, issue #270)."""
 
-    def test_creates_recurring_file(self, tmp_path: Path):
-        """Creates recurring.journal next to the main journal."""
+    def test_plain_call_does_not_create(self, tmp_path: Path):
+        """A plain call creates nothing — launching the app never writes."""
         journal = tmp_path / "test.journal"
         journal.write_text("; some journal\n")
 
         recurring_path = ensure_recurring_file(journal)
+        assert not recurring_path.exists()
+        assert "include" not in journal.read_text()
+
+    def test_creates_recurring_file(self, tmp_path: Path):
+        """create=True creates recurring.journal next to the main journal."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("; some journal\n")
+
+        recurring_path = ensure_recurring_file(journal, create=True)
         assert recurring_path.exists()
         assert recurring_path.name == RECURRING_FILENAME
 
     def test_adds_include_directive(self, tmp_path: Path):
-        """Adds include directive to main journal."""
+        """create=True adds the include directive to the main journal."""
         journal = tmp_path / "test.journal"
         journal.write_text("; some journal\n")
 
-        ensure_recurring_file(journal)
+        ensure_recurring_file(journal, create=True)
         content = journal.read_text()
         assert f"include {RECURRING_FILENAME}" in content
 
@@ -565,17 +574,17 @@ class TestEnsureRecurringFile:
         recurring = tmp_path / RECURRING_FILENAME
         recurring.write_text("")
 
-        ensure_recurring_file(journal)
+        ensure_recurring_file(journal, create=True)
         content = journal.read_text()
         assert content.count(f"include {RECURRING_FILENAME}") == 1
 
     def test_idempotent(self, tmp_path: Path):
-        """Calling twice is safe."""
+        """Calling twice with create=True is safe."""
         journal = tmp_path / "test.journal"
         journal.write_text("; some journal\n")
 
-        ensure_recurring_file(journal)
-        ensure_recurring_file(journal)
+        ensure_recurring_file(journal, create=True)
+        ensure_recurring_file(journal, create=True)
 
         content = journal.read_text()
         assert content.count(f"include {RECURRING_FILENAME}") == 1

@@ -128,25 +128,45 @@ class TestParseBudgetRules:
 
 
 class TestEnsureBudgetFile:
-    """Tests for ensure_budget_file."""
+    """Tests for ensure_budget_file (create=False never writes, issue #270)."""
 
-    def test_creates_budget_file(self, tmp_path: Path):
-        """Creates budget.journal if missing."""
+    def test_plain_call_does_not_create(self, tmp_path: Path):
+        """A plain call creates nothing — launching the app never writes."""
         journal = tmp_path / "test.journal"
         journal.write_text("; some journal\n")
 
         budget_path = ensure_budget_file(journal)
+        assert not budget_path.exists()
+        assert "include" not in journal.read_text()
+
+    def test_creates_budget_file(self, tmp_path: Path):
+        """create=True creates budget.journal if missing."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("; some journal\n")
+
+        budget_path = ensure_budget_file(journal, create=True)
         assert budget_path.exists()
         assert budget_path.name == "budget.journal"
 
     def test_adds_include_directive(self, tmp_path: Path):
-        """Adds include directive to main journal."""
+        """create=True adds the include directive to the main journal."""
         journal = tmp_path / "test.journal"
         journal.write_text("; some journal\n")
 
-        ensure_budget_file(journal)
+        ensure_budget_file(journal, create=True)
         content = journal.read_text()
         assert "include budget.journal" in content
+
+    def test_plain_call_with_existing_file_is_read_only(self, tmp_path: Path):
+        """When the file and include already exist, nothing is rewritten."""
+        journal = tmp_path / "test.journal"
+        journal.write_text("include budget.journal\n\n; some journal\n")
+        tmp_path.joinpath("budget.journal").write_text("")
+        before = journal.read_bytes()
+
+        ensure_budget_file(journal)
+
+        assert journal.read_bytes() == before
 
     def test_does_not_duplicate_include(self, tmp_path: Path):
         """Does not add include directive if already present."""
@@ -155,17 +175,17 @@ class TestEnsureBudgetFile:
         budget = tmp_path / "budget.journal"
         budget.write_text("")
 
-        ensure_budget_file(journal)
+        ensure_budget_file(journal, create=True)
         content = journal.read_text()
         assert content.count("include budget.journal") == 1
 
     def test_idempotent(self, tmp_path: Path):
-        """Calling twice is safe."""
+        """Calling twice with create=True is safe."""
         journal = tmp_path / "test.journal"
         journal.write_text("; some journal\n")
 
-        ensure_budget_file(journal)
-        ensure_budget_file(journal)
+        ensure_budget_file(journal, create=True)
+        ensure_budget_file(journal, create=True)
 
         content = journal.read_text()
         assert content.count("include budget.journal") == 1
@@ -173,7 +193,7 @@ class TestEnsureBudgetFile:
     def test_concurrent_includes_from_both_panes(self, tmp_path: Path):
         """Concurrent include insertion by budget + recurring keeps the journal valid.
 
-        Both pane loads read-modify-write the main journal to add their include
+        Both mutation paths read-modify-write the main journal to add their include
         line. Without a shared lock and an atomic write, one include could be
         lost and a concurrent reader could observe a partially written (invalid
         UTF-8) journal — the UnicodeDecodeError crash seen on CI.
@@ -181,6 +201,12 @@ class TestEnsureBudgetFile:
         import threading
 
         from hledger_textual.recurring import ensure_recurring_file
+
+        def ensure_budget(file):
+            return ensure_budget_file(file, create=True)
+
+        def ensure_recurring(file):
+            return ensure_recurring_file(file, create=True)
 
         journal = tmp_path / "main.journal"
         journal.write_text(
@@ -198,8 +224,8 @@ class TestEnsureBudgetFile:
                 errors.append(exc)
 
         threads = [
-            threading.Thread(target=run, args=(ensure_budget_file,)),
-            threading.Thread(target=run, args=(ensure_recurring_file,)),
+            threading.Thread(target=run, args=(ensure_budget,)),
+            threading.Thread(target=run, args=(ensure_recurring,)),
         ]
         for thread in threads:
             thread.start()
