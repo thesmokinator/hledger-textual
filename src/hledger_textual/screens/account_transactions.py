@@ -143,6 +143,13 @@ class AccountTransactionsScreen(Screen):
 
         def on_result(note: str | None) -> None:
             if note is not None:
+                if self.app.read_only:
+                    self.notify(
+                        "Read-only mode: editing is disabled (started with --read-only)",
+                        severity="warning",
+                        timeout=5,
+                    )
+                    return
                 save_account_directive(self.journal_file, self.account, note)
                 self._refresh_metadata()
                 self.notify("Note saved", timeout=2)

@@ -71,11 +71,14 @@ def resolve_tab_order(configured: list[str] | None) -> list[str]:
     return known + missing or list(DEFAULT_TAB_ORDER)
 
 
-def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
+def _build_footer_commands(
+    sync_enabled: bool, read_only: bool = False
+) -> dict[str, str]:
     """Build the footer command strings.
 
     Args:
         sync_enabled: Whether the sync shortcut should be shown.
+        read_only: Prepend a persistent READ-ONLY marker to every footer.
 
     Returns:
         A dict mapping section name to footer text.
@@ -83,14 +86,15 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
     sync_part = "\\[s] Sync  " if sync_enabled else ""
     global_part = f"\\[x] Export  {sync_part}\\[?] Help  \\[q] Quit"
     global_no_export = f"{sync_part}\\[?] Help  \\[q] Quit"
+    ro_part = "\\[READ-ONLY]  " if read_only else ""
     return {
-        "summary": f"\\[◄/►] Month  \\[r] Reload  \\[i]/\\[l] Fold  {global_no_export}",
-        "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[g] Period  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
-        "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
-        "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  \\[o] Overview  {global_part}",
-        "reports": f"\\[◄/►] Window  \\[n] New  \\[S] Sort  \\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
-        "reports-custom": f"\\[esc] Back  \\[n] New  \\[e] Edit  \\[d] Del  \\[r] Reload  {global_part}",
-        "recurring": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {global_part}",
+        "summary": f"{ro_part}\\[◄/►] Month  \\[r] Reload  \\[i]/\\[l] Fold  {global_no_export}",
+        "transactions": f"{ro_part}\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[g] Period  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
+        "accounts": f"{ro_part}\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
+        "budget": f"{ro_part}\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  \\[o] Overview  {global_part}",
+        "reports": f"{ro_part}\\[◄/►] Window  \\[n] New  \\[S] Sort  \\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
+        "reports-custom": f"{ro_part}\\[esc] Back  \\[n] New  \\[e] Edit  \\[d] Del  \\[r] Reload  {global_part}",
+        "recurring": f"{ro_part}\\[a] Add  \\[e] Edit  \\[d] Del  \\[g] Generate  \\[r] Reload  {global_part}",
     }
 
 
@@ -162,6 +166,7 @@ class HledgerTuiApp(App):
         self,
         journal_file: Path,
         initial_period: PeriodSelection | None = None,
+        read_only: bool = False,
     ) -> None:
         """Initialize the app.
 
@@ -171,12 +176,15 @@ class HledgerTuiApp(App):
                 flags or the ``default_period`` config key); None means the
                 current month, with the landing heuristic of #267 allowed to
                 move to the latest activity when the current month is empty.
+            read_only: Disable every write path (issue #271). Exports,
+                search, period navigation and drill-down stay available.
         """
         super().__init__()
         self.journal_file = journal_file
         # An explicit period (CLI/config) must not be overridden by the
         # startup landing heuristic.
         self._period_explicit = initial_period is not None
+        self.read_only = read_only
         self._cache = HledgerCache()
         self._stale_panes: set[str] = set()
         # Non-visible panes defer their initial hledger load until the Summary
@@ -199,7 +207,9 @@ class HledgerTuiApp(App):
                 )
             except SyncError:
                 pass
-        self._footer_commands = _build_footer_commands(self._sync_backend is not None)
+        self._footer_commands = _build_footer_commands(
+            self._sync_backend is not None, read_only
+        )
         self._tab_order = resolve_tab_order(load_tab_order())
         theme = _resolve_saved_theme(load_theme(), self.available_themes)
         if theme:
@@ -268,8 +278,14 @@ class HledgerTuiApp(App):
         # Safety net: if the Summary never reports loaded, still preload the
         # other panes rather than leaving them empty forever.
         self.set_timer(30.0, self._start_deferred_loads)
-        if load_auto_generate_recurring():
+        if load_auto_generate_recurring() and not self.read_only:
             self._auto_generate_recurring()
+        if self.read_only:
+            self.notify(
+                "Read-only mode: no changes will be written to the journal",
+                severity="information",
+                timeout=8,
+            )
 
     # ------------------------------------------------------------------
     # Startup pane preloading
@@ -556,6 +572,8 @@ class HledgerTuiApp(App):
           before the modal screen ever sees it.
         """
         if action == "sync":
+            if self.read_only:
+                return None  # a download could rewrite the journal
             return self._sync_backend is not None
         if action == "command_palette":
             from hledger_textual.screens.import_wizard import ImportWizardScreen
@@ -569,7 +587,11 @@ class HledgerTuiApp(App):
         from hledger_textual.screens.sync_confirm import SyncConfirmModal
 
         backend = self._sync_backend
-        if backend is None:
+        if backend is None or self.read_only:
+            if self.read_only:
+                self.notify(
+                    "Read-only mode: sync is disabled", severity="warning", timeout=5
+                )
             return
 
         if not backend.is_available():
