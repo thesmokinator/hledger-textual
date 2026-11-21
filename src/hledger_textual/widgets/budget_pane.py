@@ -16,10 +16,10 @@ from textual.widgets import Button, DataTable, Input, Static
 
 from hledger_textual.period import current_month_selection, shift_months
 from hledger_textual.budget import (
+    BUDGET_FILENAME,
     BudgetError,
     add_budget_rule,
     delete_budget_rule,
-    ensure_budget_file,
     parse_budget_rules,
     update_budget_rule,
 )
@@ -144,7 +144,9 @@ class BudgetPane(DataTablePaneMixin, Widget):
         """Load budget rules and actual spending data."""
 
         def _load() -> None:
-            self._budget_path = ensure_budget_file(self.journal_file)
+            # The budget file is only created by the first "add rule"
+            # action; looking at the pane never writes (issue #270).
+            self._budget_path = self.journal_file.parent / BUDGET_FILENAME
             self._rules = sorted(
                 parse_budget_rules(self._budget_path),
                 key=lambda r: r.account.lower(),

@@ -245,28 +245,8 @@ class HledgerTuiApp(App):
             return AccountsPane(self.journal_file, cache=self._cache, id="accounts")
         return RecurringPane(self.journal_file, id="recurring")
 
-    def _ensure_auxiliary_journals(self) -> None:
-        """Add the budget/recurring ``include`` lines before any pane loads.
-
-        Panes used to insert these lines from their own workers while other
-        panes were already running hledger.  A reader could then load source
-        positions from the journal *before* the include lines shifted them,
-        making a later edit point at the wrong lines.  Doing both inserts once
-        during composition keeps the source line numbers stable for the rest
-        of the session.
-        """
-        from hledger_textual.budget import ensure_budget_file
-        from hledger_textual.recurring import ensure_recurring_file
-
-        for ensure in (ensure_budget_file, ensure_recurring_file):
-            try:
-                ensure(self.journal_file)
-            except Exception:
-                continue
-
     def compose(self) -> ComposeResult:
         """Create the app layout, with tabs in the configured order."""
-        self._ensure_auxiliary_journals()
         yield _NavTabs(
             *[
                 _NavTab(f"{i + 1}. {TAB_LABELS[section]}", id=f"tab-{section}")
@@ -418,7 +398,9 @@ class HledgerTuiApp(App):
         )
 
         try:
-            recurring_path = ensure_recurring_file(self.journal_file)
+            # Auto-generation is an explicit opt-in mutation (config key),
+            # so creating the file and its include here is acceptable.
+            recurring_path = ensure_recurring_file(self.journal_file, create=True)
             rules = parse_recurring_rules(recurring_path)
         except Exception:
             return
