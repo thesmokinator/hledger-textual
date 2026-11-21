@@ -113,17 +113,23 @@ def _save_config_dict(data: dict) -> None:
     _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     sections: dict[str, dict] = {}
+
+    def _format_value(v) -> str:
+        """Format a scalar as TOML (booleans stay bare, the rest quoted)."""
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        escaped = str(v).replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+
     for key, value in data.items():
         if isinstance(value, dict):
             sections[key] = value
         else:
-            escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'{_toml_key(key)} = "{escaped}"')
+            lines.append(f"{_toml_key(key)} = {_format_value(value)}")
     for section_name, section_dict in sections.items():
         lines.append(f"\n[{_toml_key(section_name)}]")
         for k, v in section_dict.items():
-            escaped = str(v).replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'{_toml_key(k)} = "{escaped}"')
+            lines.append(f"{_toml_key(k)} = {_format_value(v)}")
     _CONFIG_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -351,6 +357,37 @@ def load_tab_order() -> list[str] | None:
     known = {"summary", "accounts", "transactions", "budget", "recurring", "reports"}
     ordered = [str(name) for name in val if str(name) in known]
     return ordered or None
+
+
+def load_confirm_directive_writes() -> bool:
+    """Return whether directive writes ask for preview confirmation (issue #273).
+
+    Reads the ``confirm_directive_writes`` key from config.toml.  Defaults
+    to ``True``: include insertions and account-note writes show a preview
+    modal with the exact diff until the user checks "Don't ask again"
+    (which persists ``confirm_directive_writes = false``).  Setting the key
+    back to ``true`` restores the prompt.
+
+    Returns:
+        True when directive writes should be confirmed.
+    """
+    val = _load_config_dict().get("confirm_directive_writes", True)
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.strip().lower() not in ("false", "0", "no")
+    return True
+
+
+def save_confirm_directive_writes(enabled: bool) -> None:
+    """Persist the directive-write confirmation preference.
+
+    Args:
+        enabled: True restores the confirmation prompt, False disables it.
+    """
+    data = _load_config_dict()
+    data["confirm_directive_writes"] = enabled
+    _save_config_dict(data)
 
 
 def load_read_only() -> bool:

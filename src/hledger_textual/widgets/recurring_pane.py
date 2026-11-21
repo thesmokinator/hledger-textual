@@ -153,11 +153,25 @@ class RecurringPane(DataTablePaneMixin, Widget):
 
     def action_add(self) -> None:
         """Open the form to add a new recurring rule."""
+        from hledger_textual.recurring import include_insert_plans
+        from hledger_textual.screens.directive_confirm import (
+            confirm_directive_writes,
+        )
         from hledger_textual.screens.recurring_form import RecurringFormScreen
 
         def on_save(result: RecurringRule | None) -> None:
-            if result is not None:
-                self._do_add(result)
+            if result is None:
+                return
+            # The first rule creates recurring.journal and inserts the
+            # include line; preview those writes before touching anything.
+            plans = include_insert_plans(self.journal_file)
+            confirm_directive_writes(
+                self,
+                plans,
+                "Recurring rules live in recurring.journal; hledger needs "
+                "the include directive to see them.",
+                on_ok=lambda: self._do_add(result),
+            )
 
         self.app.push_screen(
             RecurringFormScreen(journal_file=self.journal_file),

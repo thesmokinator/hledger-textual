@@ -1172,6 +1172,45 @@ SaveFilterModal {
     color: $text-muted;
 }
 
+/* --- Directive confirm --- */
+
+#directive-confirm-dialog {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#directive-confirm-title {
+    text-style: bold;
+    color: $accent;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#directive-confirm-reason {
+    width: 100%;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#directive-confirm-diff {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#directive-confirm-dont-ask {
+    margin-bottom: 1;
+}
+
+#directive-confirm-buttons {
+    height: auto;
+    align-horizontal: center;
+}
+
 /* --- Period Picker --- */
 
 #period-picker-dialog {

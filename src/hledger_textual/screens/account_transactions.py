@@ -142,26 +142,48 @@ class AccountTransactionsScreen(Screen):
         current_note = directive.comment if directive else ""
 
         def on_result(note: str | None) -> None:
-            if note is not None:
-                if self.app.read_only:
-                    self.notify(
-                        "Read-only mode: editing is disabled (started with --read-only)",
-                        severity="warning",
-                        timeout=5,
-                    )
-                    return
-                written, fell_back = save_account_directive(
-                    self.journal_file, self.account, note
+            if note is None:
+                return
+            if self.app.read_only:
+                self.notify(
+                    "Read-only mode: editing is disabled (started with --read-only)",
+                    severity="warning",
+                    timeout=5,
+                )
+                return
+            from hledger_textual.hledger import plan_account_directive
+            from hledger_textual.screens.directive_confirm import (
+                confirm_directive_writes,
+            )
+
+            plan = plan_account_directive(self.journal_file, self.account, note)
+
+            def apply_note() -> None:
+                save_account_directive(
+                    self.journal_file,
+                    self.account,
+                    note,
+                    plan=plan,
                 )
                 self._refresh_metadata()
-                if fell_back:
+                if plan.fell_back:
                     self.notify(
-                        f"Note saved to {written.name} "
+                        f"Note saved to {plan.target_file.name} "
                         "(account not found in transactions)",
                         timeout=5,
                     )
                 else:
-                    self.notify(f"Note saved to {written.name}", timeout=3)
+                    self.notify(
+                        f"Note saved to {plan.target_file.name}", timeout=3
+                    )
+
+            confirm_directive_writes(
+                self,
+                [plan],
+                "Account notes are stored as account directives next to "
+                "the account's transactions.",
+                on_ok=apply_note,
+            )
 
         self.app.push_screen(
             AccountNoteModal(self.account, current_note), callback=on_result
