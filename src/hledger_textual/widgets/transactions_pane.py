@@ -326,6 +326,10 @@ class TransactionsPane(DataTablePaneMixin, Widget):
         """Append a transaction to the journal and emit JournalChanged."""
         from hledger_textual.journal import JournalError, append_transaction
 
+        from hledger_textual.widgets.pane_mixin import refuse_read_only
+
+        if refuse_read_only(self, from_worker=True):
+            return
         try:
             append_transaction(self.journal_file, transaction)
             self.app.call_from_thread(self.notify, "Transaction added", timeout=3)
@@ -440,6 +444,11 @@ class TransactionsPane(DataTablePaneMixin, Widget):
     def _do_import(self, transactions: list[Transaction]) -> None:
         """Import confirmed transactions into the journal."""
         from hledger_textual.journal import JournalError, append_transaction
+
+        from hledger_textual.widgets.pane_mixin import refuse_read_only
+
+        if refuse_read_only(self, from_worker=True):
+            return
 
         count = 0
         for txn in transactions:

@@ -5,6 +5,7 @@ import sys
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.config import (
     load_default_period,
+    load_read_only,
     parse_args,
     resolve_journal_file,
 )
@@ -101,7 +102,11 @@ def main() -> None:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
-    app = HledgerTuiApp(journal_file=journal_file, initial_period=initial_period)
+    app = HledgerTuiApp(
+        journal_file=journal_file,
+        initial_period=initial_period,
+        read_only=args.read_only or load_read_only(),
+    )
     app.run()
 
 

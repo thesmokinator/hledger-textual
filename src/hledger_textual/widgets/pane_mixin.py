@@ -78,6 +78,51 @@ def set_empty_state_visible(
     widget.query_one(f"#{table_id}", DataTable).display = not visible
 
 
+READ_ONLY_MESSAGE = "Read-only mode: editing is disabled (started with --read-only)"
+
+
+def is_read_only(widget) -> bool:
+    """Return True when the app was started in read-only mode.
+
+    Safe to call from a worker thread or after teardown.
+
+    Args:
+        widget: The widget attempting a mutation.
+    """
+    try:
+        app = widget.app
+    except Exception:
+        return False
+    # Strict identity check: mocks and truthy-but-not-True values must not
+    # enable the mode accidentally.
+    return getattr(app, "read_only", None) is True
+
+
+def refuse_read_only(widget, *, from_worker: bool = False) -> bool:
+    """Notify the user and return True when mutation is refused (issue #271).
+
+    Args:
+        widget: The widget attempting the mutation.
+        from_worker: True when called from a worker thread (the toast is
+            then dispatched with ``call_from_thread``).
+
+    Returns:
+        ``True`` when read-only mode blocks the mutation.
+    """
+    if not is_read_only(widget):
+        return False
+    try:
+        if from_worker:
+            widget.app.call_from_thread(
+                widget.notify, READ_ONLY_MESSAGE, severity="warning", timeout=5
+            )
+        else:
+            widget.notify(READ_ONLY_MESSAGE, severity="warning", timeout=5)
+    except Exception:
+        pass
+    return True
+
+
 def run_mutation(
     widget,
     mutate: Callable[[], object],
@@ -106,6 +151,8 @@ def run_mutation(
             (title + body, longer timeout) instead of ``str(exc)``.
     """
     if not guard:
+        return
+    if refuse_read_only(widget, from_worker=True):
         return
     try:
         mutate()

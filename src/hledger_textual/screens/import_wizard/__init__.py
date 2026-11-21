@@ -540,6 +540,10 @@ class ImportWizardScreen(DirtyGuardMixin, ModalScreen[tuple[Path, Path] | None])
 
     def _do_save(self) -> None:
         """Save the rules file and dismiss with paths."""
+        from hledger_textual.widgets.pane_mixin import refuse_read_only
+
+        if refuse_read_only(self):
+            return
         editor = self.query_one("#wizard-raw-editor", TextArea)
         content = editor.text
 
