@@ -307,6 +307,19 @@ cd hledger-textual
 uv sync
 ```
 
+### Vendored test fixtures
+
+`tests/fixtures/matrix/` contains four journals vendored **unmodified**
+from the hledger repository (`hledgerorg/hledger`, `examples/`, pinned to
+commit `61d999db5004253fdb0db188338122e0b545a9c2`) so the test suite runs
+against the exact data of the [hledger UI test
+matrix](https://hledger.org/uis.html). Those files are part of hledger and
+are licensed **GPL-3.0**: they are redistributed here under their original
+licence, are not covered by this project's MIT licence, and are excluded
+from the published wheel/sdist. Their checksums are asserted by
+`tests/test_matrix.py`; see `tests/fixtures/matrix/README.md` for the full
+provenance note and the refresh procedure.
+
 ### Testing
 
 ```bash
