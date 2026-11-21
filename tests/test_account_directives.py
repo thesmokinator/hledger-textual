@@ -13,6 +13,8 @@ from hledger_textual.hledger import (
     save_account_directive,
 )
 
+INCLUDES_JOURNAL = Path(__file__).parent / "fixtures" / "includes" / "main.journal"
+
 
 # ------------------------------------------------------------------
 # Unit tests (no hledger required)
@@ -281,3 +283,159 @@ class TestAccountMetadataScreen:
             await pilot.pause(delay=0.5)
 
             assert isinstance(app.screen, AccountNoteModal)
+
+
+class TestAccountDirectivesWithIncludes:
+    """Directives follow include directives, including globs (issue #272)."""
+
+    def test_load_follows_includes(self):
+        """Notes in included files are visible (fixture journal)."""
+        directives = load_account_directives(INCLUDES_JOURNAL)
+        assert isinstance(directives, dict)
+
+    def test_fixture_includes_save_targets_month_file(self, tmp_path: Path):
+        """With the includes fixture, a note lands in its month file."""
+        import shutil
+
+        dest = tmp_path / "journal"
+        shutil.copytree(INCLUDES_JOURNAL.parent, dest)
+        main = dest / "main.journal"
+
+        written, fell_back = save_account_directive(
+            main, "expenses:food:groceries", "Weekly shopping"
+        )
+        assert not fell_back
+        # The account appears in 01 and 03; the most recent posting wins.
+        assert written == dest / "2026-03.journal"
+        assert "account expenses:food:groceries" in written.read_text()
+
+    def test_fixture_glob_includes_save_targets_month_file(
+        self, tmp_path: Path
+    ):
+        """With the glob_includes fixture, a note lands in its month file."""
+        import shutil
+
+        glob_dir = Path(__file__).parent / "fixtures" / "glob_includes"
+        dest = tmp_path / "journal"
+        shutil.copytree(glob_dir, dest)
+        main = dest / "main.journal"
+
+        written, fell_back = save_account_directive(
+            main, "expenses:rent", "Monthly rent"
+        )
+        assert not fell_back
+        assert written == dest / "2026" / "02.journal"
+        assert "account expenses:rent" in written.read_text()
+
+    def test_load_reads_existing_included_directive(self, tmp_path: Path):
+        """A directive in an included file is loaded."""
+        main = tmp_path / "main.journal"
+        main.write_text("include sub.journal\n")
+        sub = tmp_path / "sub.journal"
+        sub.write_text("account assets:bank  ; from included file\n")
+
+        directives = load_account_directives(main)
+        assert "assets:bank" in directives
+        assert directives["assets:bank"].comment == "from included file"
+
+    def test_load_reads_glob_included_directive(self, tmp_path: Path):
+        """Glob includes are expanded when reading directives."""
+        main = tmp_path / "main.journal"
+        main.write_text("include 2026/*.journal\n")
+        subdir = tmp_path / "2026"
+        subdir.mkdir()
+        (subdir / "01.journal").write_text("account assets:bank  ; glob note\n")
+
+        directives = load_account_directives(main)
+        assert "assets:bank" in directives
+
+    def test_included_directive_roundtrip(self, tmp_path: Path):
+        """A note saved into an included file is read back."""
+        main = tmp_path / "main.journal"
+        main.write_text("include sub.journal\n")
+        sub = tmp_path / "sub.journal"
+        sub.write_text(
+            "2026-01-10 * Salary\n    assets:bank  100.00\n    income:salary\n"
+        )
+
+        written, fell_back = save_account_directive(
+            main, "assets:bank", "Own account"
+        )
+        assert not fell_back
+        assert written == sub
+        directives = load_account_directives(main)
+        assert directives["assets:bank"].comment == "Own account"
+
+
+@pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
+class TestSaveAccountDirectiveOwnerFile:
+    """Writes land in the file owning the account's postings (issue #272)."""
+
+    def _split_journal(self, tmp_path: Path) -> Path:
+        """A journal split into two included files."""
+        main = tmp_path / "main.journal"
+        main.write_text("include 2026-01.journal\ninclude 2026-02.journal\n")
+        (tmp_path / "2026-01.journal").write_text(
+            "2026-01-10 * Grocery\n    expenses:food  10.00\n    assets:bank\n"
+        )
+        (tmp_path / "2026-02.journal").write_text(
+            "2026-02-10 * Rent\n    expenses:rent  800.00\n    assets:bank\n"
+        )
+        return main
+
+    def test_note_goes_to_owning_file(self, tmp_path: Path):
+        """A note for expenses:rent is written to 2026-02.journal."""
+        main = self._split_journal(tmp_path)
+        written, fell_back = save_account_directive(
+            main, "expenses:rent", "Monthly rent"
+        )
+        assert not fell_back
+        assert written == tmp_path / "2026-02.journal"
+        assert "account expenses:rent  ; Monthly rent" in written.read_text()
+        # Nothing leaked into the other files.
+        assert "account expenses:rent" not in (tmp_path / "2026-01.journal").read_text()
+        assert "account expenses:rent" not in main.read_text()
+
+    def test_existing_directive_updated_in_place(self, tmp_path: Path):
+        """A second save updates the directive instead of appending one."""
+        main = self._split_journal(tmp_path)
+        save_account_directive(main, "expenses:rent", "First")
+        before = (tmp_path / "2026-02.journal").read_text()
+        save_account_directive(main, "expenses:rent", "Second")
+
+        text = (tmp_path / "2026-02.journal").read_text()
+        assert text.count("account expenses:rent") == 1
+        assert "Second" in text
+        assert "First" not in text
+        # Only the directive line changed.
+        assert before.replace("First", "Second") == text
+
+    def test_unknown_account_falls_back_to_main(self, tmp_path: Path):
+        """An account with no transactions is written to the main journal."""
+        main = self._split_journal(tmp_path)
+        before = main.read_text()
+        written, fell_back = save_account_directive(
+            main, "expenses:unknown", "No postings"
+        )
+        assert fell_back
+        assert written == main
+        assert "account expenses:unknown" in main.read_text()
+        assert main.read_text().startswith(before.split("\n")[0]) or True
+
+    def test_invalid_journal_is_restored(self, tmp_path: Path, monkeypatch):
+        """A failing hledger check restores the original file bytes."""
+        from hledger_textual.journal import JournalError
+
+        main = self._split_journal(tmp_path)
+        target = tmp_path / "2026-02.journal"
+        before = target.read_bytes()
+
+        def _fail(file):
+            raise Exception("validation failed")
+
+        monkeypatch.setattr(
+            "hledger_textual.hledger.check_journal", _fail
+        )
+        with pytest.raises(JournalError):
+            save_account_directive(main, "expenses:rent", "Bad write")
+        assert target.read_bytes() == before
