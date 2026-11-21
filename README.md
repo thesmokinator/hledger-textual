@@ -218,6 +218,28 @@ include directive to see them."). Cancel leaves every file byte-identical.
 Checking **Don't ask again** persists `confirm_directive_writes = false`
 in the config; setting the key back to `true` restores the prompt.
 
+## Files hledger-textual writes
+
+Everything the app may write, when, and how to prevent it. The journal
+stays a plain-text file you own — there is no database.
+
+| File | Purpose | When written | Confirmation | Opt-out |
+| --- | --- | --- | --- | --- |
+| Your journal (transactions) | Add, edit, delete, clone, move, status toggles, CSV import | Only from explicit actions in the Transactions view | The edit/add forms show the full transaction before saving | `--read-only` |
+| `budget.journal` (next to the journal) | Budget rules as `~ monthly` periodic transactions | Created on the first "add rule" action only — never on launch | Preview modal (file + diff) before the write | `--read-only`, or Cancel in the preview |
+| `recurring.journal` (next to the journal) | Recurring transaction rules | Created on the first "add rule" action, or when the opt-in `auto_generate_recurring` generates pending transactions | Preview modal for the first rule; auto-generation writes only transactions it computed | `--read-only`, or Cancel in the preview |
+| `include` lines in your journal | `include budget.journal` / `include recurring.journal` so hledger sees the rule files | Inserted together with the first rule of each kind | Preview modal (exact lines shown) | `--read-only`, or Cancel in the preview |
+| `account` directives (notes) | Account notes/comments, written into the file that owns the account's postings | Only when you save a note | Preview modal (exact lines shown) | `--read-only`, or Cancel in the preview |
+| CSV rules files (e.g. `bank.csv.rules` next to the CSV) | Mapping rules for CSV import | Saved from the import wizard | The full rules content is visible and validated (hledger dry-run) before saving | `--read-only` |
+| Export directory (configurable) | CSV / PDF exports of table data | On an explicit export action, after choosing file and format | The export modal asks for directory and filename | Not applicable |
+| Disk cache (system cache dir) | hledger output keyed by journal signature, including market prices — prices live there, never in your journal | Automatic, on first load of each query | None (transparent cache) | Delete the cache directory; it is rebuilt on demand |
+| Config file (`~/.config/hledger-textual/config.toml`) | Theme, default commodity/period, tab order, saved filters, the "Don't ask again" choice | When you change a preference in the app (e.g. checking "Don't ask again") | None (it is your own preference change) | Edit the file manually |
+
+The app never writes on launch, never keeps a database, and only touches
+transactions from actions you perform in the UI. Every journal write is
+atomic: the file is validated with `hledger check` and the original bytes
+are restored on failure.
+
 ### Default currency
 
 For multi-currency journals, the default currency is resolved in this order:
