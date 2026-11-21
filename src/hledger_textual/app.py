@@ -8,6 +8,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
@@ -84,7 +85,7 @@ def _build_footer_commands(sync_enabled: bool) -> dict[str, str]:
     global_no_export = f"{sync_part}\\[?] Help  \\[q] Quit"
     return {
         "summary": f"\\[◄/►] Month  \\[r] Reload  \\[i]/\\[l] Fold  {global_no_export}",
-        "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
+        "transactions": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[c] Clone  \\[m] Move  \\[◄/►] Month  \\[g] Period  \\[/] Search  \\[f] Filters  \\[^s] Save filter  {global_part}",
         "accounts": f"\\[↵] Drill  \\[/] Search  \\[r] Reload  {global_part}",
         "budget": f"\\[a] Add  \\[e] Edit  \\[d] Del  \\[◄/►] Month  \\[/] Search  \\[o] Overview  {global_part}",
         "reports": f"\\[◄/►] Window  \\[n] New  \\[S] Sort  \\[c] Chart  \\[i] Inv  \\[r] Reload  {global_part}",
@@ -341,8 +342,18 @@ class HledgerTuiApp(App):
         self._preload_started = True
         queued = self._deferred_loads
         self._deferred_loads = []
+        self._run_deferred_loaders(queued)
+
+    def _run_deferred_loaders(
+        self, queued: list[tuple[str, Callable[[], None]]]
+    ) -> None:
+        """Run deferred loaders, tolerating panes torn down during shutdown."""
         for _section, loader in queued:
-            loader()
+            try:
+                loader()
+            except NoMatches:
+                # The app is closing and the pane's children are gone.
+                continue
 
     def _flush_deferred_section(self, section: str) -> None:
         """Start this section's queued loads now (early tab switch).
@@ -351,12 +362,14 @@ class HledgerTuiApp(App):
             section: Tab section being activated.
         """
         remaining: list[tuple[str, Callable[[], None]]] = []
+        flush: list[tuple[str, Callable[[], None]]] = []
         for queued_section, loader in self._deferred_loads:
             if queued_section == section:
-                loader()
+                flush.append((queued_section, loader))
             else:
                 remaining.append((queued_section, loader))
         self._deferred_loads = remaining
+        self._run_deferred_loaders(flush)
 
     @work(thread=True, exclusive=True, group="startup-update-check")
     def _check_for_updates(self) -> None:

@@ -172,19 +172,31 @@ def run_pane_load(
         on_error: Maps the exception to a fallback payload; None skips
             ``apply`` on failure.
     """
+    try:
+        app = widget.app
+    except Exception:
+        # The app is shutting down: no point in loading anything.
+        return
     if loading_message is not None:
-        widget.app.call_from_thread(show_loading_overlay, widget, loading_message)
+        app.call_from_thread(show_loading_overlay, widget, loading_message)
     try:
         result = load()
     except Exception as exc:
         title, body = humanize_error(exc)
-        widget.app.call_from_thread(
-            widget.notify, body, title=title, severity="error", timeout=10
-        )
+        try:
+            widget.app.call_from_thread(
+                widget.notify, body, title=title, severity="error", timeout=10
+            )
+        except Exception:
+            return  # app shut down while the worker was running
         if on_error is None:
             return
         result = on_error(exc)
-    widget.app.call_from_thread(apply, result)
+    try:
+        widget.app.call_from_thread(apply, result)
+    except Exception:
+        # The app shut down between load() and the UI update.
+        pass
 
 
 class DataTablePaneMixin:

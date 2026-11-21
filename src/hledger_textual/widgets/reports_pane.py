@@ -95,6 +95,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         Binding("shift+left", "shift_window_year_back", "Shift window back one year", show=False, priority=True),
         Binding("shift+right", "shift_window_year_forward", "Shift window forward one year", show=False, priority=True),
         Binding("t", "today_window", "Today", show=False, priority=True),
+        Binding("g", "go_to_period", "Go to period", show=True, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("h", "cursor_left", "Left", show=False),
@@ -251,6 +252,22 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         """Return the report window to the current month."""
         set_period(self, current_month_selection())
         self._load_report_data()
+
+    def action_go_to_period(self) -> None:
+        """Open the period picker and jump to the chosen selection."""
+        from hledger_textual.screens.period_picker import PeriodPickerModal
+
+        stats = getattr(self.app, "journal_stats", None)
+
+        def on_result(selection) -> None:
+            if selection is not None:
+                set_period(self, selection)
+                self._load_report_data()
+
+        self.app.push_screen(
+            PeriodPickerModal(journal_stats=stats, current=get_period(self)),
+            callback=on_result,
+        )
 
     def _period_range(self) -> tuple[str, str]:
         """Calculate begin and end dates for the report window.

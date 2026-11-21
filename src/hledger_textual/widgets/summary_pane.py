@@ -284,6 +284,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         Binding("shift+right", "next_year", "Next year", show=False, priority=True),
         Binding("t", "today_month", "Today", show=False, priority=True),
         Binding("J", "jump_to_latest", "Jump to latest activity", show=False, priority=True),
+        Binding("g", "go_to_period", "Go to period", show=True, priority=True),
     ]
 
     def __init__(
@@ -920,6 +921,22 @@ class SummaryPane(DataTablePaneMixin, Widget):
             return
         if not set_period(self, month_selection(stats.last_date)):
             self.reload_month()
+
+    def action_go_to_period(self) -> None:
+        """Open the period picker and jump to the chosen selection."""
+        from hledger_textual.screens.period_picker import PeriodPickerModal
+
+        stats = self.journal_stats or getattr(self.app, "journal_stats", None)
+
+        def on_result(selection) -> None:
+            if selection is not None:
+                if not set_period(self, selection):
+                    self.reload_month()
+
+        self.app.push_screen(
+            PeriodPickerModal(journal_stats=stats, current=get_period(self)),
+            callback=on_result,
+        )
 
     def on_click(self, event) -> None:
         """Handle a click on the empty-month hint."""

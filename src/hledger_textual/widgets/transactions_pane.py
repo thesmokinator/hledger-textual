@@ -44,6 +44,9 @@ class TransactionsPane(DataTablePaneMixin, Widget):
         Binding("escape", "dismiss_filter", "Dismiss filter", show=False),
         Binding("left", "prev_month", "Previous month", show=False, priority=True),
         Binding("right", "next_month", "Next month", show=False, priority=True),
+        Binding("shift+left", "prev_year", "Previous year", show=False, priority=True),
+        Binding("shift+right", "next_year", "Next year", show=False, priority=True),
+        Binding("g", "go_to_period", "Go to period", show=True, priority=True),
         Binding("t", "today_month", "Today", show=False, priority=True),
         Binding("*", "toggle_cleared", "Toggle cleared", show=False, priority=True),
         Binding(
@@ -154,9 +157,33 @@ class TransactionsPane(DataTablePaneMixin, Widget):
         """Navigate to the next month."""
         self._table.next_month()
 
+    def action_prev_year(self) -> None:
+        """Navigate to the same month one year back."""
+        self._table.prev_year()
+
+    def action_next_year(self) -> None:
+        """Navigate to the same month one year forward."""
+        self._table.next_year()
+
     def action_today_month(self) -> None:
         """Jump to the current month."""
         self._table.today_month()
+
+    def action_go_to_period(self) -> None:
+        """Open the period picker and jump to the chosen selection."""
+        from hledger_textual.screens.period_picker import PeriodPickerModal
+
+        table = self._table
+        stats = getattr(self.app, "journal_stats", None)
+
+        def on_result(selection) -> None:
+            if selection is not None:
+                table.goto_period(selection)
+
+        self.app.push_screen(
+            PeriodPickerModal(journal_stats=stats, current=table._period),
+            callback=on_result,
+        )
 
     def action_add(self) -> None:
         """Open the form to add a new transaction."""

@@ -1172,6 +1172,44 @@ SaveFilterModal {
     color: $text-muted;
 }
 
+/* --- Period Picker --- */
+
+#period-picker-dialog {
+    width: 64;
+    max-width: 90%;
+    height: auto;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#period-picker-title {
+    text-style: bold;
+    color: $accent;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#period-picker-syntax {
+    width: 100%;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#period-picker-error {
+    width: 100%;
+    color: $text-muted;
+    min-height: 1;
+    margin-bottom: 1;
+}
+
+#period-picker-hint {
+    width: 100%;
+    text-align: center;
+    color: $text-muted;
+}
+
 /* --- Help Screen --- */
 
 HelpScreen {
