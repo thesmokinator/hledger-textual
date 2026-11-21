@@ -15,7 +15,9 @@ against the exact data the matrix uses (issue #275).
   never be modified (the test suite asserts their checksums, recorded in
   `tests/test_matrix.py::MATRIX_CHECKSUMS`). To verify by hand run
   `shasum -a 256 *.journal` in this directory; to refresh the fixtures see
-  the procedure at the bottom of this file.
+  the procedure at the bottom of this file. (The project `.gitignore`
+  excludes user journals with `*.journal`; the fixtures are tracked via an
+  explicit exception.)
 
 ## The files
 

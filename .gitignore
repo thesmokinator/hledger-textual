@@ -28,3 +28,5 @@ Thumbs.db
 *.bak
 # Ignore all hledger journal files
 *.journal
+# Vendored hledger UI-matrix fixtures (GPL-3.0, see tests/fixtures/matrix/README.md)
+!tests/fixtures/matrix/*.journal
