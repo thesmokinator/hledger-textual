@@ -25,6 +25,7 @@ from hledger_textual.models import (
     Amount,
     AmountStyle,
     BudgetRow,
+    AccountDirective,
     JournalStats,
     PeriodSummary,
     Posting,
@@ -35,6 +36,8 @@ from hledger_textual.models import (
     TransactionStatus,
 )
 from hledger_textual.parallel import MAX_PARALLEL_LOADS, gather_loads
+
+_INCLUDE_LINE_RE = re.compile(r"^include\s+([^;]+?)\s*(?:;.*)?$")
 
 
 class HledgerError(Exception):
@@ -517,32 +520,54 @@ def load_accounts(file: str | Path) -> list[str]:
 
 
 def load_account_directives(file: str | Path) -> dict[str, AccountDirective]:
-    """Parse ``account`` directives and their comments from a journal file.
+    """Parse ``account`` directives and their comments from a journal.
 
-    Reads the file directly (the hledger CLI does not export directive
-    comments).  Supports both single-line and multi-line comments::
+    Reads the files directly (the hledger CLI does not export directive
+    comments).  ``include`` directives are followed (globs expanded), so
+    notes stored in included files are visible (issue #272).  Later files
+    win, mirroring hledger's "last definition wins" behaviour.
+
+    Supports both single-line and multi-line comments::
 
         account expenses:groceries  ; note:Weekly shopping
             ; category:food
 
     Args:
-        file: Path to the journal file.
+        file: Path to the main journal file.
 
     Returns:
         A dict mapping full account names to :class:`AccountDirective`
         instances.  Only accounts that have an ``account`` directive in
-        the file are included.
+        the journal (or its includes) are included.
     """
-    from hledger_textual.models import AccountDirective
+    return _load_directives_from(Path(file), frozenset())
 
-    path = Path(file)
-    if not path.exists():
+
+def _load_directives_from(
+    path: Path, seen: frozenset[Path]
+) -> dict[str, AccountDirective]:
+    """Recursively parse account directives from *path* and its includes.
+
+    Args:
+        path: Journal file to read.
+        seen: Files already visited (cycle guard).
+    """
+    if path in seen:
+        return {}
+
+    # Imported here (not at module level) to avoid a config↔hledger cycle.
+    from hledger_textual.config import _expand_include
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
         return {}
 
     directives: dict[str, AccountDirective] = {}
     current: AccountDirective | None = None
+    include_paths: list[Path] = []
 
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         # Match "account <name>" optionally followed by "  ; comment"
         m = re.match(r"^account\s+(\S+)\s*(?:;\s*(.*))?$", line)
         if m:
@@ -572,9 +597,16 @@ def load_account_directives(file: str | Path) -> dict[str, AccountDirective]:
         # Any non-continuation line ends the current directive
         current = None
 
+        inc = _INCLUDE_LINE_RE.match(line)
+        if inc:
+            include_paths.extend(_expand_include(path, inc.group(1).strip()))
+
+    for included in include_paths:
+        directives.update(
+            _load_directives_from(included, seen | {path})
+        )
+
     return directives
-
-
 def _parse_comment_tags(comment: str) -> dict[str, str]:
     """Extract ``key:value`` tags from a comment string.
 
@@ -594,21 +626,32 @@ def save_account_directive(
     file: str | Path,
     account: str,
     comment: str,
-) -> None:
-    """Add or update an ``account`` directive in the journal file.
+) -> tuple[Path, bool]:
+    """Add or update an ``account`` directive in the journal (issue #272).
 
-    If the account already has a directive, its comment is replaced.
-    Otherwise a new directive is appended at the top of the file (after
-    any leading comments/blanks).
+    The directive is written into the file that owns the account's
+    postings (resolved from the transaction source positions, following
+    ``include`` directives and globs).  Writes are atomic and validated
+    with ``hledger check``; on failure the original bytes are restored.
+
+    If the account cannot be located in the transactions, the directive
+    is written to the main journal and the caller is told so it can say
+    so in the confirmation.
 
     Args:
-        file: Path to the journal file.
+        file: Path to the main journal file.
         account: Full account name (e.g. ``"expenses:groceries"``).
         comment: The comment text (without leading ``;``).  If empty,
             any existing comment is removed but the directive is kept.
+
+    Returns:
+        ``(written_file, fell_back)``: the file that was written and
+        whether the account had to be located by fallback.
     """
     path = Path(file)
-    lines = path.read_text(encoding="utf-8").splitlines()
+    target, fell_back = _resolve_account_file(path, account)
+
+    lines = target.read_text(encoding="utf-8").splitlines()
     comment_suffix = f"  ; {comment}" if comment else ""
     new_line = f"account {account}{comment_suffix}"
 
@@ -627,7 +670,8 @@ def save_account_directive(
         i += 1
 
     if not found:
-        # Insert before the first transaction (first line starting with a date)
+        # Insert after existing directives, before the first transaction
+        # (first line starting with a date)
         insert_at = 0
         for idx, line in enumerate(lines):
             if re.match(r"^\d{4}[-/]", line):
@@ -643,7 +687,54 @@ def save_account_directive(
         if insert_at + 1 < len(lines) and lines[insert_at + 1].strip():
             lines.insert(insert_at + 1, "")
 
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Deferred imports: fileutil/journal sit above this module in the
+    # dependency graph (journal imports hledger).
+    from hledger_textual.fileutil import safe_write_with_validation
+    from hledger_textual.journal import JournalError
+
+    safe_write_with_validation(
+        target_file=target,
+        content="\n".join(lines) + "\n",
+        journal_file=path,
+        validate=check_journal,
+        error_cls=JournalError,
+        context="Account note",
+    )
+    return target, fell_back
+
+
+def _resolve_account_file(journal: Path, account: str) -> tuple[Path, bool]:
+    """Return the file that owns *account*'s postings.
+
+    The most recent transaction with a posting for the account wins; its
+    source position names the owning file (hledger resolves includes and
+    globs for us).
+
+    Args:
+        journal: Path to the main journal file.
+        account: Full account name to locate.
+
+    Returns:
+        ``(owning_file, fell_back)``.  When the account cannot be located
+        (no transactions, no source position, or hledger failure) the main
+        journal is returned with ``fell_back=True``.
+    """
+    try:
+        transactions = load_transactions(journal)
+    except Exception:
+        return journal, True
+
+    for txn in reversed(transactions):
+        if not any(p.account == account for p in txn.postings):
+            continue
+        if txn.source_pos is None:
+            continue
+        source = Path(txn.source_pos[0].source_name)
+        if source.exists():
+            return source, False
+        break  # most recent matching transaction has an unusable position
+
+    return journal, True
 
 
 def load_descriptions(file: str | Path) -> list[str]:
