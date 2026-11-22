@@ -3,730 +3,729 @@ include recurring.journal
 include budget.journal
 
 ; hledger-textual demo journal
-; Nine months of realistic personal finance data (Jul 2025 – Mar 2026)
+; Nine months of realistic personal finance data (Apr 2026 – Dec 2026)
 
-include demo-budget.journal
 
-; === Mortgage (opened July 2025) ===
+; === Mortgage (opened April 2026) ===
 
-2025-07-01 * Mortgage disbursement  ; 25-year fixed rate
+2026-04-01 * Mortgage disbursement  ; 25-year fixed rate
     assets:bank:checking            €180000.00
     liabilities:mortgage
 
-; === July 2025 ===
+; === April 2026 ===
 
-2025-07-01 * (SAL-202507) Monthly salary
+2026-04-01 * (SAL-202604) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2025-07-02 * Rent payment
+2026-04-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2025-07-04 * Supermarket
+2026-04-04 * Supermarket
     expenses:food:groceries               €78.50
     assets:bank:checking
 
-2025-07-05 Transfer to savings
+2026-04-05 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2025-07-07 * Electricity bill
+2026-04-07 * Electricity bill
     expenses:housing:utilities            €72.30
     assets:bank:checking
 
-2025-07-08 * Monthly subscriptions  ; streaming + cloud
+2026-04-08 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2025-07-10 * Trattoria
+2026-04-10 * Trattoria
     expenses:food:restaurant              €35.00
     assets:bank:checking
 
-2025-07-11 * Supermarket
+2026-04-11 * Supermarket
     expenses:food:groceries               €95.40
     assets:bank:checking
 
-2025-07-12 * Monthly train pass
+2026-04-12 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2025-07-14 * Buy XDWD  ; world equity ETF
+2026-04-14 * Buy XDWD  ; world equity ETF
     assets:investments:XDWD            8 XDWD @ €112.30
     assets:bank:checking            €-898.40
 
-2025-07-16 * Sushi restaurant
+2026-04-16 * Sushi restaurant
     expenses:food:restaurant              €42.50
     assets:bank:checking
 
-2025-07-18 * Supermarket
+2026-04-18 * Supermarket
     expenses:food:groceries              €103.20
     assets:bank:checking
 
-2025-07-20 * Freelance project
+2026-04-20 * Freelance project
     assets:bank:checking                 €550.00
     income:freelance
 
-2025-07-22 * Water bill
+2026-04-22 * Water bill
     expenses:housing:utilities            €35.60
     assets:bank:checking
 
-2025-07-24 * Supermarket
+2026-04-24 * Supermarket
     expenses:food:groceries               €67.80
     assets:bank:checking
 
-2025-07-26 * Pizzeria
+2026-04-26 * Pizzeria
     expenses:food:restaurant              €24.00
     assets:bank:checking
 
-2025-07-28 * Taxi ride
+2026-04-28 * Taxi ride
     expenses:transport                    €16.50
     assets:bank:checking
 
-2025-07-30 * Mortgage payment  ; monthly instalment
+2026-04-30 * Mortgage payment  ; monthly instalment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €180.00
     assets:bank:checking
 
-2025-07-31 * Credit card statement
+2026-04-30 * Credit card statement
     liabilities:credit-card            €-145.00
     expenses:shopping                   €95.00
     expenses:food:restaurant            €50.00
 
-; === August 2025 ===
+; === May 2026 ===
 
-2025-08-01 * (SAL-202508) Monthly salary
+2026-05-01 * (SAL-202605) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2025-08-02 * Rent payment
+2026-05-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2025-08-03 * Supermarket
+2026-05-03 * Supermarket
     expenses:food:groceries               €58.70
     assets:bank:checking
 
-2025-08-04 Transfer to savings
+2026-05-04 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2025-08-06 * Monthly subscriptions  ; streaming + cloud
+2026-05-06 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2025-08-07 * Monthly train pass
+2026-05-07 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2025-08-09 * Supermarket
+2026-05-09 * Supermarket
     expenses:food:groceries               €84.30
     assets:bank:checking
 
-2025-08-10 * Summer vacation flights  ; Rome to Barcelona
+2026-05-10 * Summer vacation flights  ; Rome to Barcelona
     expenses:travel                      €380.00
     assets:bank:checking
 
-2025-08-11 * Summer vacation hotel  ; 5 nights
+2026-05-11 * Summer vacation hotel  ; 5 nights
     expenses:travel                      €520.00
     assets:bank:checking
 
-2025-08-13 * Tapas bar  ; Barcelona
+2026-05-13 * Tapas bar  ; Barcelona
     expenses:food:restaurant              €55.00
     assets:bank:checking
 
-2025-08-15 * Buy XEON  ; euro money market ETF
+2026-05-15 * Buy XEON  ; euro money market ETF
     assets:investments:XEON             4 XEON @ €146.20
     assets:bank:checking            €-584.80
 
-2025-08-18 * Supermarket
+2026-05-18 * Supermarket
     expenses:food:groceries              €110.50
     assets:bank:checking
 
-2025-08-20 * Gas bill
+2026-05-20 * Gas bill
     expenses:housing:utilities            €38.90
     assets:bank:checking
 
-2025-08-22 * Burger restaurant
+2026-05-22 * Burger restaurant
     expenses:food:restaurant              €28.00
     assets:bank:checking
 
-2025-08-25 * Supermarket
+2026-05-25 * Supermarket
     expenses:food:groceries               €72.60
     assets:bank:checking
 
-2025-08-27 * Taxi ride
+2026-05-27 * Taxi ride
     expenses:transport                    €22.00
     assets:bank:checking
 
-2025-08-30 * Mortgage payment
+2026-05-30 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €178.50
     assets:bank:checking
 
-2025-08-31 * Credit card statement
+2026-05-30 * Credit card statement
     liabilities:credit-card            €-210.00
     expenses:shopping                  €130.00
     expenses:food:restaurant            €80.00
 
-; === September 2025 ===
+; === June 2026 ===
 
-2025-09-01 * (SAL-202509) Monthly salary
+2026-06-01 * (SAL-202606) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2025-09-02 * Rent payment
+2026-06-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2025-09-04 * Supermarket
+2026-06-04 * Supermarket
     expenses:food:groceries               €69.40
     assets:bank:checking
 
-2025-09-05 Transfer to savings
+2026-06-05 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2025-09-07 * Electricity bill
+2026-06-07 * Electricity bill
     expenses:housing:utilities            €81.20
     assets:bank:checking
 
-2025-09-08 * Monthly subscriptions  ; streaming + cloud
+2026-06-08 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2025-09-09 * Thai restaurant
+2026-06-09 * Thai restaurant
     expenses:food:restaurant              €33.50
     assets:bank:checking
 
-2025-09-10 * Supermarket
+2026-06-10 * Supermarket
     expenses:food:groceries               €88.60
     assets:bank:checking
 
-2025-09-11 * Monthly train pass
+2026-06-11 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2025-09-13 * Buy XGDU  ; gold ETC
+2026-06-13 * Buy XGDU  ; gold ETC
     assets:investments:XGDU            6 XGDU @ €61.80
     assets:bank:checking            €-370.80
 
-2025-09-15 ! Freelance invoice  ; pending payment
+2026-06-15 ! Freelance invoice  ; pending payment
     assets:bank:checking                 €700.00
     income:freelance
 
-2025-09-17 * Supermarket
+2026-06-17 * Supermarket
     expenses:food:groceries              €114.30
     assets:bank:checking
 
-2025-09-19 * Pizzeria
+2026-06-19 * Pizzeria
     expenses:food:restaurant              €26.00
     assets:bank:checking
 
-2025-09-21 * Water bill
+2026-06-21 * Water bill
     expenses:housing:utilities            €33.40
     assets:bank:checking
 
-2025-09-23 * Supermarket
+2026-06-23 * Supermarket
     expenses:food:groceries               €57.90
     assets:bank:checking
 
-2025-09-25 * Indian restaurant
+2026-06-25 * Indian restaurant
     expenses:food:restaurant              €45.00
     assets:bank:checking
 
-2025-09-28 * Taxi ride
+2026-06-28 * Taxi ride
     expenses:transport                    €14.50
     assets:bank:checking
 
-2025-09-29 * Mortgage payment
+2026-06-29 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €177.00
     assets:bank:checking
 
-2025-09-30 * Credit card statement
+2026-06-30 * Credit card statement
     liabilities:credit-card            €-175.00
     expenses:shopping                  €110.00
     expenses:food:restaurant            €65.00
 
-; === October 2025 ===
+; === July 2026 ===
 
-2025-10-01 * (SAL-202510) Monthly salary
+2026-07-01 * (SAL-202607) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2025-10-02 * Rent payment
+2026-07-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2025-10-03 * Supermarket
+2026-07-03 * Supermarket
     expenses:food:groceries               €75.20
     assets:bank:checking
 
-2025-10-04 Transfer to savings
+2026-07-04 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2025-10-05 * Car loan disbursement  ; 5-year loan
+2026-07-05 * Car loan disbursement  ; 5-year loan
     assets:bank:checking             €15000.00
     liabilities:loan:car
 
-2025-10-06 * Annual insurance premium
+2026-07-06 * Annual insurance premium
     expenses:insurance                   €420.00
     assets:bank:checking
 
-2025-10-07 * Monthly subscriptions  ; streaming + cloud
+2026-07-07 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2025-10-08 * Monthly train pass
+2026-07-08 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2025-10-10 * Supermarket
+2026-07-10 * Supermarket
     expenses:food:groceries               €98.70
     assets:bank:checking
 
-2025-10-12 * Buy XDWD  ; world equity ETF
+2026-07-12 * Buy XDWD  ; world equity ETF
     assets:investments:XDWD            6 XDWD @ €115.90
     assets:bank:checking            €-695.40
 
-2025-10-14 * Sushi restaurant
+2026-07-14 * Sushi restaurant
     expenses:food:restaurant              €48.00
     assets:bank:checking
 
-2025-10-16 * Electricity bill
+2026-07-16 * Electricity bill
     expenses:housing:utilities            €88.50
     assets:bank:checking
 
-2025-10-18 * Supermarket
+2026-07-18 * Supermarket
     expenses:food:groceries               €62.40
     assets:bank:checking
 
-2025-10-20 * Cinema tickets
+2026-07-20 * Cinema tickets
     expenses:entertainment                €24.00
     assets:bank:checking
 
-2025-10-22 * Trattoria
+2026-07-22 * Trattoria
     expenses:food:restaurant              €37.50
     assets:bank:checking
 
-2025-10-24 * Supermarket
+2026-07-24 * Supermarket
     expenses:food:groceries              €105.80
     assets:bank:checking
 
-2025-10-27 * Taxi ride
+2026-07-27 * Taxi ride
     expenses:transport                    €19.00
     assets:bank:checking
 
-2025-10-30 * Mortgage payment
+2026-07-30 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €175.50
     assets:bank:checking
 
-2025-10-30 * Car loan payment
+2026-07-30 * Car loan payment
     liabilities:loan:car               €250.00
     expenses:transport:interest         €45.00
     assets:bank:checking
 
-2025-10-31 * Credit card statement
+2026-07-30 * Credit card statement
     liabilities:credit-card            €-190.00
     expenses:shopping                  €120.00
     expenses:food:restaurant            €70.00
 
-; === November 2025 ===
+; === August 2026 ===
 
-2025-11-01 * (SAL-202511) Monthly salary
+2026-08-01 * (SAL-202608) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2025-11-02 * Rent payment
+2026-08-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2025-11-03 * Supermarket
+2026-08-03 * Supermarket
     expenses:food:groceries               €82.90
     assets:bank:checking
 
-2025-11-04 Transfer to savings
+2026-08-04 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2025-11-06 * Gas bill
+2026-08-06 * Gas bill
     expenses:housing:utilities            €56.30
     assets:bank:checking
 
-2025-11-07 * Monthly subscriptions  ; streaming + cloud
+2026-08-07 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2025-11-09 * Burger restaurant
+2026-08-09 * Burger restaurant
     expenses:food:restaurant              €25.50
     assets:bank:checking
 
-2025-11-10 * Supermarket
+2026-08-10 * Supermarket
     expenses:food:groceries               €94.50
     assets:bank:checking
 
-2025-11-11 * Monthly train pass
+2026-08-11 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2025-11-13 * Buy XEON  ; euro money market ETF
+2026-08-13 * Buy XEON  ; euro money market ETF
     assets:investments:XEON             3 XEON @ €149.10
     assets:bank:checking            €-447.30
 
-2025-11-15 * Freelance project
+2026-08-15 * Freelance project
     assets:bank:checking                 €800.00
     income:freelance
 
-2025-11-17 * Supermarket
+2026-08-17 * Supermarket
     expenses:food:groceries              €118.20
     assets:bank:checking
 
-2025-11-19 * Concert tickets
+2026-08-19 * Concert tickets
     expenses:entertainment                €65.00
     assets:bank:checking
 
-2025-11-20 * Pizzeria
+2026-08-20 * Pizzeria
     expenses:food:restaurant              €22.50
     assets:bank:checking
 
-2025-11-23 * Supermarket
+2026-08-23 * Supermarket
     expenses:food:groceries               €59.70
     assets:bank:checking
 
-2025-11-25 * Thai restaurant
+2026-08-25 * Thai restaurant
     expenses:food:restaurant              €36.00
     assets:bank:checking
 
-2025-11-28 * Taxi ride
+2026-08-28 * Taxi ride
     expenses:transport                    €13.50
     assets:bank:checking
 
-2025-11-29 * Mortgage payment
+2026-08-29 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €174.00
     assets:bank:checking
 
-2025-11-29 * Car loan payment
+2026-08-29 * Car loan payment
     liabilities:loan:car               €250.00
     expenses:transport:interest         €44.00
     assets:bank:checking
 
-2025-11-30 * Credit card statement
+2026-08-30 * Credit card statement
     liabilities:credit-card            €-160.00
     expenses:shopping                  €100.00
     expenses:food:restaurant            €60.00
 
-; === December 2025 ===
+; === September 2026 ===
 
-2025-12-01 * (SAL-202512) Monthly salary
+2026-09-01 * (SAL-202609) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2025-12-02 * Rent payment
+2026-09-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2025-12-03 * Supermarket
+2026-09-03 * Supermarket
     expenses:food:groceries               €71.40
     assets:bank:checking
 
-2025-12-04 Transfer to savings
+2026-09-04 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2025-12-06 * Electricity bill
+2026-09-06 * Electricity bill
     expenses:housing:utilities            €92.10
     assets:bank:checking
 
-2025-12-07 * Monthly subscriptions  ; streaming + cloud
+2026-09-07 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2025-12-08 * Monthly train pass
+2026-09-08 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2025-12-10 * Supermarket
+2026-09-10 * Supermarket
     expenses:food:groceries               €96.80
     assets:bank:checking
 
-2025-12-12 * Christmas gifts  ; family
+2026-09-12 * Christmas gifts  ; family
     expenses:gifts                       €180.00
     assets:bank:checking
 
-2025-12-13 * Christmas gifts  ; friends
+2026-09-13 * Christmas gifts  ; friends
     expenses:gifts                       €120.00
     assets:bank:checking
 
-2025-12-15 * Buy XGDU  ; gold ETC
+2026-09-15 * Buy XGDU  ; gold ETC
     assets:investments:XGDU            5 XGDU @ €64.50
     assets:bank:checking            €-322.50
 
-2025-12-17 * Supermarket
+2026-09-17 * Supermarket
     expenses:food:groceries              €115.60
     assets:bank:checking
 
-2025-12-19 * Christmas dinner  ; restaurant
+2026-09-19 * Christmas dinner  ; restaurant
     expenses:food:restaurant              €90.00
     assets:bank:checking
 
-2025-12-22 * Supermarket
+2026-09-22 * Supermarket
     expenses:food:groceries               €88.30
     assets:bank:checking
 
-2025-12-24 * Water bill
+2026-09-24 * Water bill
     expenses:housing:utilities            €36.80
     assets:bank:checking
 
-2025-12-27 * Trattoria
+2026-09-27 * Trattoria
     expenses:food:restaurant              €41.00
     assets:bank:checking
 
-2025-12-29 * Taxi ride
+2026-09-29 * Taxi ride
     expenses:transport                    €20.50
     assets:bank:checking
 
-2025-12-30 * Mortgage payment
+2026-09-30 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €172.50
     assets:bank:checking
 
-2025-12-30 * Car loan payment
+2026-09-30 * Car loan payment
     liabilities:loan:car               €250.00
     expenses:transport:interest         €43.00
     assets:bank:checking
 
-2025-12-31 * Credit card statement
+2026-09-30 * Credit card statement
     liabilities:credit-card            €-280.00
     expenses:shopping                  €200.00
     expenses:food:restaurant            €80.00
 
-; === January 2026 ===
+; === October 2026 ===
 
-2026-01-02 * (SAL-202601) Monthly salary
+2026-10-02 * (SAL-202610) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2026-01-03 * Rent payment
+2026-10-03 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2026-01-05 * Supermarket
+2026-10-05 * Supermarket
     expenses:food:groceries               €62.30
     assets:bank:checking
 
-2026-01-06 Transfer to savings
+2026-10-06 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2026-01-07 * Gym membership  ; monthly
+2026-10-07 * Gym membership  ; monthly
     expenses:health                       €35.00
     assets:bank:checking
 
-2026-01-08 * Electricity bill
+2026-10-08 * Electricity bill
     expenses:housing:utilities            €85.40
     assets:bank:checking
 
-2026-01-10 * Monthly subscriptions  ; streaming + cloud
+2026-10-10 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2026-01-11 * Sushi restaurant
+2026-10-11 * Sushi restaurant
     expenses:food:restaurant              €38.50
     assets:bank:checking
 
-2026-01-12 * Supermarket
+2026-10-12 * Supermarket
     expenses:food:groceries               €91.20
     assets:bank:checking
 
-2026-01-13 * Monthly train pass
+2026-10-13 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2026-01-15 * Buy XDWD  ; world equity ETF
+2026-10-15 * Buy XDWD  ; world equity ETF
     assets:investments:XDWD            10 XDWD @ €118.50
     assets:bank:checking            €-1185.00
 
-2026-01-15 * Buy XEON  ; euro money market ETF
+2026-10-15 * Buy XEON  ; euro money market ETF
     assets:investments:XEON             5 XEON @ €147.80
     assets:bank:checking             €-739.00
 
-2026-01-17 * Pizzeria
+2026-10-17 * Pizzeria
     expenses:food:restaurant              €22.00
     assets:bank:checking
 
-2026-01-19 * Supermarket
+2026-10-19 * Supermarket
     expenses:food:groceries              €108.45
     assets:bank:checking
 
-2026-01-20 ! Freelance invoice  ; pending payment
+2026-10-20 ! Freelance invoice  ; pending payment
     assets:bank:checking                 €450.00
     income:freelance
 
-2026-01-22 * Gas bill
+2026-10-22 * Gas bill
     expenses:housing:utilities            €42.70
     assets:bank:checking
 
-2026-01-25 * Supermarket
+2026-10-25 * Supermarket
     expenses:food:groceries               €73.60
     assets:bank:checking
 
-2026-01-27 * Buy XGDU  ; gold ETC
+2026-10-27 * Buy XGDU  ; gold ETC
     assets:investments:XGDU             8 XGDU @ €63.20
     assets:bank:checking             €-505.60
 
-2026-01-28 * Taxi ride
+2026-10-28 * Taxi ride
     expenses:transport                    €18.50
     assets:bank:checking
 
-2026-01-30 * Thai restaurant
+2026-10-30 * Thai restaurant
     expenses:food:restaurant              €31.00
     assets:bank:checking
 
-2026-01-30 * Mortgage payment
+2026-10-30 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €171.00
     assets:bank:checking
 
-2026-01-30 * Car loan payment
+2026-10-30 * Car loan payment
     liabilities:loan:car               €250.00
     expenses:transport:interest         €42.00
     assets:bank:checking
 
-2026-01-31 * Credit card statement
+2026-10-30 * Credit card statement
     liabilities:credit-card            €-155.00
     expenses:shopping                   €95.00
     expenses:food:restaurant            €60.00
 
-; === February 2026 ===
+; === November 2026 ===
 
-2026-02-01 * (SAL-202602) Monthly salary
+2026-11-01 * (SAL-202611) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2026-02-02 * Rent payment
+2026-11-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2026-02-03 * Supermarket
+2026-11-03 * Supermarket
     expenses:food:groceries               €55.80
     assets:bank:checking
 
-2026-02-04 Transfer to savings
+2026-11-04 Transfer to savings
     assets:bank:savings                  €500.00
     assets:bank:checking
 
-2026-02-05 * Gym membership  ; monthly
+2026-11-05 * Gym membership  ; monthly
     expenses:health                       €35.00
     assets:bank:checking
 
-2026-02-06 * Water bill
+2026-11-06 * Water bill
     expenses:housing:utilities            €38.20
     assets:bank:checking
 
-2026-02-07 * Burger restaurant
+2026-11-07 * Burger restaurant
     expenses:food:restaurant              €27.50
     assets:bank:checking
 
-2026-02-08 * Monthly subscriptions  ; streaming + cloud
+2026-11-08 * Monthly subscriptions  ; streaming + cloud
     expenses:subscriptions                €24.99
     expenses:subscriptions                €12.99
     assets:bank:checking
 
-2026-02-10 * Supermarket
+2026-11-10 * Supermarket
     expenses:food:groceries               €82.15
     assets:bank:checking
 
-2026-02-11 * Monthly train pass
+2026-11-11 * Monthly train pass
     expenses:transport                    €49.00
     assets:bank:checking
 
-2026-02-12 * Buy XDWD  ; world equity ETF
+2026-11-12 * Buy XDWD  ; world equity ETF
     assets:investments:XDWD             5 XDWD @ €124.70
     assets:bank:checking             €-623.50
 
-2026-02-14 * Valentine's dinner
+2026-11-14 * Valentine's dinner
     expenses:food:restaurant              €85.00
     assets:bank:checking
 
-2026-02-15 * Supermarket
+2026-11-15 * Supermarket
     expenses:food:groceries               €67.90
     assets:bank:checking
 
-2026-02-17 * Electricity bill
+2026-11-17 * Electricity bill
     expenses:housing:utilities            €79.60
     assets:bank:checking
 
-2026-02-18 * Freelance project
+2026-11-18 * Freelance project
     assets:bank:checking                 €600.00
     income:freelance
 
-2026-02-20 * Supermarket
+2026-11-20 * Supermarket
     expenses:food:groceries               €94.30
     assets:bank:checking
 
-2026-02-21 * Buy XEON  ; euro money market ETF
+2026-11-21 * Buy XEON  ; euro money market ETF
     assets:investments:XEON             3 XEON @ €148.50
     assets:bank:checking             €-445.50
 
-2026-02-22 * Trattoria
+2026-11-22 * Trattoria
     expenses:food:restaurant              €42.00
     assets:bank:checking
 
-2026-02-24 * Taxi ride
+2026-11-24 * Taxi ride
     expenses:transport                    €15.00
     assets:bank:checking
 
-2026-02-25 * Supermarket
+2026-11-25 * Supermarket
     expenses:food:groceries               €71.40
     assets:bank:checking
 
-2026-02-27 * Mortgage payment
+2026-11-27 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €169.50
     assets:bank:checking
 
-2026-02-27 * Car loan payment
+2026-11-27 * Car loan payment
     liabilities:loan:car               €250.00
     expenses:transport:interest         €41.00
     assets:bank:checking
 
-2026-02-28 * Credit card statement
+2026-11-28 * Credit card statement
     liabilities:credit-card            €-185.00
     expenses:shopping                  €115.00
     expenses:food:restaurant            €70.00
 
-; === March 2026 ===
+; === December 2026 ===
 
-2026-03-01 * (SAL-202603) Monthly salary
+2026-12-01 * (SAL-202612) Monthly salary
     assets:bank:checking               €3200.00
     income:salary
 
-2026-03-02 * Rent payment
+2026-12-02 * Rent payment
     expenses:housing:rent                €800.00
     assets:bank:checking
 
-2026-03-02 * Mortgage payment
+2026-12-02 * Mortgage payment
     liabilities:mortgage               €620.00
     expenses:housing:interest          €168.00
     assets:bank:checking
 
-2026-03-02 * Car loan payment
+2026-12-02 * Car loan payment
     liabilities:loan:car               €250.00
     expenses:transport:interest         €40.00
     assets:bank:checking
 
-2026-03-03 * Credit card statement
+2026-12-03 * Credit card statement
     liabilities:credit-card            €-170.00
     expenses:shopping                  €105.00
     expenses:food:restaurant            €65.00
