@@ -14,11 +14,11 @@ from textual.widgets import DataTable
 
 from hledger_textual.models import RecurringRule
 from hledger_textual.recurring import (
+    RECURRING_FILENAME,
     RecurringError,
     add_recurring_rule,
     compute_pending,
     delete_recurring_rule,
-    ensure_recurring_file,
     generate_transactions,
     parse_recurring_rules,
     update_recurring_rule,
@@ -93,7 +93,10 @@ class RecurringPane(DataTablePaneMixin, Widget):
         """Load recurring rules from file."""
 
         def _load() -> list[RecurringRule]:
-            self._recurring_path = ensure_recurring_file(self.journal_file)
+            # The recurring file is only created by the first "add rule"
+            # action or an explicit generation; looking at the pane never
+            # writes (issue #270).
+            self._recurring_path = self.journal_file.parent / RECURRING_FILENAME
             return sorted(
                 parse_recurring_rules(self._recurring_path),
                 key=lambda r: r.start_date or "",

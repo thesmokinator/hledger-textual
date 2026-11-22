@@ -14,7 +14,6 @@ from pathlib import Path
 
 from hledger_textual.amountutil import parse_amount_string as _parse_amount_string_raw
 from hledger_textual.fileutil import (
-    atomic_write_text,
     journal_include_lock,
     safe_write_with_validation,
 )
@@ -38,16 +37,26 @@ def _budget_path(journal_file: Path) -> Path:
     return journal_file.parent / BUDGET_FILENAME
 
 
-def ensure_budget_file(journal_file: Path) -> Path:
-    """Create budget.journal if missing and add include directive to the main journal.
+def ensure_budget_file(journal_file: Path, *, create: bool = False) -> Path:
+    """Return the budget.journal path, optionally creating it and its include.
+
+    Looking at the Budget pane never touches the disk.  Only a mutating
+    action (adding the first rule) calls this with ``create=True``: the
+    empty file is created and the ``include budget.journal`` line is
+    inserted into the main journal with backup/validate/restore safety
+    (issue #270 — the app must not write on launch).
 
     Args:
         journal_file: Path to the main hledger journal file.
+        create: Create the file and insert the include when missing.
 
     Returns:
         Path to the budget.journal file.
     """
     budget_file = _budget_path(journal_file)
+
+    if not create and not budget_file.exists():
+        return budget_file
 
     if not budget_file.exists():
         budget_file.write_text("", encoding="utf-8")
@@ -64,7 +73,14 @@ def ensure_budget_file(journal_file: Path) -> Path:
             include_line = f"include {BUDGET_FILENAME}\n"
             if journal_text and not journal_text.startswith("\n"):
                 include_line += "\n"
-            atomic_write_text(journal_file, include_line + journal_text)
+            safe_write_with_validation(
+                target_file=journal_file,
+                content=include_line + journal_text,
+                journal_file=journal_file,
+                validate=check_journal,
+                error_cls=BudgetError,
+                context="Budget include",
+            )
 
     return budget_file
 
@@ -209,6 +225,9 @@ def add_budget_rule(
     if any(r.account == rule.account for r in rules):
         raise BudgetError(f"Budget rule already exists for {rule.account}")
     rules.append(rule)
+    # First rule: create the file and insert the include as part of this
+    # mutation (never on launch).
+    ensure_budget_file(journal_file, create=True)
     write_budget_rules(budget_path, rules, journal_file)
 
 

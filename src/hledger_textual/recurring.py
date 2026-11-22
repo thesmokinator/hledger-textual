@@ -18,7 +18,6 @@ from pathlib import Path
 
 from hledger_textual.amountutil import parse_amount_string as _parse_amount_string_raw
 from hledger_textual.fileutil import (
-    atomic_write_text,
     journal_include_lock,
     safe_write_with_validation,
 )
@@ -57,16 +56,27 @@ class RecurringError(Exception):
     """Raised when a recurring file operation fails."""
 
 
-def ensure_recurring_file(journal_file: Path) -> Path:
-    """Create recurring.journal if missing and add include directive to the main journal.
+def ensure_recurring_file(journal_file: Path, *, create: bool = False) -> Path:
+    """Return the recurring.journal path, optionally creating it and its include.
+
+    Looking at the Recurring pane never touches the disk.  Only a mutating
+    action (adding the first rule or auto-generating) calls this with
+    ``create=True``: the empty file is created and the ``include
+    recurring.journal`` line is inserted into the main journal with
+    backup/validate/restore safety (issue #270 — the app must not write on
+    launch).
 
     Args:
         journal_file: Path to the main hledger journal file.
+        create: Create the file and insert the include when missing.
 
     Returns:
         Path to the recurring.journal file.
     """
     recurring_file = journal_file.parent / RECURRING_FILENAME
+
+    if not create and not recurring_file.exists():
+        return recurring_file
 
     if not recurring_file.exists():
         recurring_file.write_text("", encoding="utf-8")
@@ -82,7 +92,14 @@ def ensure_recurring_file(journal_file: Path) -> Path:
             include_line = f"include {RECURRING_FILENAME}\n"
             if journal_text and not journal_text.startswith("\n"):
                 include_line += "\n"
-            atomic_write_text(journal_file, include_line + journal_text)
+            safe_write_with_validation(
+                target_file=journal_file,
+                content=include_line + journal_text,
+                journal_file=journal_file,
+                validate=check_journal,
+                error_cls=RecurringError,
+                context="Recurring include",
+            )
 
     return recurring_file
 
@@ -308,6 +325,9 @@ def add_recurring_rule(
     if any(r.rule_id == rule.rule_id for r in rules):
         raise RecurringError(f"Recurring rule already exists with id: {rule.rule_id}")
     rules.append(rule)
+    # First rule: create the file and insert the include as part of this
+    # mutation (never on launch).
+    ensure_recurring_file(journal_file, create=True)
     write_recurring_rules(recurring_path, rules, journal_file)
 
 
