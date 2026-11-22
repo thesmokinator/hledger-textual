@@ -66,10 +66,47 @@ The journal is resolved in this order:
 3. `~/.config/hledger-textual/config.toml` (`journal_file` key)
 4. `~/.hledger.journal`
 
-### Startup period
+### Navigating time
 
-The app can open directly on a specific period with the same flags as
-hledger:
+Every pane shares one period selection, so moving in time moves all of
+them together. On startup the app opens on the current month, or — when the
+current month has no transactions — on the month of the journal's latest
+activity (with an explanatory notice).
+
+Inside the app:
+
+| Key | Effect |
+| --- | --- |
+| `g` | Open the "go to period" picker (Transactions, Summary, Reports, Budget) |
+| `◄` / `►` | Step one month (Reports shifts its whole window) |
+| `shift+◄` / `shift+►` | Step one year |
+| `t` | Return to the current month |
+
+The picker accepts hledger-style period expressions:
+
+```
+2024          whole year
+2024-03       one month
+2024-01..2024-06      month range
+2024-03-05..2024-04-02        day range
+this month · last month · next month · this/last/next year
+ytd           year to date
+all           the whole journal
+march · mar 2024      month names
+```
+
+Selections outside the journal's data span are rejected with the actual
+span shown. When the selected month is empty, Transactions offers a
+"Jump to latest activity" hint (also available in Summary as `J`).
+
+Caveats of the all-time view (`all`): the Summary cards and breakdown show
+aggregates over the entire journal, so month-specific figures are not
+visible there; the Transactions "Scheduled" split (future-dated
+transactions at the end of the list) only appears on the current month.
+For an at-a-glance view of a single period, prefer a month or year
+selection.
+
+At startup, the same scoping is available with the same flags as hledger:
 
 ```bash
 hledger-textual -f all.journal -p 2024              # whole year
@@ -78,12 +115,10 @@ hledger-textual -f all.journal -p ytd               # year to date
 hledger-textual -f all.journal -b 2024-01-01 -e 2024-06-30   # explicit range
 ```
 
-`-p/--period` accepts any expression the in-app period picker (`g`)
-understands: `2024`, `2024-03`, `2024-01..2024-06`, `2024-03-05..2024-04-02`,
-`this/last/next month/year`, `ytd`, `all`, month names. `-b/--begin` and
-`-e/--end` take precedence over `-p` bounds and behave exactly like hledger
-(`--end` is exclusive). An invalid period aborts with a clear message and a
-non-zero status instead of opening an empty UI.
+`-p/--period` accepts any expression the period picker understands.
+`-b/--begin` and `-e/--end` take precedence over `-p` bounds and behave
+exactly like hledger (`--end` is exclusive). An invalid period aborts with
+a clear message and a non-zero status instead of opening an empty UI.
 
 The startup period is resolved in this order:
 
@@ -91,9 +126,6 @@ The startup period is resolved in this order:
 2. the `default_period` key in `~/.config/hledger-textual/config.toml`
 3. the current month — or, when the current month has no transactions, the
    month of the journal's latest activity (with an explanatory notice)
-
-Inside the app, all panes share one period: navigate with `g` (picker),
-`◄`/`►` (months), `shift+◄`/`shift+►` (years) and `t` (today).
 
 ## Performance
 
@@ -123,6 +155,7 @@ A minimal `~/.config/hledger-textual/config.toml`:
 ```toml
 journal_file = "~/finance/all.journal"
 theme = "nord"
+# default_period = "last month"
 
 # Reorder the tabs (any subset; missing tabs keep their default order)
 tab_order = ["summary", "accounts", "transactions", "budget", "recurring", "reports"]

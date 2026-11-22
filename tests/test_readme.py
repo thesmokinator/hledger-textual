@@ -59,3 +59,27 @@ class TestReadme:
             if line.strip().startswith("```")
         ]
         assert len(fences) % 2 == 0, "unbalanced code fences in README.md"
+
+
+class TestNavigatingTimeDocs:
+    """The "Navigating time" section documents period navigation (issue #269)."""
+
+    def _readme(self) -> str:
+        """Return the README text."""
+        return README.read_text(encoding="utf-8")
+
+    def test_navigating_time_section_exists(self) -> None:
+        """The README has a Navigating time section."""
+        assert "### Navigating time" in self._readme()
+
+    def test_section_documents_picker_cli_and_all_time(self) -> None:
+        """Picker syntax, CLI flags and the all-time caveat are documented."""
+        text = self._readme()
+        for needle in (
+            "go to period",
+            "-p/--period",
+            "--end` is exclusive",
+            "Caveats of the all-time view",
+            "default_period",
+        ):
+            assert needle in text, f"missing from README: {needle}"
