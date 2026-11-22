@@ -66,6 +66,35 @@ The journal is resolved in this order:
 3. `~/.config/hledger-textual/config.toml` (`journal_file` key)
 4. `~/.hledger.journal`
 
+### Startup period
+
+The app can open directly on a specific period with the same flags as
+hledger:
+
+```bash
+hledger-textual -f all.journal -p 2024              # whole year
+hledger-textual -f all.journal -p "last month"      # relative period
+hledger-textual -f all.journal -p ytd               # year to date
+hledger-textual -f all.journal -b 2024-01-01 -e 2024-06-30   # explicit range
+```
+
+`-p/--period` accepts any expression the in-app period picker (`g`)
+understands: `2024`, `2024-03`, `2024-01..2024-06`, `2024-03-05..2024-04-02`,
+`this/last/next month/year`, `ytd`, `all`, month names. `-b/--begin` and
+`-e/--end` take precedence over `-p` bounds and behave exactly like hledger
+(`--end` is exclusive). An invalid period aborts with a clear message and a
+non-zero status instead of opening an empty UI.
+
+The startup period is resolved in this order:
+
+1. `-p` / `-b` / `-e` CLI arguments
+2. the `default_period` key in `~/.config/hledger-textual/config.toml`
+3. the current month — or, when the current month has no transactions, the
+   month of the journal's latest activity (with an explanatory notice)
+
+Inside the app, all panes share one period: navigate with `g` (picker),
+`◄`/`►` (months), `shift+◄`/`shift+►` (years) and `t` (today).
+
 ## Performance
 
 Independent hledger queries run concurrently, the Summary paints its cards before loading the rest, and every tab keeps loading in the background. A persistent disk cache makes restarting on an unchanged journal effectively instant.

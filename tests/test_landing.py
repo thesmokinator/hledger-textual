@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from hledger_textual.app import HledgerTuiApp
-from hledger_textual.period import current_month_selection, month_selection
+from hledger_textual.period import (
+    current_month_selection,
+    month_selection,
+    year_selection,
+)
 from tests.conftest import has_hledger, wait_until
 
 
@@ -122,3 +126,67 @@ class TestStartupLanding:
             await pilot.press("r")
             await pilot.pause(delay=0.5)
             assert app.period_selection == month_selection(date(2024, 5, 1))
+
+
+class TestExplicitPeriod:
+    """A CLI/config period (issue #268) is never overridden by the landing."""
+
+    async def test_explicit_period_not_overridden_by_landing(self, tmp_path: Path):
+        """An old journal with -p 2024 stays on 2024, no landing notice."""
+        journal = _write_journal(
+            tmp_path,
+            "2024-03-10 * Old groceries\n"
+            "    expenses:food          20.00\n"
+            "    assets:checking\n",
+        )
+        app = HledgerTuiApp(
+            journal_file=journal, initial_period=year_selection(2024)
+        )
+        notices = _spy_notify(app)
+        async with app.run_test() as pilot:
+            await wait_until(pilot, lambda: app.journal_stats is not None)
+            await pilot.pause(delay=0.3)
+            assert app.period_selection == year_selection(2024)
+            assert not any("latest activity" in m for m in notices)
+
+    async def test_every_pane_opens_on_the_explicit_year(self, tmp_path: Path):
+        """With -p 2024, Transactions, Summary and Reports scope to 2024."""
+        from hledger_textual.widgets.reports_pane import ReportsPane
+        from hledger_textual.widgets.summary_pane import SummaryPane
+        from hledger_textual.widgets.transactions_table import TransactionsTable
+
+        journal = _write_journal(
+            tmp_path,
+            "2024-03-10 * Old groceries\n"
+            "    expenses:food          20.00\n"
+            "    assets:checking\n",
+        )
+        app = HledgerTuiApp(
+            journal_file=journal, initial_period=year_selection(2024)
+        )
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            table = app.query_one(TransactionsTable)
+            assert table._period.query() == "date:2024"
+            summary = app.query_one(SummaryPane)
+            assert summary._period_str() == "2024"
+            reports = app.query_one(ReportsPane)
+            assert reports._period_range() == ("2024-01-01", "2025-01-01")
+
+    async def test_transactions_show_the_explicit_year(self, tmp_path: Path):
+        """Transactions actually list the 2024 data at startup."""
+        from hledger_textual.widgets.transactions_table import TransactionsTable
+
+        journal = _write_journal(
+            tmp_path,
+            "2024-03-10 * Old groceries\n"
+            "    expenses:food          20.00\n"
+            "    assets:checking\n",
+        )
+        app = HledgerTuiApp(
+            journal_file=journal, initial_period=year_selection(2024)
+        )
+        async with app.run_test() as pilot:
+            app._activate_section("transactions")
+            table = app.query_one(TransactionsTable)
+            await wait_until(pilot, lambda: len(table._all_transactions) == 1)

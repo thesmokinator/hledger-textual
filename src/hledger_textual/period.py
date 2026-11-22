@@ -54,10 +54,15 @@ class PeriodSelection:
         Examples: ``2024-03``, ``2024-01..2024-06``, ``2024-03-05..2024-04-02``.
         Empty string for the unbounded ``"all"`` selection.
         """
-        if self.kind == "all" or self.begin is None:
+        if self.kind == "all" or (self.begin is None and self.end is None):
             return ""
-        if self.kind == "month" or self.end is None:
+        if self.begin is None:
+            return f"..{self._format_inclusive_end()}"
+        if self.kind == "month":
             return self._format_inclusive_begin()
+        if self.end is None:
+            # Open-ended range: everything from the begin bound onwards.
+            return f"{self._format_inclusive_begin()}.."
         return self._format_inclusive_span()
 
     def query(self) -> str:
@@ -90,6 +95,13 @@ class PeriodSelection:
         """
         assert self.begin is not None
         return self._format_bound(self.begin)
+
+    def _format_inclusive_end(self) -> str:
+        """Format the (exclusive) end bound as an inclusive hledger expression."""
+        assert self.end is not None
+        if self.end.day == 1:
+            return prev_month(self.end).strftime("%Y-%m")
+        return (self.end - timedelta(days=1)).isoformat()
 
     def _format_inclusive_span(self) -> str:
         """Format begin/end (exclusive) as an inclusive hledger span.
@@ -435,6 +447,68 @@ def _parse_month_name(text: str, today: date) -> PeriodSelection | None:
         return None
     year = int(year_text) if year_text else today.year
     return month_selection(date(year, month, 1))
+
+
+def period_from_flags(
+    period: str | None, begin: str | None, end: str | None
+) -> PeriodSelection:
+    """Build the initial period from the CLI flags ``-p``/``-b``/``-e`` (issue #268).
+
+    ``-b``/``-e`` take precedence over ``-p`` when given (matching hledger,
+    where explicit bounds override the period expression's bounds).  Bounds
+    accept ``YYYY``, ``YYYY-MM`` and ``YYYY-MM-DD``; ``--end`` is **exclusive**,
+    exactly like hledger's ``-e``.
+
+    Args:
+        period: Value of ``-p/--period`` (may be None).
+        begin: Value of ``-b/--begin`` (may be None).
+        end: Value of ``-e/--end`` (may be None).
+
+    Returns:
+        The selection covering the requested period.
+
+    Raises:
+        ValueError: If a flag value cannot be parsed.
+    """
+    if begin or end:
+        begin_date = _parse_bound(begin) if begin else None
+        end_date = _parse_bound(end) if end else None
+        if begin and begin_date is None:
+            raise ValueError(f"Invalid --begin value: {begin!r}")
+        if end and end_date is None:
+            raise ValueError(f"Invalid --end value: {end!r}")
+        if begin_date is not None and end_date is not None:
+            if begin_date > end_date:
+                begin_date, end_date = end_date, begin_date
+            if begin_date.day == 1 and end_date.day == 1:
+                label = _month_range_label(begin_date, end_date)
+            else:
+                label = (
+                    f"{begin_date.isoformat()} \u2192 "
+                    f"{(end_date - timedelta(days=1)).isoformat()}"
+                )
+            return PeriodSelection(
+                kind="range", begin=begin_date, end=end_date, label=label
+            )
+        if begin_date is not None:
+            return PeriodSelection(
+                kind="range",
+                begin=begin_date,
+                end=None,
+                label=f"from {begin_date.isoformat()}",
+            )
+        return PeriodSelection(
+            kind="range",
+            begin=None,
+            end=end_date,
+            label=f"to {(end_date - timedelta(days=1)).isoformat()}",
+        )
+    if period:
+        selection = parse_period(period)
+        if selection is None:
+            raise ValueError(f"Invalid period: {period!r}")
+        return selection
+    raise ValueError("No period flags given")
 
 
 def _parse_bound(text: str) -> date | None:

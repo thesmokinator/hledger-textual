@@ -445,12 +445,13 @@ class SummaryPane(DataTablePaneMixin, Widget):
     # ------------------------------------------------------------------
 
     def _period_str(self) -> str:
-        """Return the hledger period query string for the selected month.
+        """Return the hledger period expression for the shared selection.
 
-        The month comes from the app's shared period selection (issue #263);
-        widgets mounted outside the main app fall back to the current month.
+        For a month selection this is ``YYYY-MM``; ranges and years use
+        their compact hledger form (``2024-01..2024-06``, ``2024``); the
+        ``all`` selection returns ``""`` (all time).
         """
-        return self._current_month.strftime("%Y-%m")
+        return get_period(self).period_expr
 
     @property
     def _current_month(self) -> date:
@@ -1110,7 +1111,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         if not self.is_attached or not self.query("#summary-income-title"):
             return
 
-        month_name = self._current_month.strftime("%B %Y")
+        month_name = get_period(self).label
 
         # --- Income breakdown ---
         self.query_one("#summary-income-title", Static).update(
@@ -1220,13 +1221,13 @@ class SummaryPane(DataTablePaneMixin, Widget):
             return
         hint = hints.first()
         stats = self.journal_stats
+        period = get_period(self)
         if income_breakdown or breakdown or stats is None or stats.last_date is None:
             hint.update("")
             hint.display = False
             return
-        month_name = self._current_month.strftime("%B %Y")
         hint.update(
-            f"[dim]No transactions in {month_name}. [/dim]"
+            f"[dim]No transactions in {period.label}. [/dim]"
             "[bold]Jump to latest activity[/bold][dim] (click or press J)[/dim]"
         )
         hint.display = True
