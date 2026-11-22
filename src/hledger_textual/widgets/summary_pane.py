@@ -35,6 +35,7 @@ from hledger_textual.hledger import (
     load_income_breakdown,
     load_investment_eur_by_account,
     load_investment_portfolio,
+    load_journal_stats,
     load_liabilities_breakdown,
     load_period_expenses_by_commodity,
     load_period_income_by_commodity,
@@ -43,6 +44,7 @@ from hledger_textual.hledger import (
 )
 from hledger_textual.parallel import gather_loads
 from hledger_textual.prices import PriceError, get_prices_file, has_pricehist
+from hledger_textual.models import JournalStats
 
 
 class _DisplayTable(DataTable):
@@ -256,6 +258,18 @@ class SummaryPane(DataTablePaneMixin, Widget):
     class Loaded(Message):
         """Posted once the Summary's static and breakdown sections have loaded."""
 
+    class StatsLoaded(Message):
+        """Posted when journal statistics (including the date span) are available."""
+
+        def __init__(self, stats: JournalStats) -> None:
+            """Initialise the message.
+
+            Args:
+                stats: The loaded journal statistics.
+            """
+            super().__init__()
+            self.stats = stats
+
     BINDINGS = [
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
@@ -286,6 +300,8 @@ class SummaryPane(DataTablePaneMixin, Widget):
         self._summary_export_rows: list[list[str]] = []
         self._collapsed_sections: set[str] = set()
         self._loaded_posted = False
+        #: Journal statistics loaded with the static data (issue #267).
+        self.journal_stats: JournalStats | None = None
 
     # ------------------------------------------------------------------
     # Layout
@@ -568,6 +584,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
             summary_result,
             net_result,
             liabilities_result,
+            stats_result,
         ) = gather_loads(
             [
                 lambda: load_period_summary(
@@ -579,6 +596,10 @@ class SummaryPane(DataTablePaneMixin, Widget):
                 lambda: load_liabilities_breakdown(
                     self.journal_file, commodity=commodity, cache=self._cache
                 ),
+                # Stats also carry the transaction date span used for the
+                # startup landing heuristic (issue #267); loaded once here so
+                # period navigation never pays for it again.
+                lambda: load_journal_stats(self.journal_file),
             ]
         )
 
@@ -588,6 +609,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
         # comes from a cache and must not be mutated.
         net_by_commodity = _load_result(net_result, [])
         liabilities = _load_result(liabilities_result, [])
+        stats = _load_result(stats_result, None)
 
         # The per-side views reuse the raw R/X queries cached by the net
         # loader, so these calls normally do not start a subprocess.
@@ -612,6 +634,7 @@ class SummaryPane(DataTablePaneMixin, Widget):
             expenses_by_commodity,
             net_by_commodity,
             commodity,
+            stats,
         )
 
     @work(thread=True, exclusive=True, group="summary-investments")
@@ -693,11 +716,15 @@ class SummaryPane(DataTablePaneMixin, Widget):
         expenses_by_commodity: list[tuple[str, Decimal]] | None = None,
         net_by_commodity: list[tuple[str, Decimal]] | None = None,
         commodity: str | None = None,
+        stats: JournalStats | None = None,
     ) -> None:
         """Apply card values and liabilities."""
         hide_loading_overlay(self)
         if not self.is_attached:
             return
+        if stats is not None:
+            self.journal_stats = stats
+            self.post_message(self.StatsLoaded(stats))
         # Guard against the widget being unmounted between the is_attached check
         # and the DOM query (can happen when a background worker completes after
         # the app has started tearing down during tests).

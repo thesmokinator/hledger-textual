@@ -18,7 +18,7 @@ from hledger_textual.config import (
     load_tab_order,
     load_theme,
 )
-from hledger_textual.period import PeriodSelection, current_month_selection
+from hledger_textual.period import PeriodSelection, current_month_selection, month_selection
 from hledger_textual.sync import SyncBackend, SyncError, create_sync_backend
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
@@ -173,6 +173,11 @@ class HledgerTuiApp(App):
         self._deferred_loads: list[tuple[str, Callable[[], None]]] = []
         self._preload_started = False
         self._sync_backend: SyncBackend | None = None
+        #: Journal statistics (with the date span), set once the Summary loads
+        #: them; used by the startup landing heuristic (issue #267) and later
+        #: by the period picker for validation.
+        self.journal_stats = None
+        self._landing_checked = False
         sync_config = load_sync_config()
         if sync_config:
             method = sync_config.get("method", "git")
@@ -296,6 +301,38 @@ class HledgerTuiApp(App):
     def _on_summary_loaded(self, event: SummaryPane.Loaded) -> None:
         """Kick off the deferred pane loads once the Summary has painted."""
         self._start_deferred_loads()
+
+    @on(SummaryPane.StatsLoaded)
+    def _on_summary_stats_loaded(self, event: SummaryPane.StatsLoaded) -> None:
+        """Store the journal span and land on the latest month when needed.
+
+        The landing heuristic runs once at startup: if the newest transaction
+        predates the current month, the current month is provably empty, so
+        the app starts on the month of the latest activity (issue #267).
+        Journals with no data or with future-dated transactions are left on
+        the current month without any notice.
+        """
+        self.journal_stats = event.stats
+        if self._landing_checked:
+            return
+        self._landing_checked = True
+        stats = event.stats
+        if stats.last_date is None:
+            return
+        from datetime import date
+
+        today = date.today()
+        latest = stats.last_date
+        if (latest.year, latest.month) >= (today.year, today.month):
+            return
+        if self.period_selection != current_month_selection():
+            return  # user (or a future CLI flag) already chose a period
+        self.period_selection = month_selection(latest)
+        self.notify(
+            f"Showing {latest.strftime('%b %Y')} — latest activity in this journal",
+            severity="information",
+            timeout=10,
+        )
 
     def _start_deferred_loads(self) -> None:
         """Start every queued initial pane load exactly once."""

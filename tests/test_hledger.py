@@ -5,6 +5,7 @@ import subprocess
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -256,6 +257,45 @@ class TestLoadJournalStats:
         """The sample journal uses a single commodity: Euro."""
         stats = load_journal_stats(sample_journal_path)
         assert stats.commodities == ["€"]
+
+    def test_date_span(self, sample_journal_path: Path):
+        """The span is parsed from the Txns span line (end is exclusive)."""
+        stats = load_journal_stats(sample_journal_path)
+        assert stats.first_date == date(2026, 1, 15)
+        assert stats.last_date == date(2026, 1, 17)
+
+    def test_empty_journal_span_is_none(self, tmp_path: Path):
+        """An empty journal reports no dates."""
+        journal = tmp_path / "empty.journal"
+        journal.write_text("")
+        stats = load_journal_stats(journal)
+        assert stats.transaction_count == 0
+        assert stats.first_date is None
+        assert stats.last_date is None
+
+    def test_span_fallback_without_span_line(self, tmp_path: Path, monkeypatch):
+        """Old stats output without a span line falls back to print."""
+        journal = tmp_path / "journal.journal"
+        journal.write_text(
+            "2024-03-10 * Test\n"
+            "    expenses:food          10.00\n"
+            "    assets:checking\n"
+        )
+        stats_output = (
+            "Txns                : 1\n"
+            "Accounts            : 2\n"
+        )
+        monkeypatch.setattr(
+            "hledger_textual.hledger.run_hledger",
+            lambda *args, **kwargs: stats_output if args and args[0] == "stats" else "",
+        )
+        monkeypatch.setattr(
+            "hledger_textual.hledger.load_transactions",
+            lambda file: [SimpleNamespace(date="2024-03-10")],
+        )
+        stats = load_journal_stats(journal)
+        assert stats.first_date == date(2024, 3, 10)
+        assert stats.last_date == date(2024, 3, 10)
 
 
 class TestLoadPeriodSummary:
