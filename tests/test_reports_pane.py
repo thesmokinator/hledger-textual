@@ -12,6 +12,7 @@ from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from hledger_textual.models import ReportData, ReportRow
+from hledger_textual.period import month_selection
 from hledger_textual.widgets.reports_pane import ReportsPane
 from hledger_textual.widgets.reports_renderer import format_custom_output as _format_custom_output
 from tests.conftest import wait_until
@@ -172,6 +173,128 @@ class TestReportsPaneReload:
             await pilot.press("r")
             await pilot.pause(delay=0.5)
             assert call_count > initial_count
+
+
+class TestReportsPaneWindowNavigation:
+    """Arrow-key period window shifting (issue #264)."""
+
+    def _stub_load(self, monkeypatch) -> None:
+        """Stub load_report so no hledger subprocess runs."""
+        def _mock_load(*args, **kwargs):
+            return ReportData(title="IS", period_headers=["Jan"], rows=[])
+
+        monkeypatch.setattr(
+            "hledger_textual.widgets.reports_pane.load_report", _mock_load
+        )
+
+    async def test_right_shifts_window_forward(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Right arrow moves the anchor forward by the window length."""
+        self._stub_load(monkeypatch)
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._period_fallback = month_selection(date(2024, 3, 1))
+            pane.focus()
+            await pilot.press("right")
+            await pilot.pause(delay=0.5)
+            assert pane._period_fallback == month_selection(date(2024, 9, 1))
+
+    async def test_left_shifts_window_back(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Left arrow moves the anchor back by the window length."""
+        self._stub_load(monkeypatch)
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._period_fallback = month_selection(date(2024, 3, 1))
+            pane.focus()
+            await pilot.press("left")
+            await pilot.pause(delay=0.5)
+            assert pane._period_fallback == month_selection(date(2023, 9, 1))
+
+    async def test_shift_across_year_boundary(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Shifting from December crosses into the next year."""
+        self._stub_load(monkeypatch)
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._period_fallback = month_selection(date(2024, 12, 1))
+            pane.focus()
+            await pilot.press("right")
+            await pilot.pause(delay=0.5)
+            assert pane._period_fallback == month_selection(date(2025, 6, 1))
+
+    async def test_shift_left_right_year_keys(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Shift+arrows move the anchor by exactly one year."""
+        self._stub_load(monkeypatch)
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._period_fallback = month_selection(date(2024, 3, 1))
+            pane.focus()
+            await pilot.press("shift+right")
+            await pilot.pause(delay=0.5)
+            assert pane._period_fallback == month_selection(date(2025, 3, 1))
+            await pilot.press("shift+left")
+            await pilot.pause(delay=0.5)
+            assert pane._period_fallback == month_selection(date(2024, 3, 1))
+
+    async def test_ytd_window_shifts_by_a_year(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """A YTD window has a 12-month shift step."""
+        self._stub_load(monkeypatch)
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._period_fallback = month_selection(date(2024, 3, 1))
+            pane._period_months = 0
+            pane.focus()
+            await pilot.press("right")
+            await pilot.pause(delay=0.5)
+            assert pane._period_fallback == month_selection(date(2025, 3, 1))
+
+    async def test_t_returns_to_current_window(
+        self, reports_journal: Path, monkeypatch
+    ):
+        """Pressing t restores the window to the current calendar month."""
+        self._stub_load(monkeypatch)
+        app = _ReportsApp(reports_journal)
+        async with app.run_test() as pilot:
+            await pilot.pause(delay=0.5)
+            pane = app.query_one(ReportsPane)
+            pane._period_fallback = month_selection(date(2024, 3, 1))
+            pane.focus()
+            await pilot.press("t")
+            await pilot.pause(delay=0.5)
+            today = date.today().replace(day=1)
+            assert pane._period_fallback == month_selection(today)
+
+    def test_window_display_range(self):
+        """The context bar range names the real begin and end months."""
+        pane = ReportsPane.__new__(ReportsPane)
+        pane._period_months = 6
+        pane._period_fallback = month_selection(date(2024, 3, 1))
+        assert pane._window_display_range() == "2023-10 → 2024-03"
+
+    def test_drill_down_date_query_for_shifted_window(self):
+        """Drill-down column dates derive from the shifted window begin."""
+        pane = ReportsPane.__new__(ReportsPane)
+        pane._period_begin = date(2023, 10, 1)
+        assert pane._column_to_date_query(0) == "date:2023-10"
+        assert pane._column_to_date_query(3) == "date:2024-01"
 
 
 class TestReportsPaneVimNavigation:
@@ -419,10 +542,10 @@ class TestReportsPaneInvestments:
             assert "Investments" not in section_names
             assert inv_call_count == 0
 
-    async def test_t_key_toggles_tree_mode(
+    async def test_T_key_toggles_tree_mode(
         self, reports_journal: Path, monkeypatch
     ):
-        """Pressing t flips _tree_mode and triggers reload with the new mode."""
+        """Pressing T flips _tree_mode and triggers reload with the new mode."""
         captured_modes: list[str] = []
 
         def _mock_load(*args, **kwargs):
@@ -440,12 +563,12 @@ class TestReportsPaneInvestments:
             assert captured_modes[-1] == "flat"
 
             pane.focus()
-            await pilot.press("t")
+            await pilot.press("T")
             await pilot.pause(delay=0.5)
             assert pane._tree_mode
             assert captured_modes[-1] == "tree"
 
-            await pilot.press("t")
+            await pilot.press("T")
             await pilot.pause(delay=0.5)
             assert not pane._tree_mode
             assert captured_modes[-1] == "flat"
@@ -495,10 +618,10 @@ class TestReportsPaneInvestments:
             assert cells_by_account["food"] == "  food"
             assert cells_by_account["groceries"] == "    groceries"
 
-    async def test_t_key_noop_when_custom_report_active(
+    async def test_T_key_noop_when_custom_report_active(
         self, reports_journal: Path, monkeypatch
     ):
-        """Pressing t does nothing when a custom report is active."""
+        """Pressing T does nothing when a custom report is active."""
         def _mock_load(*args, **kwargs):
             return ReportData(title="IS", period_headers=["Jan"], rows=[])
 
@@ -512,7 +635,7 @@ class TestReportsPaneInvestments:
             pane._custom_report_name = "my-report"
             initial = pane._tree_mode
             pane.focus()
-            await pilot.press("t")
+            await pilot.press("T")
             await pilot.pause(delay=0.2)
             assert pane._tree_mode == initial
 

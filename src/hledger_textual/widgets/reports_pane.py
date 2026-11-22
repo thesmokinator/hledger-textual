@@ -23,6 +23,7 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.parallel import gather_loads
+from hledger_textual.period import current_month_selection, shift_months
 from hledger_textual.textual_compat import is_no_selection
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
@@ -40,6 +41,7 @@ from hledger_textual.widgets.pane_mixin import (
     request_initial_load,
     run_pane_load,
     set_empty_state_visible,
+    set_period,
 )
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 from hledger_textual.widgets.report_chart import extract_chart_data
@@ -78,7 +80,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         Binding("r", "refresh", "Refresh", show=True, priority=True),
         Binding("c", "toggle_chart", "Chart", show=False, priority=True),
         Binding("i", "toggle_investments", "Investments", show=False, priority=True),
-        Binding("t", "toggle_tree", "Tree/Flat", show=True, priority=True),
+        Binding("T", "toggle_tree", "Tree/Flat", show=True, priority=True),
         Binding("S", "toggle_sort_amount", "Sort amount", show=True, priority=True),
         Binding("M", "toggle_stacked_currency", "Stacked", show=True, priority=True),
         Binding("x", "export", "Export", show=False, priority=True),
@@ -86,6 +88,13 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         Binding("e", "edit_custom_report", "Edit report", show=False, priority=True),
         Binding("d", "delete_custom_report", "Delete report", show=False, priority=True),
         Binding("escape", "back_to_builtin", "Back", show=False),
+        # Arrow keys shift the period window (issue #264); h/l/j/k keep
+        # cursor navigation inside the report table.
+        Binding("left", "shift_window_back", "Shift window back", show=False, priority=True),
+        Binding("right", "shift_window_forward", "Shift window forward", show=False, priority=True),
+        Binding("shift+left", "shift_window_year_back", "Shift window back one year", show=False, priority=True),
+        Binding("shift+right", "shift_window_year_forward", "Shift window forward one year", show=False, priority=True),
+        Binding("t", "today_window", "Today", show=False, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("h", "cursor_left", "Left", show=False),
@@ -181,8 +190,67 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         text.append(report_name, style="bold")
         text.append("  ·  ", style="dim")
         text.append(period_name, style="dim")
+        text.append("  ·  ", style="dim")
+        text.append(self._window_display_range(), style="dim")
 
         self.query_one("#report-context-bar", Static).update(text)
+
+    def _window_display_range(self) -> str:
+        """Return the month span the report window covers, e.g. ``2024-07 → 2024-12``.
+
+        Derived from the shared period anchor (issue #263) and the window
+        length, so it always matches the data that would be loaded now.
+        """
+        period = get_period(self)
+        anchor = period.begin or date.today()
+        anchor = anchor.replace(day=1)
+        if self._period_months == 0:
+            begin = date(anchor.year, 1, 1)
+        else:
+            total = anchor.year * 12 + anchor.month - self._period_months
+            begin_year, begin_month = divmod(total, 12)
+            begin = date(begin_year, begin_month + 1, 1)
+        return f"{begin.strftime('%Y-%m')} \u2192 {anchor.strftime('%Y-%m')}"
+
+    # --- Window navigation (issue #264) ---
+
+    def _window_months(self) -> int:
+        """Return the shift amount for one window step.
+
+        The window length itself (3/6/12 months, YTD) is a separate setting
+        from the anchor; a YTD window shifts by a full year.
+        """
+        return self._period_months if self._period_months > 0 else 12
+
+    def _shift_window(self, months: int) -> None:
+        """Move the shared period anchor by *months* and reload.
+
+        Args:
+            months: Number of months to shift (negative = backwards).
+        """
+        set_period(self, shift_months(get_period(self), months))
+        self._load_report_data()
+
+    def action_shift_window_back(self) -> None:
+        """Shift the report window back by its own length."""
+        self._shift_window(-self._window_months())
+
+    def action_shift_window_forward(self) -> None:
+        """Shift the report window forward by its own length."""
+        self._shift_window(self._window_months())
+
+    def action_shift_window_year_back(self) -> None:
+        """Shift the report window back by one year."""
+        self._shift_window(-12)
+
+    def action_shift_window_year_forward(self) -> None:
+        """Shift the report window forward by one year."""
+        self._shift_window(12)
+
+    def action_today_window(self) -> None:
+        """Return the report window to the current month."""
+        set_period(self, current_month_selection())
+        self._load_report_data()
 
     def _period_range(self) -> tuple[str, str]:
         """Calculate begin and end dates for the report window.
