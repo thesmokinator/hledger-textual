@@ -150,6 +150,18 @@ file or the `HLEDGER_TEXTUAL_READ_ONLY=1` environment variable; the
 `--read-only` flag takes precedence. See [Files written](#files-hledger-textual-writes)
 for the complete list of files the app may write.
 
+### Directive writes
+
+The app only writes directives (include lines, account notes) from
+explicit user actions, and previews them first. When you add the first
+budget/recurring rule or save an account note, a confirmation dialog shows
+the target file relative to the journal, the exact lines added or removed,
+and the reason ("Budget rules live in budget.journal; hledger needs the
+include directive to see them."). Cancel leaves every file byte-identical.
+
+Checking **Don't ask again** persists `confirm_directive_writes = false`
+in the config; setting the key back to `true` restores the prompt.
+
 ## Performance
 
 Independent hledger queries run concurrently, the Summary paints its cards before loading the rest, and every tab keeps loading in the background. A persistent disk cache makes restarting on an unchanged journal effectively instant.

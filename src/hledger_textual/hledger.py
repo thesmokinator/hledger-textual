@@ -26,6 +26,7 @@ from hledger_textual.models import (
     AmountStyle,
     BudgetRow,
     AccountDirective,
+    DirectiveWritePlan,
     JournalStats,
     PeriodSummary,
     Posting,
@@ -626,6 +627,7 @@ def save_account_directive(
     file: str | Path,
     account: str,
     comment: str,
+    plan: DirectiveWritePlan | None = None,
 ) -> tuple[Path, bool]:
     """Add or update an ``account`` directive in the journal (issue #272).
 
@@ -643,32 +645,100 @@ def save_account_directive(
         account: Full account name (e.g. ``"expenses:groceries"``).
         comment: The comment text (without leading ``;``).  If empty,
             any existing comment is removed but the directive is kept.
+        plan: Optional pre-computed plan from
+            :func:`plan_account_directive` (shown in a confirmation
+            first).  When given it is applied as-is.
 
     Returns:
         ``(written_file, fell_back)``: the file that was written and
         whether the account had to be located by fallback.
     """
     path = Path(file)
+    if plan is None:
+        plan = plan_account_directive(path, account, comment)
+
+    from hledger_textual.fileutil import safe_write_with_validation
+    from hledger_textual.journal import JournalError
+
+    safe_write_with_validation(
+        target_file=plan.target_file,
+        content=plan.content,
+        journal_file=path,
+        validate=check_journal,
+        error_cls=JournalError,
+        context="Account note",
+    )
+    return plan.target_file, plan.fell_back
+
+
+def plan_account_directive(
+    file: str | Path,
+    account: str,
+    comment: str,
+) -> DirectiveWritePlan:
+    """Compute the edit :func:`save_account_directive` would perform, without writing.
+
+    Args:
+        file: Path to the main journal file.
+        account: Full account name the note belongs to.
+        comment: The note text (without leading ``;``).
+
+    Returns:
+        A :class:`DirectiveWritePlan` describing the target file and the
+        exact added/removed lines.
+    """
+    path = Path(file)
     target, fell_back = _resolve_account_file(path, account)
 
-    lines = target.read_text(encoding="utf-8").splitlines()
+    try:
+        lines = target.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        lines = []
+
+    new_lines, added, removed = _edit_directive_lines(lines, account, comment)
+    return DirectiveWritePlan(
+        target_file=target,
+        content="\n".join(new_lines) + "\n",
+        added=added,
+        removed=removed,
+        fell_back=fell_back,
+    )
+
+
+def _edit_directive_lines(
+    lines: list[str], account: str, comment: str
+) -> tuple[list[str], list[str], list[str]]:
+    """Apply an account-directive edit to a list of lines.
+
+    Args:
+        lines: Current file lines.
+        account: Full account name.
+        comment: The note text (empty removes the comment).
+
+    Returns:
+        ``(new_lines, added, removed)`` — the new content plus the exact
+        added/removed lines for the confirmation diff.
+    """
     comment_suffix = f"  ; {comment}" if comment else ""
     new_line = f"account {account}{comment_suffix}"
 
-    # Try to find and replace an existing directive
     found = False
+    removed: list[str] = []
     i = 0
     while i < len(lines):
         m = re.match(r"^account\s+(\S+)", lines[i])
         if m and m.group(1) == account:
+            removed.append(lines[i])
             lines[i] = new_line
             found = True
             # Remove any continuation comment lines
             while i + 1 < len(lines) and re.match(r"^\s+;", lines[i + 1]):
+                removed.append(lines[i + 1])
                 lines.pop(i + 1)
             break
         i += 1
 
+    added = [new_line]
     if not found:
         # Insert after existing directives, before the first transaction
         # (first line starting with a date)
@@ -683,24 +753,13 @@ def save_account_directive(
         if insert_at > 0 and lines[insert_at - 1].strip():
             lines.insert(insert_at, "")
             insert_at += 1
+            added.insert(0, "")
         lines.insert(insert_at, new_line)
         if insert_at + 1 < len(lines) and lines[insert_at + 1].strip():
             lines.insert(insert_at + 1, "")
+            added.append("")
 
-    # Deferred imports: fileutil/journal sit above this module in the
-    # dependency graph (journal imports hledger).
-    from hledger_textual.fileutil import safe_write_with_validation
-    from hledger_textual.journal import JournalError
-
-    safe_write_with_validation(
-        target_file=target,
-        content="\n".join(lines) + "\n",
-        journal_file=path,
-        validate=check_journal,
-        error_cls=JournalError,
-        context="Account note",
-    )
-    return target, fell_back
+    return lines, added, removed
 
 
 def _resolve_account_file(journal: Path, account: str) -> tuple[Path, bool]:
