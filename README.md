@@ -127,6 +127,29 @@ The startup period is resolved in this order:
 3. the current month — or, when the current month has no transactions, the
    month of the journal's latest activity (with an explanatory notice)
 
+### Read-only mode
+
+Open the journal for viewing only — every write path is disabled:
+
+```bash
+hledger-textual --read-only
+```
+
+When enabled:
+
+- adding, editing, deleting, cloning, moving and status toggles are refused
+  with a toast
+- account note editing, CSV import, budget and recurring rules and the
+  recurring auto-generation are disabled
+- sync is disabled (a download could rewrite the journal)
+- the footer carries a persistent `READ-ONLY` marker
+
+Exports, search, saved filters, period navigation and drill-down keep
+working. The mode can also be enabled with `read_only = true` in the config
+file or the `HLEDGER_TEXTUAL_READ_ONLY=1` environment variable; the
+`--read-only` flag takes precedence. See [Files written](#files-hledger-textual-writes)
+for the complete list of files the app may write.
+
 ## Performance
 
 Independent hledger queries run concurrently, the Summary paints its cards before loading the rest, and every tab keeps loading in the background. A persistent disk cache makes restarting on an unchanged journal effectively instant.
@@ -156,6 +179,7 @@ A minimal `~/.config/hledger-textual/config.toml`:
 journal_file = "~/finance/all.journal"
 theme = "nord"
 # default_period = "last month"
+# read_only = true
 
 # Reorder the tabs (any subset; missing tabs keep their default order)
 tab_order = ["summary", "accounts", "transactions", "budget", "recurring", "reports"]

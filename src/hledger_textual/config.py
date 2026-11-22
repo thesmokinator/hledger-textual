@@ -353,6 +353,23 @@ def load_tab_order() -> list[str] | None:
     return ordered or None
 
 
+def load_read_only() -> bool:
+    """Return whether the app should start in read-only mode (issue #271).
+
+    Reads the ``read_only`` key from config.toml (``read_only = true``) or
+    the ``HLEDGER_TEXTUAL_READ_ONLY`` environment variable (``1``/``true``).
+    The ``--read-only`` CLI flag takes precedence over both.
+
+    Returns:
+        True when read-only mode is requested by config or environment.
+    """
+    env = os.environ.get("HLEDGER_TEXTUAL_READ_ONLY", "").strip().lower()
+    if env in ("1", "true", "yes"):
+        return True
+    val = _load_config_dict().get("read_only", None)
+    return val is True
+
+
 def load_default_period() -> str | None:
     """Return the configured startup period, or ``None`` when not set.
 
@@ -590,8 +607,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-e",
         "--end",
-        help="Inclusive end date of the initial period (YYYY-MM-DD). Overrides --period bounds.",
+        help="Exclusive end date of the initial period (like hledger -e). Overrides --period bounds.",
         default=None,
+    )
+    parser.add_argument(
+        "--read-only",
+        help="Open the journal for viewing only: disable every write path.",
+        action="store_true",
+        default=False,
     )
     return parser.parse_args(argv)
 

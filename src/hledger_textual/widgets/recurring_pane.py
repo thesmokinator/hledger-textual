@@ -221,6 +221,10 @@ class RecurringPane(DataTablePaneMixin, Widget):
 
     def action_generate(self) -> None:
         """Compute pending transactions and open the generate preview screen."""
+        from hledger_textual.widgets.pane_mixin import refuse_read_only
+
+        if refuse_read_only(self):
+            return
         if not self._rules:
             self.notify("No recurring rules defined", severity="warning", timeout=3)
             return
