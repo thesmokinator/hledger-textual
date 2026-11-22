@@ -150,9 +150,18 @@ class AccountTransactionsScreen(Screen):
                         timeout=5,
                     )
                     return
-                save_account_directive(self.journal_file, self.account, note)
+                written, fell_back = save_account_directive(
+                    self.journal_file, self.account, note
+                )
                 self._refresh_metadata()
-                self.notify("Note saved", timeout=2)
+                if fell_back:
+                    self.notify(
+                        f"Note saved to {written.name} "
+                        "(account not found in transactions)",
+                        timeout=5,
+                    )
+                else:
+                    self.notify(f"Note saved to {written.name}", timeout=3)
 
         self.app.push_screen(
             AccountNoteModal(self.account, current_note), callback=on_result
