@@ -1,6 +1,6 @@
 [project]
 name = "hledger-textual"
-version = "1.0.0"
+version = "1.1.0"
 description = "A full-featured terminal user interface for hledger plain-text accounting"
 readme = "README.md"
 authors = [
