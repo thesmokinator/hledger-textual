@@ -23,6 +23,7 @@ from hledger_textual.config import (
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.parallel import gather_loads
+from hledger_textual.textual_compat import is_no_selection
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.click_select_datatable import ClickSelectDataTable
 from hledger_textual.widgets.constants import (
@@ -497,7 +498,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @on(Select.Changed, "#report-type-select")
     def on_report_type_changed(self, event: Select.Changed) -> None:
         """Reload when the report type changes."""
-        if event.value is not Select.NULL:
+        if not is_no_selection(event.value):
             # Select emits Changed for its initial value while mounting; the
             # deferred initial load already covers that case.
             if event.value == self._report_type and self._custom_report_name is None:
@@ -513,7 +514,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @on(Select.Changed, "#report-period-select")
     def on_period_range_changed(self, event: Select.Changed) -> None:
         """Reload when the period range changes."""
-        if event.value is not Select.NULL:
+        if not is_no_selection(event.value):
             if event.value == self._period_months:
                 return
             self._period_months = event.value
@@ -524,7 +525,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     @on(Select.Changed, "#custom-report-select")
     def on_custom_report_changed(self, event: Select.Changed) -> None:
         """Load and display the selected custom report."""
-        if event.value is Select.NULL:
+        if is_no_selection(event.value):
             self._custom_report_name = None
             self._set_custom_view(active=False)
             self._update_context_bar_builtin()

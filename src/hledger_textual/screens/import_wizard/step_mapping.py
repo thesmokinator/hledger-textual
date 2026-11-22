@@ -8,6 +8,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Label, Select, Static
 
 from hledger_textual.screens.import_wizard.state import WizardState
+from hledger_textual.textual_compat import is_no_selection
 from hledger_textual.widgets.constants import FIELD_OPTIONS
 
 
@@ -86,7 +87,7 @@ class MappingStep(VerticalScroll):
             idx = int(select_id[len("mapping-select-"):])
         except ValueError:
             return
-        new_value = "" if event.value is Select.NULL else str(event.value)
+        new_value = "" if is_no_selection(event.value) else str(event.value)
         if idx < len(self._state.field_mapping):
             if self._state.field_mapping[idx] == new_value:
                 # Mount-time sync of the initial value, not a user change.
