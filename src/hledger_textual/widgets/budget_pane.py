@@ -14,8 +14,7 @@ from textual.widget import Widget
 from rich.text import Text
 from textual.widgets import Button, DataTable, Input, Static
 
-from hledger_textual.dateutil import next_month as _next_month
-from hledger_textual.dateutil import prev_month as _prev_month
+from hledger_textual.period import current_month_selection, shift_months
 from hledger_textual.budget import (
     BudgetError,
     add_budget_rule,
@@ -33,9 +32,11 @@ from hledger_textual.widgets.formatting import fmt_amount, fmt_amount_pretty
 from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    get_period,
     request_initial_load,
     run_pane_load,
     set_empty_state_visible,
+    set_period,
 )
 from hledger_textual.widgets.pane_toolbar import PaneToolbar
 
@@ -76,7 +77,6 @@ class BudgetPane(DataTablePaneMixin, Widget):
         self._budget_path: Path | None = None
         self._rules: list[BudgetRule] = []
         self._budget_rows: list[BudgetRow] = []
-        self._current_month: date = date.today().replace(day=1)
         self.filter_text: str = ""
         self._alerted_accounts: set[str] = set()
 
@@ -117,6 +117,18 @@ class BudgetPane(DataTablePaneMixin, Widget):
         set_empty_state_visible(self, "budget-empty-state", "budget-table", False)
         request_initial_load(self, "budget", self._load_budget_data)
         table.focus()
+
+    @property
+    def _current_month(self) -> date:
+        """Return the anchor month of the app's shared period selection.
+
+        The budget pane keeps its monthly cadence but follows the same
+        anchor as every other pane (issue #263).
+        """
+        period = get_period(self)
+        if period.begin is not None:
+            return period.begin.replace(day=1)
+        return date.today().replace(day=1)
 
     def _period_label(self) -> str:
         """Return the formatted period label for the current month."""
@@ -359,20 +371,26 @@ class BudgetPane(DataTablePaneMixin, Widget):
 
     def action_prev_month(self) -> None:
         """Navigate to the previous month."""
-        self._current_month = _prev_month(self._current_month)
-        self._alerted_accounts.clear()
-        self._load_budget_data()
+        self._shift_anchor(-1)
 
     def action_next_month(self) -> None:
         """Navigate to the next month."""
-        self._current_month = _next_month(self._current_month)
-        self._alerted_accounts.clear()
-        self._load_budget_data()
+        self._shift_anchor(1)
 
     def action_today_month(self) -> None:
         """Jump to the current month."""
-        self._current_month = date.today().replace(day=1)
         self._alerted_accounts.clear()
+        set_period(self, current_month_selection())
+        self._load_budget_data()
+
+    def _shift_anchor(self, months: int) -> None:
+        """Move the shared period anchor by *months* and reload.
+
+        Args:
+            months: Number of months to shift (negative = backwards).
+        """
+        self._alerted_accounts.clear()
+        set_period(self, shift_months(get_period(self), months))
         self._load_budget_data()
 
     def action_overview(self) -> None:

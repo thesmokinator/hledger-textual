@@ -36,6 +36,7 @@ from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    get_period,
     request_initial_load,
     run_pane_load,
     set_empty_state_visible,
@@ -184,26 +185,33 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         self.query_one("#report-context-bar", Static).update(text)
 
     def _period_range(self) -> tuple[str, str]:
-        """Calculate begin and end dates based on the selected period range.
+        """Calculate begin and end dates for the report window.
+
+        The window ends at the *anchor month* of the app's shared period
+        selection (issue #263) instead of always ending today: this is what
+        lets a 2024 window be displayed at all.  The window length still
+        comes from ``_period_months``.
 
         Returns:
-            A ``(begin, end)`` tuple of date strings in ``YYYY-MM-DD`` format.
+            A ``(begin, end)`` tuple of date strings in ``YYYY-MM-DD``
+            format, where *end* is exclusive (hledger ``-e``).
         """
-        today = date.today()
-        if today.month == 12:
-            end = date(today.year + 1, 1, 1)
-        else:
-            end = date(today.year, today.month + 1, 1)
+        period = get_period(self)
+        anchor = period.begin or date.today()
+        anchor = anchor.replace(day=1)
+
+        end_month = anchor.month + 1
+        end_year = anchor.year
+        if end_month > 12:
+            end_month, end_year = 1, end_year + 1
+        end = date(end_year, end_month, 1)
 
         if self._period_months == 0:
-            begin = date(today.year, 1, 1)
+            begin = date(anchor.year, 1, 1)
         else:
-            month = today.month - self._period_months + 1
-            year = today.year
-            while month < 1:
-                month += 12
-                year -= 1
-            begin = date(year, month, 1)
+            total = anchor.year * 12 + anchor.month - self._period_months
+            begin_year, begin_month = divmod(total, 12)
+            begin = date(begin_year, begin_month + 1, 1)
 
         return begin.isoformat(), end.isoformat()
 

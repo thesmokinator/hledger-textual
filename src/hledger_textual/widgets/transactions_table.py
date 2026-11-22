@@ -13,17 +13,22 @@ from textual.widget import Widget
 from rich.text import Text
 from textual.widgets import DataTable, Input, Static
 
-from hledger_textual.dateutil import next_month as _next_month
-from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.cache import HledgerCache
 from hledger_textual.hledger import expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
+from hledger_textual.period import (
+    PeriodSelection,
+    current_month_selection,
+    shift_months,
+)
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.pane_mixin import (
+    get_period,
     request_initial_load,
     run_mutation,
     run_pane_load,
     set_empty_state_visible,
+    set_period,
 )
 from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.formatting import fmt_amount_str
@@ -64,8 +69,20 @@ class TransactionsTable(Widget):
 
     @property
     def current_month(self) -> date:
-        """Return the first day of the currently displayed month."""
-        return self._current_month
+        """Return the first day of the currently displayed month.
+
+        For a month selection this is the month itself; range and "all"
+        selections fall back to their begin bound (or today when unbounded).
+        """
+        period = self._period
+        if period.begin is not None:
+            return period.begin.replace(day=1)
+        return date.today().replace(day=1)
+
+    @property
+    def _period(self) -> PeriodSelection:
+        """Return the shared period selection this table displays."""
+        return get_period(self)
 
     def __init__(
         self,
@@ -79,50 +96,47 @@ class TransactionsTable(Widget):
         self.journal_file = journal_file
         self._fixed_query = fixed_query
         self._cache = cache
-        self._current_month: date = date.today().replace(day=1)
-        self._date_query: str = "" if fixed_query else self._month_query()
         self._search_query: str = ""
         self._all_transactions: list[Transaction] = []
 
     # ------------------------------------------------------------------
-    # Month helpers
+    # Period helpers
     # ------------------------------------------------------------------
 
-    def _month_query(self) -> str:
-        """Return hledger date query for the current month."""
-        return f"date:{self._current_month.strftime('%Y-%m')}"
-
     def _period_label(self) -> str:
-        """Return a human-readable label for the current month."""
-        return self._current_month.strftime("%B %Y")
+        """Return a human-readable label for the selected period."""
+        return self._period.label
 
     def _update_period_label(self) -> None:
-        """Refresh the month label widget."""
+        """Refresh the period label widget."""
         self.query_one("#txn-period-label", Static).update(self._period_label())
+
+    def _navigate(self, selection: PeriodSelection) -> None:
+        """Apply a new period selection and refresh the display.
+
+        When the app owns the shared period state its watcher refreshes the
+        pane; otherwise (standalone widget) this widget reloads itself.
+
+        Args:
+            selection: The period selection to apply.
+        """
+        applied = set_period(self, selection)
+        if not applied:
+            self._update_period_label()
+            self._load_transactions()
+            self.post_message(self.MonthChanged(self.current_month))
 
     def prev_month(self) -> None:
         """Navigate to the previous month and reload."""
-        self._current_month = _prev_month(self._current_month)
-        self._date_query = self._month_query()
-        self._update_period_label()
-        self._load_transactions()
-        self.post_message(self.MonthChanged(self._current_month))
+        self._navigate(shift_months(self._period, -1))
 
     def next_month(self) -> None:
         """Navigate to the next month and reload."""
-        self._current_month = _next_month(self._current_month)
-        self._date_query = self._month_query()
-        self._update_period_label()
-        self._load_transactions()
-        self.post_message(self.MonthChanged(self._current_month))
+        self._navigate(shift_months(self._period, 1))
 
     def today_month(self) -> None:
         """Jump to the current calendar month and reload."""
-        self._current_month = date.today().replace(day=1)
-        self._date_query = self._month_query()
-        self._update_period_label()
-        self._load_transactions()
-        self.post_message(self.MonthChanged(self._current_month))
+        self._navigate(current_month_selection())
 
     # ------------------------------------------------------------------
     # Composition
@@ -188,6 +202,7 @@ class TransactionsTable(Widget):
 
     def reload(self) -> None:
         """Trigger a full reload from the journal (call after mutations)."""
+        self._update_period_label()
         self._load_transactions()
 
     def show_filter(self) -> None:
@@ -220,17 +235,13 @@ class TransactionsTable(Widget):
         search_input.value = ""
         search_input.disabled = True
         self._search_query = ""
-        # Restore month filter
-        self._current_month = date.today().replace(day=1)
+        # Restore the period-scoped view (search looked at the whole journal)
         nav = self.query("#txn-period-nav")
         if nav:
-            self._date_query = self._month_query()
-            self._update_period_label()
             nav.first().remove_class("hidden")
-        else:
-            self._date_query = ""
+        self._update_period_label()
         self._load_transactions()
-        self.post_message(self.MonthChanged(self._current_month))
+        self.post_message(self.MonthChanged(self.current_month))
         self.query_one(DataTable).focus()
         return True
 
@@ -240,7 +251,7 @@ class TransactionsTable(Widget):
         return self._search_query
 
     def apply_saved_filter(self, query: str) -> None:
-        """Apply a saved filter query, bypassing month navigation.
+        """Apply a saved filter query, bypassing period navigation.
 
         Shows the search bar pre-filled with *query* and loads matching
         transactions from the entire journal.
@@ -249,7 +260,6 @@ class TransactionsTable(Widget):
             query: The hledger query string to apply.
         """
         self._search_query = query
-        self._date_query = ""
         nav = self.query("#txn-period-nav")
         if nav:
             nav.first().add_class("hidden")
@@ -420,9 +430,17 @@ class TransactionsTable(Widget):
         """Load transactions from hledger in a background thread."""
 
         def _load() -> list[Transaction]:
+            # The date scope is resolved at load time from the shared period
+            # selection, so period changes made anywhere in the app apply on
+            # the next reload.  Search and fixed queries bypass it.
+            date_query = (
+                ""
+                if (self._fixed_query or self._search_query)
+                else self._period.query()
+            )
             parts = [
                 q
-                for q in [self._fixed_query, self._date_query, self._search_query]
+                for q in [self._fixed_query, date_query, self._search_query]
                 if q
             ]
             query = " ".join(parts) or None
@@ -464,11 +482,15 @@ class TransactionsTable(Widget):
 
         today = date.today()
         today_iso = today.isoformat()
+        period = self._period
+        # The Scheduled split is only honest when the view is exactly the
+        # current month; other periods have no "future within this period"
+        # meaning.
         is_current_month = (
             not self._fixed_query
             and not self._search_query
-            and self._current_month.year == today.year
-            and self._current_month.month == today.month
+            and period.kind == "month"
+            and period.contains(today)
         )
 
         if is_current_month:
@@ -532,9 +554,7 @@ class TransactionsTable(Widget):
     def on_search_submitted(self, event: Input.Submitted) -> None:
         """Execute the search query when the user presses Enter."""
         self._search_query = expand_search_query(event.value)
-        if self._search_query:
-            self._date_query = ""  # search entire journal
-        self._load_transactions()
+        self._load_transactions()  # search mode scopes the whole journal
 
     def on_click(self, event) -> None:
         """Handle clicks on the month navigation arrows."""

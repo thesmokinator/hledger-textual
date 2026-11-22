@@ -8,6 +8,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.reactive import reactive
 from textual.widgets import ContentSwitcher, DataTable, Static, Tab, Tabs
 
 from hledger_textual.cache import HledgerCache
@@ -17,6 +18,7 @@ from hledger_textual.config import (
     load_tab_order,
     load_theme,
 )
+from hledger_textual.period import PeriodSelection, current_month_selection
 from hledger_textual.sync import SyncBackend, SyncError, create_sync_backend
 from hledger_textual.widgets.accounts_pane import AccountsPane
 from hledger_textual.widgets.budget_pane import BudgetPane
@@ -136,6 +138,11 @@ class HledgerTuiApp(App):
     TITLE = "hledger-textual"
     CSS_PATH = "styles/app.tcss"
 
+    #: Shared period selection every pane derives its time scope from
+    #: (issue #263).  Panes no longer keep private "today" anchors; they
+    #: read this reactive and reload when it changes.
+    period_selection: reactive[PeriodSelection | None] = reactive(None, init=False)
+
     BINDINGS = [
         # Number keys follow the visual tab order (see tab_order in config),
         # so their help descriptions name the default sections at each slot.
@@ -180,6 +187,30 @@ class HledgerTuiApp(App):
         theme = _resolve_saved_theme(load_theme(), self.available_themes)
         if theme:
             self.theme = theme
+        self.period_selection = current_month_selection()
+
+    # ------------------------------------------------------------------
+    # Shared period state (issue #263)
+    # ------------------------------------------------------------------
+
+    def watch_period_selection(self, new: PeriodSelection | None) -> None:
+        """Refresh the visible pane and mark the others stale on a period change.
+
+        Panes are not rebuilt: the visible one reloads now, the period-aware
+        ones reload when they are next activated (via ``_stale_panes``).
+        """
+        if new is None or not self.is_mounted:
+            return
+        try:
+            switcher = self.query_one("#content-switcher", ContentSwitcher)
+        except Exception:
+            return
+        visible = switcher.current or "summary"
+        # Accounts and Recurring are period-independent; only the four
+        # panes scoped by time need refreshing.
+        period_sections = {"summary", "transactions", "budget", "reports"}
+        self._stale_panes |= period_sections - {visible}
+        self._refresh_pane(visible)
 
     def _pane_for_section(self, section: str):
         """Build the pane widget for a tab section."""

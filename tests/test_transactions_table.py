@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input
 
 from hledger_textual.app import HledgerTuiApp
+from hledger_textual.period import month_selection
 from hledger_textual.widgets.transactions_pane import TransactionsPane
 from hledger_textual.widgets.transactions_table import TransactionsTable
 from tests.conftest import has_hledger, select_first_transaction, wait_until
@@ -120,19 +121,19 @@ def multi_month_journal(tmp_path: Path) -> Path:
 
 
 class TestMonthQuery:
-    """Tests for the _month_query helper on TransactionsTable."""
+    """Tests for the period query and label helpers on TransactionsTable."""
 
     def test_month_query_format(self):
-        """_month_query returns hledger date:YYYY-MM format."""
+        """The period selection produces hledger date:YYYY-MM format."""
         table = TransactionsTable.__new__(TransactionsTable)
-        table._current_month = date(2026, 2, 1)
-        assert table._month_query() == "date:2026-02"
+        table._period_fallback = month_selection(date(2026, 2, 1))
+        assert table._period.query() == "date:2026-02"
 
     def test_period_label_format(self):
         """_period_label returns a human-readable month label."""
         table = TransactionsTable.__new__(TransactionsTable)
-        table._current_month = date(2026, 2, 1)
-        assert table._period_label() == "February 2026"
+        table._period_fallback = month_selection(date(2026, 2, 1))
+        assert table._period.label == "February 2026"
 
 
 # ------------------------------------------------------------------

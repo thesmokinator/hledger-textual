@@ -9,6 +9,7 @@ import pytest
 
 from hledger_textual.app import HledgerTuiApp
 from hledger_textual.budget import parse_budget_rules
+from hledger_textual.period import month_selection
 from tests.conftest import has_hledger
 
 pytestmark = pytest.mark.skipif(not has_hledger(), reason="hledger not installed")
@@ -333,7 +334,8 @@ class TestBudgetMonthNavigation:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
-            pane._current_month = date(2026, 1, 1)
+            budget_app.period_selection = month_selection(date(2026, 1, 1))
+            await pilot.pause()
             await pilot.press("h")
             await pilot.pause()
             assert pane._current_month.month == 12
@@ -350,7 +352,8 @@ class TestBudgetMonthNavigation:
             await pilot.press("4")
             await pilot.pause(delay=1.0)
             pane = budget_app.screen.query_one(BudgetPane)
-            pane._current_month = date(2025, 12, 1)
+            budget_app.period_selection = month_selection(date(2025, 12, 1))
+            await pilot.pause()
             await pilot.press("l")
             await pilot.pause()
             assert pane._current_month.month == 1
