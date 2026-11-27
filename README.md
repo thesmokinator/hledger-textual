@@ -78,9 +78,18 @@ Inside the app:
 | Key | Effect |
 | --- | --- |
 | `g` | Open the "go to period" picker (Transactions, Summary, Reports, Budget) |
+| `p` | Open the period presets menu (also in the command palette) |
+| `P` | Save the current period as a named view |
 | `◄` / `►` | Step one month (Reports shifts its whole window) |
 | `shift+◄` / `shift+►` | Step one year |
 | `t` | Return to the current month |
+
+Presets apply to every pane through the shared period selection:
+This month, Last month, This year, Last year, Last 12 months,
+Year to date, All time. Named views ("FY2024", "Q3 2025") persist in
+`~/.config/hledger-textual/config.toml` under `[period_views]`, can be
+renamed (`r`) or deleted (`d`) from the presets menu, and accept any
+period expression the picker understands.
 
 The picker accepts hledger-style period expressions:
 
@@ -177,7 +186,7 @@ stays a plain-text file you own — there is no database.
 | CSV rules files (e.g. `bank.csv.rules` next to the CSV) | Mapping rules for CSV import | Saved from the import wizard | The full rules content is visible and validated (hledger dry-run) before saving | `--read-only` |
 | Export directory (configurable) | CSV / PDF exports of table data | On an explicit export action, after choosing file and format | The export modal asks for directory and filename | Not applicable |
 | Disk cache (system cache dir) | hledger output keyed by journal signature, including market prices — prices live there, never in your journal | Automatic, on first load of each query | None (transparent cache) | Delete the cache directory; it is rebuilt on demand |
-| Config file (`~/.config/hledger-textual/config.toml`) | Theme, default commodity/period, tab order, saved filters, the "Don't ask again" choice | When you change a preference in the app (e.g. checking "Don't ask again") | None (it is your own preference change) | Edit the file manually |
+| Config file (`~/.config/hledger-textual/config.toml`) | Theme, default commodity/period, tab order, saved filters, saved period views, the "Don't ask again" choice | When you change a preference in the app (e.g. checking "Don't ask again") | None (it is your own preference change) | Edit the file manually |
 
 The app never writes on launch, never keeps a database, and only touches
 transactions from actions you perform in the UI. Every journal write is

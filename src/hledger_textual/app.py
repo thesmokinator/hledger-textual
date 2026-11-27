@@ -159,6 +159,8 @@ class HledgerTuiApp(App):
         Binding("6", "switch_nth(5)", "Reports", show=False),
         Binding("s", "sync", "Sync", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
+        Binding("p", "period_presets", "Period presets", show=True),
+        Binding("P", "save_period_view", "Save period view", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -561,6 +563,24 @@ class HledgerTuiApp(App):
         from hledger_textual.screens.help import HelpScreen
 
         self.push_screen(HelpScreen(self.journal_file))
+
+    def action_period_presets(self) -> None:
+        """Open the period presets menu and apply the chosen selection."""
+        from hledger_textual.screens.period_presets import PeriodPresetsModal
+
+        def on_result(selection) -> None:
+            if selection is not None:
+                self.period_selection = selection
+
+        self.push_screen(PeriodPresetsModal(), callback=on_result)
+
+    def action_save_period_view(self) -> None:
+        """Save the current period selection as a named view."""
+        from hledger_textual.screens.save_period_view import SavePeriodViewModal
+
+        current = self.period_selection
+        expr = current.period_expr if current is not None else ""
+        self.push_screen(SavePeriodViewModal(current_expr=expr))
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
         """Gate actions on app state.
