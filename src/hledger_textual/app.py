@@ -148,6 +148,10 @@ class HledgerTuiApp(App):
     #: read this reactive and reload when it changes.
     period_selection: reactive[PeriodSelection | None] = reactive(None, init=False)
 
+    #: Global hledger query every transaction-backed pane composes with the
+    #: period (issue #281).  Empty string means "no global filter".
+    active_query: reactive[str] = reactive("", init=False)
+
     BINDINGS = [
         # Number keys follow the visual tab order (see tab_order in config),
         # so their help descriptions name the default sections at each slot.
@@ -166,6 +170,7 @@ class HledgerTuiApp(App):
         self,
         journal_file: Path,
         initial_period: PeriodSelection | None = None,
+        initial_query: str | None = None,
         read_only: bool = False,
     ) -> None:
         """Initialize the app.
@@ -176,6 +181,8 @@ class HledgerTuiApp(App):
                 flags or the ``default_period`` config key); None means the
                 current month, with the landing heuristic of #267 allowed to
                 move to the latest activity when the current month is empty.
+            initial_query: Global hledger query from ``--query`` (issue #281);
+                None means no global filter.
             read_only: Disable every write path (issue #271). Exports,
                 search, period navigation and drill-down stay available.
         """
@@ -215,6 +222,7 @@ class HledgerTuiApp(App):
         if theme:
             self.theme = theme
         self.period_selection = initial_period or current_month_selection()
+        self.active_query = initial_query or ""
 
     # ------------------------------------------------------------------
     # Shared period state (issue #263)
