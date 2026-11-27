@@ -250,10 +250,9 @@ async def _measure_all_time(journal: Path) -> dict[str, float]:
                 ),
             )
             await pilot.pause(delay=1.0)
-            table = app.screen.query_one(TransactionsTable)
-            set_period(table, all_selection())
-            await pilot.press("3")
             started = time.perf_counter()
+            set_period(app.screen.query_one(TransactionsTable), all_selection())
+            await pilot.press("3")
             first_paint: float | None = None
             total = (
                 app.journal_stats.transaction_count
