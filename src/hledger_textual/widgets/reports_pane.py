@@ -37,6 +37,7 @@ from hledger_textual.widgets.empty_state import EmptyState
 from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    get_global_query,
     get_period,
     request_initial_load,
     run_pane_load,
@@ -337,6 +338,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
                     sort_amount=self._sort_amount,
                     cache=self._cache,
                     mode="tree" if self._tree_mode else "flat",
+                    query=get_global_query(self),
                 )
 
             def _load_investments() -> ReportData:
@@ -346,6 +348,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
                     period_end=end,
                     commodity=commodity,
                     cache=self._cache,
+                    query=get_global_query(self),
                 )
 
             if show_investments:

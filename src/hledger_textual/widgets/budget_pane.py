@@ -32,6 +32,7 @@ from hledger_textual.widgets.formatting import fmt_amount, fmt_amount_pretty
 from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    get_global_query,
     get_period,
     request_initial_load,
     run_pane_load,
@@ -169,7 +170,8 @@ class BudgetPane(DataTablePaneMixin, Widget):
         """Load actual spending rows, falling back to empty on failure."""
         try:
             self._budget_rows = load_budget_report(
-                self.journal_file, self._period_string(), cache=self._cache
+                self.journal_file, self._period_string(), cache=self._cache,
+                query=get_global_query(self),
             )
         except HledgerError:
             self._budget_rows = []

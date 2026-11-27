@@ -23,6 +23,7 @@ from hledger_textual.period import (
 )
 from hledger_textual.widgets import distribute_column_widths
 from hledger_textual.widgets.pane_mixin import (
+    get_global_query,
     get_period,
     request_initial_load,
     run_mutation,
@@ -107,11 +108,15 @@ class TransactionsTable(Widget):
         """Return a human-readable label for the selected period.
 
         When a search query is active (the filter searches the whole
-        journal), the label says so instead of showing the period.
+        journal), the label says so instead of showing the period.  An
+        active global query is shown alongside the period.
         """
         if self._search_query:
             return f"Filter: {self._search_query}"
-        return self._period.label
+        label = self._period.label
+        if get_global_query(self):
+            return f"{label} + {get_global_query(self)}"
+        return label
 
     def _update_period_label(self) -> None:
         """Refresh the period label widget."""
@@ -457,7 +462,8 @@ class TransactionsTable(Widget):
         def _load() -> list[Transaction]:
             # The date scope is resolved at load time from the shared period
             # selection, so period changes made anywhere in the app apply on
-            # the next reload.  Search and fixed queries bypass it.
+            # the next reload.  Search and fixed queries bypass it; the
+            # global query always composes with the rest (issue #281).
             date_query = (
                 ""
                 if (self._fixed_query or self._search_query)
@@ -465,7 +471,12 @@ class TransactionsTable(Widget):
             )
             parts = [
                 q
-                for q in [self._fixed_query, date_query, self._search_query]
+                for q in [
+                    self._fixed_query,
+                    date_query,
+                    self._search_query,
+                    get_global_query(self),
+                ]
                 if q
             ]
             query = " ".join(parts) or None
