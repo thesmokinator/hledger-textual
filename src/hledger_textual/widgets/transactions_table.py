@@ -98,6 +98,10 @@ class TransactionsTable(Widget):
         self._cache = cache
         self._search_query: str = ""
         self._all_transactions: list[Transaction] = []
+        #: Generation counter invalidating stale all-time fills (issue #280).
+        self._all_time_generation: int = 0
+        #: Journal transaction count the all-time warning was accepted for.
+        self._all_time_confirmed_count: int | None = None
 
     # ------------------------------------------------------------------
     # Period helpers
@@ -450,9 +454,116 @@ class TransactionsTable(Widget):
     # Internal loading / filtering
     # ------------------------------------------------------------------
 
+    def _all_time_years(self) -> list[int] | None:
+        """Return journal years newest-first for bucketed all-time loads.
+
+        Returns ``None`` when the journal span is unknown, in which case
+        the loader falls back to a single full-journal query.
+        """
+        try:
+            stats = self.app.journal_stats
+        except Exception:
+            return None
+        if stats is None or stats.first_date is None or stats.last_date is None:
+            return None
+        return list(range(stats.last_date.year, stats.first_date.year - 1, -1))
+
+    @work(thread=True, exclusive=True)
+    def _load_all_time_buckets(self, gen: int) -> None:
+        """Load the whole journal one year at a time, newest first.
+
+        Each bucket is a bounded ``date:YEAR`` query (parsed and discarded
+        independently, so the full-journal JSON is never held), painted
+        incrementally without rebuilding the table.  A superseded fill
+        (period changed mid-flight) stops at the next year boundary.
+
+        Args:
+            gen: The generation this fill belongs to; stale fills drop out.
+        """
+        years = self._all_time_years()
+        if not years:
+            query = " ".join(
+                q for q in [self._fixed_query, self._search_query] if q
+            ) or None
+            run_pane_load(
+                self,
+                lambda: load_transactions(
+                    self.journal_file, query=query, reverse=True,
+                    cache=self._cache,
+                ),
+                self._set_transactions,
+                loading_message="Loading transactions…",
+                on_error=lambda _exc: [],
+            )
+            return
+        first = True
+        for year in years:
+            if gen != self._all_time_generation:
+                return
+            if (
+                self._period.kind != "all"
+                or self._fixed_query
+                or self._search_query
+            ):
+                return
+            try:
+                year_txns = load_transactions(
+                    self.journal_file,
+                    query=f"date:{year}",
+                    reverse=True,
+                    cache=self._cache,
+                )
+            except Exception:
+                return  # keep what already painted
+            try:
+                self.app.call_from_thread(
+                    self._append_all_time_year, year_txns, gen, first
+                )
+            except Exception:
+                return  # app shutting down
+            first = False
+
+    def _append_all_time_year(
+        self, year_txns: list[Transaction], gen: int, first: bool
+    ) -> None:
+        """Append one year bucket to the table (app thread).
+
+        Drops stale fills and scope changes instead of interleaving rows
+        from two different loads.
+        """
+        if gen != self._all_time_generation:
+            return
+        if not self.is_mounted or not self.query(DataTable):
+            return
+        if (
+            self._period.kind != "all"
+            or self._fixed_query
+            or self._search_query
+        ):
+            return
+        if first:
+            self._all_transactions = list(year_txns)
+            self._update_table(year_txns)
+            return
+        table = self.query_one(DataTable)
+        self._all_transactions.extend(year_txns)
+        for txn in year_txns:
+            table.add_row(*self._plain_cells(txn), key=str(txn.index))
+
     @work(thread=True, exclusive=True)
     def _load_transactions(self) -> None:
         """Load transactions from hledger in a background thread."""
+        self._all_time_generation += 1
+        gen = self._all_time_generation
+        period = self._period
+        if (
+            period.kind == "all"
+            and not self._fixed_query
+            and not self._search_query
+        ):
+            # Unbounded view: year buckets painted progressively (issue #280).
+            self._load_all_time_buckets(gen)
+            return
 
         def _load() -> list[Transaction]:
             # The date scope is resolved at load time from the shared period
@@ -493,6 +604,19 @@ class TransactionsTable(Widget):
         if not self.is_mounted or not self.query(DataTable):
             return
         self._update_table(txns)
+
+    @staticmethod
+    def _plain_cells(txn: Transaction) -> tuple:
+        """Return the DataTable cells for one transaction row."""
+        accounts = " \u00b7 ".join(p.account for p in txn.postings)
+        return (
+            txn.date,
+            txn.type_indicator,
+            txn.status.symbol,
+            txn.description,
+            Text(accounts),
+            fmt_amount_str(txn.total_amount, accounting=True),
+        )
 
     def _update_table(self, transactions: list[Transaction]) -> None:
         """Repopulate the DataTable with *transactions*.
@@ -546,28 +670,10 @@ class TransactionsTable(Widget):
                 )
 
             for txn in past:
-                accounts = " \u00b7 ".join(p.account for p in txn.postings)
-                table.add_row(
-                    txn.date,
-                    txn.type_indicator,
-                    txn.status.symbol,
-                    txn.description,
-                    Text(accounts),
-                    fmt_amount_str(txn.total_amount, accounting=True),
-                    key=str(txn.index),
-                )
+                table.add_row(*self._plain_cells(txn), key=str(txn.index))
         else:
             for txn in transactions:
-                accounts = " \u00b7 ".join(p.account for p in txn.postings)
-                table.add_row(
-                    txn.date,
-                    txn.type_indicator,
-                    txn.status.symbol,
-                    txn.description,
-                    Text(accounts),
-                    fmt_amount_str(txn.total_amount, accounting=True),
-                    key=str(txn.index),
-                )
+                table.add_row(*self._plain_cells(txn), key=str(txn.index))
 
         distribute_column_widths(table, self._TXN_FIXED, self._TXN_FLEX)
 
