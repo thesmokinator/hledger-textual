@@ -26,7 +26,7 @@ Built with [Textual](https://textual.textualize.io) and Python.
 - 📊 **Reports** — monthly, quarterly and yearly income statements, balance sheets, cash flow, charts, and saved custom reports
 - 🏦 **Accounts** — hierarchical or flat balances, search, and full transaction drill-down
 - ✍️ **Transactions** — add, edit, delete, clone, move, filter, and export, with recurring rules and a calendar
-- 💰 **Budgets** — monthly rules with actuals, remaining, percentage used, and a multi-month overview
+- 💰 **Budgets** — monthly rules with actuals, remaining, percentage used, and a multi-month overview (3–36 months, per-year totals, CSV export)
 - 📈 **Investments** — positions, cost basis, market value, and unrealised P/L for ETFs and securities
 - 📥 **Imports** — CSV wizard with separator/header detection and reusable rules
 - 🔄 **Sync** — git or rclone sync for your journal
@@ -126,6 +126,15 @@ The startup period is resolved in this order:
 2. the `default_period` key in `~/.config/hledger-textual/config.toml`
 3. the current month — or, when the current month has no transactions, the
    month of the journal's latest activity (with an explanatory notice)
+
+### Multi-year budget overview
+
+The Budget overview (`o` in the Budget pane) compares actuals against
+your `~ monthly` rules across 3–36 months. A total column per calendar
+year follows each December; rules that change over time (`~ monthly from
+2025-06`) apply per month exactly as hledger computes them, so year
+totals reflect each month's effective rule. Press `x` in the overview to
+export the full table — months and year totals — to CSV or PDF.
 
 ### Read-only mode
 
