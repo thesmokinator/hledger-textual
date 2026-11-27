@@ -381,19 +381,7 @@ async def _async_main(args) -> int:
         )
         stack.enter_context(
             patch(
-                "hledger_textual.widgets.budget_pane.ensure_budget_file",
-                side_effect=lambda _file: budget_path,
-            )
-        )
-        stack.enter_context(
-            patch(
                 "hledger_textual.recurring.ensure_recurring_file",
-                side_effect=lambda _file: recurring_path,
-            )
-        )
-        stack.enter_context(
-            patch(
-                "hledger_textual.widgets.recurring_pane.ensure_recurring_file",
                 side_effect=lambda _file: recurring_path,
             )
         )
@@ -435,6 +423,7 @@ async def _async_main(args) -> int:
         results.update(switches)
 
         if args.all_time:
+            await _measure_all_time(journal)  # warm the disk cache; unrecorded
             results.update(await _measure_all_time(journal))
 
     _print_table(results)
