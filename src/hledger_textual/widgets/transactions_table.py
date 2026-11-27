@@ -14,6 +14,7 @@ from rich.text import Text
 from textual.widgets import DataTable, Input, Static
 
 from hledger_textual.cache import HledgerCache
+from hledger_textual.config import load_all_time_threshold
 from hledger_textual.hledger import expand_search_query, load_transactions
 from hledger_textual.models import Transaction, TransactionStatus
 from hledger_textual.period import (
@@ -66,6 +67,23 @@ class TransactionsTable(Widget):
 
     class JournalChanged(Message):
         """Posted when a transaction is created, edited, or deleted."""
+
+    class AllTimeThreshold(Message):
+        """Posted when an all-time load exceeds the warning threshold.
+
+        The pane offers single years instead of loading everything.
+        """
+
+        def __init__(self, count: int, years: list[int]) -> None:
+            """Initialise the message.
+
+            Args:
+                count: Total transaction count shown in the warning.
+                years: Journal years newest-first offered as single views.
+            """
+            super().__init__()
+            self.count = count
+            self.years = years
 
     @property
     def current_month(self) -> date:
@@ -550,6 +568,43 @@ class TransactionsTable(Widget):
         for txn in year_txns:
             table.add_row(*self._plain_cells(txn), key=str(txn.index))
 
+    def _needs_all_time_confirm(self) -> bool:
+        """Return True when an all-time load must ask first (issue #280).
+
+        Uses the startup journal statistics (no extra subprocess) and the
+        confirmed count, so an accepted journal is not re-asked.
+        """
+        try:
+            stats = self.app.journal_stats
+        except Exception:
+            return False
+        if stats is None:
+            return False
+        if stats.transaction_count <= load_all_time_threshold():
+            return False
+        return self._all_time_confirmed_count != stats.transaction_count
+
+    def _request_all_time_confirm(self) -> None:
+        """Post the threshold warning (app thread) or load when yearless."""
+        try:
+            stats = self.app.journal_stats
+        except Exception:
+            return
+        if (
+            stats is None
+            or stats.first_date is None
+            or stats.last_date is None
+        ):
+            self._all_time_confirmed_count = (
+                stats.transaction_count if stats is not None else 0
+            )
+            self._load_transactions()
+            return
+        years = list(range(stats.last_date.year, stats.first_date.year - 1, -1))
+        self.post_message(
+            self.AllTimeThreshold(stats.transaction_count, years)
+        )
+
     @work(thread=True, exclusive=True)
     def _load_transactions(self) -> None:
         """Load transactions from hledger in a background thread."""
@@ -562,6 +617,12 @@ class TransactionsTable(Widget):
             and not self._search_query
         ):
             # Unbounded view: year buckets painted progressively (issue #280).
+            if self._needs_all_time_confirm():
+                try:
+                    self.app.call_from_thread(self._request_all_time_confirm)
+                except Exception:
+                    pass
+                return
             self._load_all_time_buckets(gen)
             return
 
