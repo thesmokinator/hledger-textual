@@ -107,6 +107,23 @@ class BudgetOverviewScreen(ModalScreen[None]):
         """Display an error message in the status label."""
         self.query_one("#budget-overview-status", Static).update(f"[red]Error: {msg}[/red]")
 
+    def _budget_cell(self, budget_row) -> str:
+        """Render one budget cell with usage colours.
+
+        Args:
+            budget_row: The :class:`BudgetRow` for the cell.
+        """
+        usage = budget_row.usage_pct
+        commodity = budget_row.commodity
+        actual_str = f"{commodity}{budget_row.actual:.2f}"
+        if budget_row.budget:
+            if usage > 100:
+                return f"[red]{actual_str}[/red]"
+            if usage >= 75:
+                return f"[yellow]{actual_str}[/yellow]"
+            return f"[green]{actual_str}[/green]"
+        return actual_str
+
     def _populate_table(
         self,
         periods: list[str],
@@ -131,10 +148,17 @@ class BudgetOverviewScreen(ModalScreen[None]):
             status.update("[dim]No budget data available for this range.[/dim]")
             return
 
-        # Add columns: Account + one per period
+        # Add columns: Account + one per period, with a year total after
+        # each December (issue #282).
+        from hledger_textual.budget_yearly import sum_year_row, year_columns
+
+        spec = year_columns(periods)
         table.add_column("Account", width=28)
-        for p in periods:
-            table.add_column(p, width=14)
+        for entry in spec:
+            if entry[0] == "month":
+                table.add_column(periods[entry[1]], width=14)
+            else:
+                table.add_column(entry[1], width=14)
 
         # Determine account order: rules order first, then any extras from hledger
         rule_accounts = [r.account for r in self._rules]
@@ -146,21 +170,22 @@ class BudgetOverviewScreen(ModalScreen[None]):
                 continue
             period_rows = rows[account]
             cells: list[str] = [account]
-            for br in period_rows:
-                usage = br.usage_pct
-                commodity = br.commodity
-                actual_str = f"{commodity}{br.actual:.2f}"
-                if br.budget:
-                    if usage > 100:
-                        cells.append(f"[red]{actual_str}[/red]")
-                    elif usage >= 75:
-                        cells.append(f"[yellow]{actual_str}[/yellow]")
-                    else:
-                        cells.append(f"[green]{actual_str}[/green]")
+            for entry in spec:
+                if entry[0] == "month":
+                    idx = entry[1]
+                    br = period_rows[idx] if idx < len(period_rows) else None
+                    cells.append(self._budget_cell(br) if br is not None else "")
                 else:
-                    cells.append(actual_str)
+                    _, _year, idxs = entry
+                    months = [
+                        period_rows[i] for i in idxs if i < len(period_rows)
+                    ]
+                    if not months:
+                        cells.append("")
+                    else:
+                        cells.append(self._budget_cell(sum_year_row(account, months)))
             # Pad if hledger returned fewer periods for this account
-            while len(cells) < len(periods) + 1:
+            while len(cells) < len(spec) + 1:
                 cells.append("")
             table.add_row(*cells, key=account)
 
