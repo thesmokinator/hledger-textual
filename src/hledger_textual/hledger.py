@@ -1856,6 +1856,7 @@ def load_investment_report(
     period_end: str | None = None,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    interval: Literal["month", "quarter", "year"] = "month",
 ) -> ReportData:
     """Load a multi-period investment balance report from hledger.
 
@@ -1881,13 +1882,15 @@ def load_investment_report(
         period_begin,
         period_end,
         commodity,
+        interval,
     )
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
-    args = ["bal", "assets:investments", "-M", "-O", "csv", "--flat"]
+    interval_flag = {"month": "-M", "quarter": "-Q", "year": "-Y"}[interval]
+    args = ["bal", "assets:investments", interval_flag, "-O", "csv", "--flat"]
     if commodity:
         args.extend(["-X", commodity])
     if period_begin:
@@ -1978,6 +1981,7 @@ def load_report(
     sort_amount: bool = False,
     cache: HledgerCache | None = None,
     mode: Literal["tree", "flat"] = "flat",
+    interval: Literal["month", "quarter", "year"] = "month",
 ) -> ReportData:
     """Load a multi-period financial report from hledger.
 
@@ -2001,13 +2005,14 @@ def load_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, sort_amount, mode)
+    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, sort_amount, mode, interval)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
-    args = [report_type, "-M", "-O", "csv", "--no-elide", f"--{mode}"]
+    interval_flag = {"month": "-M", "quarter": "-Q", "year": "-Y"}[interval]
+    args = [report_type, interval_flag, "-O", "csv", "--no-elide", f"--{mode}"]
     if sort_amount:
         args.append("--sort-amount")
     if commodity:

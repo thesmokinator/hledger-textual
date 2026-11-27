@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from textual import on, work
@@ -15,6 +15,11 @@ from rich.text import Text
 from textual.widgets import DataTable, Select, Static
 
 from hledger_textual.cache import HledgerCache
+from hledger_textual.comparison import (
+    append_comparison_columns,
+    normalize_comparison_headers,
+    without_comparison_columns,
+)
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.config import (
     load_custom_reports,
@@ -95,6 +100,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         Binding("shift+left", "shift_window_year_back", "Shift window back one year", show=False, priority=True),
         Binding("shift+right", "shift_window_year_forward", "Shift window forward one year", show=False, priority=True),
         Binding("t", "today_window", "Today", show=False, priority=True),
+        Binding("y", "toggle_comparison", "Compare", show=True, priority=True),
         Binding("g", "go_to_period", "Go to period", show=True, priority=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
@@ -122,6 +128,14 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         self._stacked_currency: bool = True
         self._custom_report_name: str | None = None
         self._period_begin: date | None = None
+        #: Year-over-year comparison state (issue #278): "off", "year" or
+        #: "quarter".  Yearly columns come from hledger's native `-Y`/`-Q`
+        #: intervals; balance-sheet columns stay end-of-period balances.
+        self._comparison: str = "off"
+        #: Calendar years covered by the comparison window, in order.
+        self._comparison_years: list[int] = []
+        #: Number of hledger period columns before the appended Δ / Δ%.
+        self._comparison_base_cols: int = 0
         self._table_rows: list[ReportRow | None] = []
         self._row_full_paths: list[str] = []
         # Incremental rendering state: rebuild columns only when the period
@@ -186,6 +200,10 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         """Refresh the context bar to show the active built-in report and period."""
         report_name = REPORT_LABELS.get(self._report_type, self._report_type)
         period_name = REPORT_PERIOD_LABELS.get(self._period_months, "")
+        if self._comparison == "year":
+            period_name = "Yearly comparison"
+        elif self._comparison == "quarter":
+            period_name = "Quarterly comparison"
 
         text = Text()
         text.append(report_name, style="bold")
@@ -204,6 +222,9 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         window given the current length setting.
         """
         period = get_period(self)
+        if self._comparison != "off" and self._comparison_years:
+            years = self._comparison_years
+            return f"{years[0]} → {years[-1]}"
         if period.kind == "all":
             return "All time"
         if period.kind == "range":
@@ -257,6 +278,61 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         """Return the report window to the current month."""
         set_period(self, current_month_selection())
         self._load_report_data()
+
+    def set_comparison(self, mode: str) -> None:
+        """Set the year-over-year comparison mode (issue #278).
+
+        Args:
+            mode: One of ``"off"``, ``"year"`` or ``"quarter"``.
+        """
+        if mode not in ("off", "year", "quarter"):
+            raise ValueError(f"Unknown comparison mode: {mode!r}")
+        self._comparison = mode
+        if mode == "off":
+            self._comparison_years = []
+
+    def action_toggle_comparison(self) -> None:
+        """Cycle comparison mode: off → yearly → quarterly → off."""
+        if self._custom_report_name is not None:
+            return
+        order = ("off", "year", "quarter")
+        nxt = order[(order.index(self._comparison) + 1) % len(order)]
+        self.set_comparison(nxt)
+        labels = {"off": "Comparison off", "year": "Yearly comparison", "quarter": "Quarterly comparison"}
+        self.notify(labels[nxt], timeout=2)
+        self._load_report_data()
+
+    def _comparison_range(self) -> tuple[str, str]:
+        """Return the year-snapped ``(begin, end)`` window for comparison.
+
+        The current period window is widened to full calendar years, going
+        back at least 3 years from the end year so a single-month selection
+        still compares meaningfully.  Yearly columns come from one native
+        hledger ``-Y``/``-Q`` query over this span.
+
+        Returns:
+            ``(begin, end)`` ISO date strings, end exclusive.
+        """
+        begin, end = self._period_range()
+        if end is not None:
+            end_year = (date.fromisoformat(end) - timedelta(days=1)).year
+        else:
+            anchor = get_period(self).begin or date.today()
+            end_year = anchor.year
+        begin_year = (
+            date.fromisoformat(begin).year if begin is not None else end_year
+        )
+        if end_year - begin_year < 2:
+            begin_year = end_year - 2
+        self._comparison_years = list(range(begin_year, end_year + 1))
+        return f"{begin_year}-01-01", f"{end_year + 1}-01-01"
+
+    def _comparison_range_query(self) -> str:
+        """Return a date query covering the whole comparison window."""
+        years = self._comparison_years
+        if not years:
+            return ""
+        return f"date:{years[0]}..{years[-1]}"
 
     def action_go_to_period(self) -> None:
         """Open the period picker and jump to the chosen selection."""
@@ -322,7 +398,14 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         """Load built-in report data in a background thread."""
 
         def _load() -> ReportData:
-            begin, end = self._period_range()
+            comparison = self._comparison
+            if comparison == "off":
+                begin, end = self._period_range()
+                interval: str = "month"
+                self._comparison_base_cols = 0
+            else:
+                begin, end = self._comparison_range()
+                interval = comparison
             self._period_begin = date.fromisoformat(begin) if begin else None
             commodity = resolve_default_commodity(self.journal_file)
             show_investments = self._show_investments and self._report_type == "is"
@@ -337,6 +420,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
                     sort_amount=self._sort_amount,
                     cache=self._cache,
                     mode="tree" if self._tree_mode else "flat",
+                    interval=interval,
                 )
 
             def _load_investments() -> ReportData:
@@ -346,6 +430,7 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
                     period_end=end,
                     commodity=commodity,
                     cache=self._cache,
+                    interval=interval,
                 )
 
             if show_investments:
@@ -367,6 +452,15 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
                     raise inv_result
                 elif inv_result.rows:
                     data = merge_investments(data, inv_result)
+            if comparison != "off":
+                headers = normalize_comparison_headers(
+                    data.period_headers, comparison
+                )
+                data = ReportData(
+                    title=data.title, period_headers=headers, rows=data.rows
+                )
+                self._comparison_base_cols = len(headers)
+                data = append_comparison_columns(data)
             return data
 
         def _apply(data: ReportData) -> None:
@@ -472,12 +566,28 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
     def _column_to_date_query(self, col_index: int) -> str:
         """Convert a zero-based period column index to an hledger date query.
 
+        In comparison mode columns are whole years (``date:2024``) or
+        quarters (``date:2024-04``); Δ / Δ% columns map to ``""`` and the
+        drill-down falls back to the whole comparison window.
+
         Args:
             col_index: Zero-based index into ``period_headers``.
 
         Returns:
-            A string like ``'date:2026-01'``.
+            A string like ``'date:2026-01'``, or ``""`` when unmappable.
         """
+        if self._comparison != "off" and self._comparison_years:
+            years = self._comparison_years
+            if self._comparison == "year":
+                if 0 <= col_index < len(years):
+                    return f"date:{years[col_index]}"
+                return ""
+            quarters = len(years) * 4
+            if 0 <= col_index < quarters:
+                year = years[0] + col_index // 4
+                month = 1 + 3 * (col_index % 4)
+                return f"date:{year}-{month:02d}"
+            return ""
         if self._period_begin is None:
             return ""
         month = self._period_begin.month + col_index
@@ -518,9 +628,18 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         subtitle = ""
         if col_idx > 0 and self._report_data.period_headers:
             period_idx = col_idx - 1
-            if period_idx < len(self._report_data.period_headers):
+            headers = self._report_data.period_headers
+            if period_idx < len(headers):
                 date_query = self._column_to_date_query(period_idx)
-                subtitle = self._report_data.period_headers[period_idx]
+                subtitle = headers[period_idx]
+                if (
+                    self._comparison != "off"
+                    and not date_query
+                    and self._comparison_years
+                ):
+                    date_query = self._comparison_range_query()
+                    years = self._comparison_years
+                    subtitle = f"{years[0]} → {years[-1]}"
 
         from hledger_textual.screens.account_transactions import (
             AccountTransactionsScreen,
@@ -545,7 +664,9 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
 
         from hledger_textual.screens.report_chart_modal import ReportChartModal
 
-        chart_data = extract_chart_data(self._report_data, self._report_type)
+        chart_data = extract_chart_data(
+            without_comparison_columns(self._report_data), self._report_type
+        )
         if not chart_data:
             self.notify("No chart data available for this report", severity="warning", timeout=3)
             return
