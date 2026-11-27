@@ -1249,6 +1249,47 @@ SaveFilterModal {
     color: $text-muted;
 }
 
+/* --- Query Bar --- */
+
+QueryBarModal {
+    align: center middle;
+    background: $surface 60%;
+}
+
+#query-bar-dialog {
+    width: 64;
+    max-width: 90%;
+    height: auto;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#query-bar-title {
+    text-style: bold;
+    color: $accent;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#query-bar-input {
+    margin-bottom: 1;
+}
+
+#query-bar-error {
+    width: 100%;
+    color: $text-muted;
+    min-height: 1;
+    margin-bottom: 1;
+}
+
+#query-bar-hint {
+    width: 100%;
+    text-align: center;
+    color: $text-muted;
+}
+
 /* --- Help Screen --- */
 
 HelpScreen {
