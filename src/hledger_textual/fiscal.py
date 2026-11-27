@@ -8,8 +8,10 @@ through March 2025 when the start month is April).
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
-from hledger_textual.period import PeriodSelection, range_selection
+if TYPE_CHECKING:
+    from hledger_textual.period import PeriodSelection
 
 
 def fiscal_year_of(day: date, start_month: int) -> int:
@@ -46,7 +48,7 @@ def fiscal_year_end_exclusive(year: int, start_month: int) -> date:
     return date(end_year, end_month + 1, 1)
 
 
-def fiscal_ytd(today: date, start_month: int) -> PeriodSelection:
+def fiscal_ytd(today: date, start_month: int) -> "PeriodSelection":
     """Return the year-to-date selection for a fiscal year start.
 
     Spans the first day of the current fiscal year through *today*.
@@ -55,6 +57,8 @@ def fiscal_ytd(today: date, start_month: int) -> PeriodSelection:
         today: Reference date (the end of the range).
         start_month: First month of the fiscal year (1–12).
     """
+    from hledger_textual.period import range_selection
+
     return range_selection(
         fiscal_year_begin(fiscal_year_of(today, start_month), start_month),
         today,
