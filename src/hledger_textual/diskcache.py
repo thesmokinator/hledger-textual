@@ -29,9 +29,11 @@ from hledger_textual.cache import journal_signature
 #: Bump when the cached payload format or parsing contract changes.
 CACHE_VERSION = 1
 
-#: A single command output larger than this is not persisted.  The transactions
-#: pane's month query usually fits; a full-journal ``print -O json`` does not.
-DEFAULT_MAX_ENTRY_BYTES = 8 * 1024 * 1024
+#: A single command output larger than this is not persisted.  Year-sized
+#: ``print`` buckets (~18MB measured on dense years) must fit so all-time
+#: views reopen instantly; a full-journal ``print -O json`` (~245MB on a
+#: 100k-transaction journal) still cannot fill the cache directory.
+DEFAULT_MAX_ENTRY_BYTES = 32 * 1024 * 1024
 
 #: Soft limit on the number of entries; the oldest are pruned first.
 DEFAULT_MAX_ENTRIES = 512

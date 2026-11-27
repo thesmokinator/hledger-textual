@@ -196,6 +196,23 @@ Indicative timings on an Apple M4 (10 cores), macOS, Python 3.12, Textual 8.2.8,
 | Full Summary | 1.1 s | 4.2 s | 8.5 s |
 | All tabs preloaded | 1.6 s | 6.8 s | 14.3 s |
 | Restart with warm cache | 0.2 s | 0.2 s | 0.3 s |
+| All-time first paint (cold) | 0.6 s | 0.7 s | 0.6 s |
+| All-time full fill (cold) | 6.7 s | 31.7 s | 57.8 s |
+| All-time full fill (warm cache) | 4.0 s | 7.6 s | 14.7 s |
+
+The all-time Transactions view (`all` period) loads one year at a time,
+newest first, so the first screen paints as soon as the newest year is in
+— full fills stay responsive because rows are appended, never rebuilt.
+Above `all_time_threshold` transactions (default 20000, configurable) the
+app offers single years instead of loading everything, and the 245 MB
+full-journal JSON of a 100k journal is never held in memory twice (per-year
+queries) nor cached on disk (only year-sized outputs up to 32 MB are).
+Reproduce the all-time rows with:
+
+```bash
+uv run python scripts/benchmark_perf.py --transactions 100000 --all-time
+uv run python scripts/benchmark_perf.py --transactions 100000 --all-time --disk-cache
+```
 
 Timings depend on hardware, disk, and journal shape. Reproduce them with:
 

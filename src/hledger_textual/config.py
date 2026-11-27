@@ -427,6 +427,27 @@ def load_default_period() -> str | None:
     return val.strip()
 
 
+def load_all_time_threshold() -> int:
+    """Return the transaction count above which all-time warns (issue #280).
+
+    Reads the ``all_time_threshold`` key from config.toml, e.g.::
+
+        all_time_threshold = 20000
+
+    Returns:
+        The threshold count.  Defaults to 20000 when absent or invalid
+        (non-integers, booleans and values below 1 fall back).
+    """
+    val = _load_config_dict().get("all_time_threshold", 20000)
+    if isinstance(val, bool):
+        return 20000
+    try:
+        threshold = int(val)
+    except (TypeError, ValueError):
+        return 20000
+    return threshold if threshold >= 1 else 20000
+
+
 def load_auto_generate_recurring() -> bool:
     """Return whether automatic generation of recurring transactions on startup is enabled.
 

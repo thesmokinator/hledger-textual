@@ -91,3 +91,18 @@ class TestGenerateJournal:
             check=True,
             capture_output=True,
         )
+
+
+class TestBenchmarkAllTimeFlag:
+    """The --all-time scenario flag parses correctly."""
+
+    def test_flag_defaults_off(self) -> None:
+        from scripts.benchmark_perf import _build_parser
+
+        assert _build_parser().parse_args([]).all_time is False
+
+    def test_flag_enables_scenario(self) -> None:
+        from scripts.benchmark_perf import _build_parser
+
+        args = _build_parser().parse_args(["--all-time"])
+        assert args.all_time is True

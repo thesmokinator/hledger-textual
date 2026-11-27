@@ -195,3 +195,35 @@ def test_mutating_commands_bypass_disk_cache(
     hledger_module.run_hledger("import", file=journal)
     hledger_module.run_hledger("add", file=journal)
     assert len(calls) == 3
+
+
+class TestYearBucketCap:
+    """Default cap persists year-sized outputs, still skips full journals (#280)."""
+
+    def test_default_cap_fits_year_buckets(self) -> None:
+        from hledger_textual.diskcache import DEFAULT_MAX_ENTRY_BYTES
+
+        assert DEFAULT_MAX_ENTRY_BYTES >= 32 * 1024 * 1024
+
+    def test_year_sized_output_persists_with_defaults(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A ~20MB year bucket (cf. 18MB measured) round-trips with defaults."""
+        monkeypatch.setattr(diskcache, "_hledger_version", lambda: "test-version")
+        journal = tmp_path / "j.journal"
+        journal.write_text("2026-01-01 x\n")
+        cache = HledgerDiskCache(tmp_path / "cache", enabled=True)
+        payload = "x" * (20 * 1024 * 1024)
+        cache.put(("print",), payload, file=journal)
+        assert cache.get(("print",), file=journal) == payload
+
+    def test_full_journal_output_still_skipped_with_defaults(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A 40MB output (cf. 245MB full 100k print) is still skipped."""
+        monkeypatch.setattr(diskcache, "_hledger_version", lambda: "test-version")
+        journal = tmp_path / "j.journal"
+        journal.write_text("2026-01-01 x\n")
+        cache = HledgerDiskCache(tmp_path / "cache", enabled=True)
+        cache.put(("print",), "x" * (40 * 1024 * 1024), file=journal)
+        assert cache.get(("print",), file=journal) is None

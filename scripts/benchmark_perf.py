@@ -50,6 +50,9 @@ from hledger_textual.hledger import (  # noqa: E402
     load_report,
     load_transactions,
 )
+from hledger_textual.period import all_selection  # noqa: E402
+from hledger_textual.widgets.pane_mixin import set_period  # noqa: E402
+from hledger_textual.widgets.transactions_table import TransactionsTable  # noqa: E402
 from hledger_textual.widgets.accounts_pane import AccountsPane  # noqa: E402
 from hledger_textual.widgets.reports_pane import ReportsPane  # noqa: E402
 from hledger_textual.widgets.summary_pane import SummaryPane  # noqa: E402
@@ -216,6 +219,81 @@ async def _measure_app(
     return startup, switch_stats
 
 
+async def _measure_all_time(journal: Path) -> dict[str, float]:
+    """Time the all-time transactions view: first paint and full fill.
+
+    The threshold modal is bypassed (patched sky-high) so the measurement
+    covers the bucketed load itself.  Startup settles first (preload
+    complete on the current month), so the clock isolates the all-time
+    load instead of startup contention.  Polling is sparse (2 s): tight
+    polls force re-renders of a huge table and pollute the measurement.
+
+    Returns:
+        Dict with ``alltime_first_paint_s``, ``alltime_full_fill_s`` and
+        ``alltime_rows`` (0 when the journal span is unknown).
+    """
+    from hledger_textual.widgets.transactions_pane import TransactionsPane
+
+    with patch(
+        "hledger_textual.widgets.transactions_table.load_all_time_threshold",
+        return_value=10**9,
+    ):
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause(delay=2.0)
+            await _wait_until(pilot, lambda: app.journal_stats is not None)
+            await _wait_until(
+                pilot,
+                lambda: bool(
+                    app.query_one(TransactionsPane)
+                    ._table._all_transactions
+                ),
+            )
+            await pilot.pause(delay=1.0)
+            started = time.perf_counter()
+            set_period(app.screen.query_one(TransactionsTable), all_selection())
+            await pilot.press("3")
+            first_paint: float | None = None
+            total = (
+                app.journal_stats.transaction_count
+                if app.journal_stats is not None
+                else 0
+            )
+            # Phase 1: fast polls until first paint (empty table = cheap).
+            while first_paint is None and time.perf_counter() - started < 600:
+                await pilot.pause(delay=0.1)
+                try:
+                    from textual.widgets import DataTable
+
+                    rows = app.screen.query_one(
+                        "#transactions-table", DataTable
+                    ).row_count
+                except Exception:
+                    rows = -1
+                if rows > 0:
+                    first_paint = round(time.perf_counter() - started, 3)
+            # Phase 2: sparse polls to full fill (rendering a huge table
+            # every 0.1 s would pollute the measurement).
+            while True:
+                await pilot.pause(delay=2.0)
+                elapsed = time.perf_counter() - started
+                try:
+                    from textual.widgets import DataTable
+
+                    rows = app.screen.query_one(
+                        "#transactions-table", DataTable
+                    ).row_count
+                except Exception:
+                    rows = -1
+                if (total and rows >= total) or elapsed > 600:
+                    break
+            return {
+                "alltime_first_paint_s": first_paint or -1.0,
+                "alltime_full_fill_s": round(time.perf_counter() - started, 3),
+                "alltime_rows": rows,
+            }
+
+
 def _time_loaders(journal: Path) -> dict[str, float]:
     """Time the main loaders cold and warm on a single cache."""
     cache = HledgerCache()
@@ -330,19 +408,7 @@ async def _async_main(args) -> int:
         )
         stack.enter_context(
             patch(
-                "hledger_textual.widgets.budget_pane.ensure_budget_file",
-                side_effect=lambda _file: budget_path,
-            )
-        )
-        stack.enter_context(
-            patch(
                 "hledger_textual.recurring.ensure_recurring_file",
-                side_effect=lambda _file: recurring_path,
-            )
-        )
-        stack.enter_context(
-            patch(
-                "hledger_textual.widgets.recurring_pane.ensure_recurring_file",
                 side_effect=lambda _file: recurring_path,
             )
         )
@@ -383,6 +449,10 @@ async def _async_main(args) -> int:
         results.update(startup)
         results.update(switches)
 
+        if args.all_time:
+            await _measure_all_time(journal)  # warm the disk cache; unrecorded
+            results.update(await _measure_all_time(journal))
+
     _print_table(results)
     if args.output is not None:
         args.output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
@@ -390,8 +460,8 @@ async def _async_main(args) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Command-line entry point."""
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the benchmark command-line parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--journal", type=Path, help="journal to measure")
     parser.add_argument(
@@ -410,7 +480,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repeat", type=int, default=1, help="app measurement repeats (default: 1)"
     )
+    parser.add_argument(
+        "--all-time",
+        action="store_true",
+        help="also measure the all-time transactions view (first paint + full fill)",
+    )
     parser.add_argument("--output", type=Path, help="write results as JSON")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Command-line entry point."""
+    parser = _build_parser()
     args = parser.parse_args(argv)
     if args.repeat < 1:
         parser.error("--repeat must be >= 1")

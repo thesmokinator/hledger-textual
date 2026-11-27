@@ -107,6 +107,32 @@ class TransactionsPane(DataTablePaneMixin, Widget):
         """Reload summary cards when the displayed month changes."""
         self._load_summary(event.month)
 
+    def on_transactions_table_all_time_threshold(
+        self, event: TransactionsTable.AllTimeThreshold
+    ) -> None:
+        """Offer single years instead of a huge all-time load (issue #280)."""
+        from hledger_textual.period import year_selection
+        from hledger_textual.screens.all_time_confirm import AllTimeModal
+
+        def on_choice(choice: str | None) -> None:
+            if choice == "all":
+                self._table._all_time_confirmed_count = event.count
+                self._table._load_transactions()
+            elif choice:
+                try:
+                    self._table.goto_period(year_selection(int(choice)))
+                except ValueError:
+                    pass
+            else:
+                self._table.notify(
+                    "All-time load deferred — pick a year from the period picker (g)",
+                    timeout=5,
+                )
+
+        self.app.push_screen(
+            AllTimeModal(event.years, event.count), callback=on_choice
+        )
+
     # ------------------------------------------------------------------
     # Actions
     # ------------------------------------------------------------------
