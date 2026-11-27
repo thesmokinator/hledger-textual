@@ -154,6 +154,14 @@ class TestPaneLoaderWiring:
             worker = getattr(pane, trigger)()
             await worker.wait()
             await pilot.pause()
+            if not seen:
+                # worker.wait() may resolve before a cancelled-then-rescheduled
+                # worker runs; poll briefly for the recorded call instead of
+                # trusting the handle alone.
+                try:
+                    await wait_until(pilot, lambda: bool(seen), timeout=30.0)
+                except Exception:
+                    pass
             from textual.widgets import DataTable
 
             table_rows = -1
