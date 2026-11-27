@@ -293,6 +293,8 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
 
     def action_toggle_comparison(self) -> None:
         """Cycle comparison mode: off → yearly → quarterly → off."""
+        if self._custom_report_name is not None:
+            return
         order = ("off", "year", "quarter")
         nxt = order[(order.index(self._comparison) + 1) % len(order)]
         self.set_comparison(nxt)

@@ -81,6 +81,7 @@ Inside the app:
 | `◄` / `►` | Step one month (Reports shifts its whole window) |
 | `shift+◄` / `shift+►` | Step one year |
 | `t` | Return to the current month |
+| `y` | Cycle Reports comparison: off → yearly → quarterly (Reports only) |
 
 The picker accepts hledger-style period expressions:
 
@@ -126,6 +127,16 @@ The startup period is resolved in this order:
 2. the `default_period` key in `~/.config/hledger-textual/config.toml`
 3. the current month — or, when the current month has no transactions, the
    month of the journal's latest activity (with an explanatory notice)
+
+### Comparing years in Reports
+
+Press `y` in Reports to cycle comparison mode: off → yearly → quarterly →
+off. Each year (or quarter) gets its own column plus trailing `Δ` (last
+minus first) and `Δ%` columns; a zero base shows `—` instead of a rate.
+Balance-sheet columns are end-of-year balances, income and cash-flow
+columns are flows. Exports mirror the on-screen columns, charts group by
+year, and drill-down from a year column opens that year's transactions
+(from a `Δ` column, the whole compared span).
 
 ### Read-only mode
 
