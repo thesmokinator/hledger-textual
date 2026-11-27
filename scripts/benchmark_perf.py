@@ -50,6 +50,7 @@ from hledger_textual.hledger import (  # noqa: E402
     load_report,
     load_transactions,
 )
+from hledger_textual.period import all_selection  # noqa: E402
 from hledger_textual.widgets.accounts_pane import AccountsPane  # noqa: E402
 from hledger_textual.widgets.reports_pane import ReportsPane  # noqa: E402
 from hledger_textual.widgets.summary_pane import SummaryPane  # noqa: E402
@@ -214,6 +215,56 @@ async def _measure_app(
         }
     )
     return startup, switch_stats
+
+
+async def _measure_all_time(journal: Path) -> dict[str, float]:
+    """Time the all-time transactions view: first paint and full fill.
+
+    The threshold modal is bypassed (patched sky-high) so the measurement
+    covers the bucketed load itself.  Polling is sparse (2 s): tight polls
+    force re-renders of a huge table and pollute the measurement.
+
+    Returns:
+        Dict with ``alltime_first_paint_s``, ``alltime_full_fill_s`` and
+        ``alltime_rows`` (0 when the journal span is unknown).
+    """
+    with patch(
+        "hledger_textual.widgets.transactions_table.load_all_time_threshold",
+        return_value=10**9,
+    ):
+        app = HledgerTuiApp(
+            journal_file=journal, initial_period=all_selection()
+        )
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause(delay=2.0)
+            await pilot.press("3")
+            started = time.perf_counter()
+            first_paint: float | None = None
+            total = (
+                app.journal_stats.transaction_count
+                if app.journal_stats is not None
+                else 0
+            )
+            while True:
+                await pilot.pause(delay=2.0)
+                elapsed = time.perf_counter() - started
+                try:
+                    from textual.widgets import DataTable
+
+                    rows = app.screen.query_one(
+                        "#transactions-table", DataTable
+                    ).row_count
+                except Exception:
+                    rows = -1
+                if first_paint is None and rows > 0:
+                    first_paint = round(elapsed, 3)
+                if (total and rows >= total) or elapsed > 600:
+                    break
+            return {
+                "alltime_first_paint_s": first_paint or -1.0,
+                "alltime_full_fill_s": round(time.perf_counter() - started, 3),
+                "alltime_rows": rows,
+            }
 
 
 def _time_loaders(journal: Path) -> dict[str, float]:
@@ -383,6 +434,9 @@ async def _async_main(args) -> int:
         results.update(startup)
         results.update(switches)
 
+        if args.all_time:
+            results.update(await _measure_all_time(journal))
+
     _print_table(results)
     if args.output is not None:
         args.output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
@@ -390,8 +444,8 @@ async def _async_main(args) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Command-line entry point."""
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the benchmark command-line parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--journal", type=Path, help="journal to measure")
     parser.add_argument(
@@ -410,7 +464,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repeat", type=int, default=1, help="app measurement repeats (default: 1)"
     )
+    parser.add_argument(
+        "--all-time",
+        action="store_true",
+        help="also measure the all-time transactions view (first paint + full fill)",
+    )
     parser.add_argument("--output", type=Path, help="write results as JSON")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Command-line entry point."""
+    parser = _build_parser()
     args = parser.parse_args(argv)
     if args.repeat < 1:
         parser.error("--repeat must be >= 1")
