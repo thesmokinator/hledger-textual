@@ -127,6 +127,19 @@ The startup period is resolved in this order:
 3. the current month — or, when the current month has no transactions, the
    month of the journal's latest activity (with an explanatory notice)
 
+### Fiscal years
+
+Many users do not align with the calendar year. Set `fiscal_year_start`
+to the first month (1–12, default 1) and the app's Year-to-date windows
+run from that month: with `fiscal_year_start = 4`, YTD in June 2024 spans
+April→June, and February 2024 belongs to FY2023 (April 2023→March 2024,
+leap days included). Fiscal years are labelled by the year they start in.
+
+Note: `-p ytd` and `-p "this year"` on the command line keep hledger's
+calendar semantics — the setting only affects the app's own YTD paths
+(Reports window, budget year, presets). hledger itself has no fiscal-year
+flag, so the offset is applied app-side.
+
 ### Read-only mode
 
 Open the journal for viewing only — every write path is disabled:
@@ -214,6 +227,7 @@ journal_file = "~/finance/all.journal"
 theme = "nord"
 # default_period = "last month"
 # read_only = true
+# fiscal_year_start = 4   # April; Year-to-date runs April→March
 
 # Reorder the tabs (any subset; missing tabs keep their default order)
 tab_order = ["summary", "accounts", "transactions", "budget", "recurring", "reports"]
