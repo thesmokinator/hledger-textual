@@ -44,6 +44,7 @@ class BudgetOverviewScreen(ModalScreen[None]):
 
     BINDINGS = [
         Binding("escape,o", "dismiss_screen", "Close", show=True),
+        Binding("x", "export_overview", "Export", show=True),
     ]
 
     def __init__(self, journal_file: Path, rules: list[BudgetRule]) -> None:
@@ -57,6 +58,8 @@ class BudgetOverviewScreen(ModalScreen[None]):
         self.journal_file = journal_file
         self._rules = rules
         self._num_periods: int = 3
+        self._last_periods: list[str] = []
+        self._last_rows: dict[str, list] = {}
 
     def compose(self) -> ComposeResult:
         """Create the screen layout."""
@@ -107,22 +110,75 @@ class BudgetOverviewScreen(ModalScreen[None]):
         """Display an error message in the status label."""
         self.query_one("#budget-overview-status", Static).update(f"[red]Error: {msg}[/red]")
 
-    def _budget_cell(self, budget_row) -> str:
+    def _budget_cell(self, budget_row, markup: bool = True) -> str:
         """Render one budget cell with usage colours.
 
         Args:
             budget_row: The :class:`BudgetRow` for the cell.
+            markup: Wrap in usage colour markup; plain text when False
+                (used for CSV export).
         """
         usage = budget_row.usage_pct
         commodity = budget_row.commodity
         actual_str = f"{commodity}{budget_row.actual:.2f}"
-        if budget_row.budget:
-            if usage > 100:
-                return f"[red]{actual_str}[/red]"
-            if usage >= 75:
-                return f"[yellow]{actual_str}[/yellow]"
-            return f"[green]{actual_str}[/green]"
-        return actual_str
+        if not budget_row.budget or not markup:
+            return actual_str
+        if usage > 100:
+            return f"[red]{actual_str}[/red]"
+        if usage >= 75:
+            return f"[yellow]{actual_str}[/yellow]"
+        return f"[green]{actual_str}[/green]"
+
+    def get_export_data(self):
+        """Return an ExportData with month and year-total columns.
+
+        Mirrors the on-screen table: one column per month plus a total
+        column per calendar year.  Cells are plain text (no colour markup).
+
+        Returns:
+            An ExportData instance, or None when no data was loaded.
+        """
+        from hledger_textual.budget_yearly import sum_year_row, year_columns
+        from hledger_textual.export import ExportData
+
+        periods = getattr(self, "_last_periods", None)
+        rows = getattr(self, "_last_rows", None)
+        if not periods or not rows:
+            return None
+        spec = year_columns(periods)
+        headers = ["Account"]
+        for entry in spec:
+            if entry[0] == "month":
+                headers.append(periods[entry[1]])
+            else:
+                headers.append(entry[1])
+        data_rows: list[list[str]] = []
+        for account, period_rows in rows.items():
+            cells = [account]
+            for entry in spec:
+                if entry[0] == "month":
+                    idx = entry[1]
+                    br = period_rows[idx] if idx < len(period_rows) else None
+                    cells.append(
+                        self._budget_cell(br, markup=False)
+                        if br is not None
+                        else ""
+                    )
+                else:
+                    months = [
+                        period_rows[i]
+                        for i in entry[2]
+                        if i < len(period_rows)
+                    ]
+                    cells.append(
+                        self._budget_cell(
+                            sum_year_row(account, months), markup=False
+                        )
+                        if months
+                        else ""
+                    )
+            data_rows.append(cells)
+        return ExportData.from_rows("Budget Overview", headers, data_rows, "budget-overview")
 
     def _populate_table(
         self,
@@ -146,7 +202,12 @@ class BudgetOverviewScreen(ModalScreen[None]):
 
         if not periods or not rows:
             status.update("[dim]No budget data available for this range.[/dim]")
+            self._last_periods = []
+            self._last_rows = {}
             return
+
+        self._last_periods = periods
+        self._last_rows = rows
 
         # Add columns: Account + one per period, with a year total after
         # each December (issue #282).
@@ -188,6 +249,43 @@ class BudgetOverviewScreen(ModalScreen[None]):
             while len(cells) < len(spec) + 1:
                 cells.append("")
             table.add_row(*cells, key=account)
+
+    def action_export_overview(self) -> None:
+        """Export the overview table (months + year totals) to CSV or PDF."""
+        from hledger_textual.config import load_export_dir
+        from hledger_textual.export import default_filename, export_csv, export_pdf
+
+        data = self.get_export_data()
+        if data is None:
+            self.notify("Nothing to export yet", severity="warning", timeout=3)
+            return
+
+        from hledger_textual.screens.export_modal import ExportModal
+
+        def on_result(result: tuple[str, str, str] | None) -> None:
+            if result is None:
+                return
+            fmt, fname, directory = result
+            from pathlib import Path as _Path
+
+            path = _Path(directory).expanduser().resolve() / fname
+            try:
+                if fmt == "pdf":
+                    export_pdf(data, path)
+                else:
+                    export_csv(data, path)
+            except Exception as exc:
+                self.notify(f"Export failed: {exc}", severity="error", timeout=8)
+                return
+            self.notify(f"Exported to {path}", timeout=5)
+
+        self.app.push_screen(
+            ExportModal(
+                default_filename=default_filename("budget-overview", "csv"),
+                default_directory=str(load_export_dir()),
+            ),
+            callback=on_result,
+        )
 
     def action_dismiss_screen(self) -> None:
         """Close the overview screen."""

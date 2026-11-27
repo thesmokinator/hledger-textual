@@ -130,3 +130,82 @@ class TestOverviewYearColumns:
             len(groups[0][1]) - 5
         )
         assert total.budget == expected
+
+
+class TestOverviewExport:
+    """CSV export mirrors on-screen columns including year totals."""
+
+    async def _mounted_screen(self, app, pilot, journal):
+        from hledger_textual.screens.budget_overview import BudgetOverviewScreen
+
+        await app.push_screen(BudgetOverviewScreen(journal, rules=[_rule()]))
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, BudgetOverviewScreen)
+        return screen
+
+    async def test_export_data_includes_year_totals(
+        self, tmp_path: Path
+    ) -> None:
+        journal = tmp_path / "empty.journal"
+        journal.write_text("")
+        periods = ["2023-11", "2023-12", "2024-01"]
+        rows = {
+            "expenses:food": [
+                _row("40.00", "100.00"),
+                _row("60.00", "100.00"),
+                _row("10.00", "100.00"),
+            ]
+        }
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = await self._mounted_screen(app, pilot, journal)
+            screen._populate_table(periods, rows)
+            await pilot.pause()
+            data = screen.get_export_data()
+            assert data is not None
+            assert data.headers == [
+                "Account",
+                "2023-11", "2023-12", "2023",
+                "2024-01", "2024",
+            ]
+            assert data.rows[0][0] == "expenses:food"
+            assert "€100.00" in data.rows[0][3]
+            assert "€10.00" in data.rows[0][5]
+
+    async def test_export_csv_round_trip(self, tmp_path: Path) -> None:
+        from hledger_textual.export import export_csv
+
+        journal = tmp_path / "empty.journal"
+        journal.write_text("")
+        periods = ["2024-01", "2024-02"]
+        rows = {"expenses:food": [_row("40.00", "100.00"), _row("60.00", "100.00")]}
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = await self._mounted_screen(app, pilot, journal)
+            screen._populate_table(periods, rows)
+            await pilot.pause()
+            data = screen.get_export_data()
+            assert data is not None
+            out = tmp_path / "overview.csv"
+            export_csv(data, out)
+            text = out.read_text(encoding="utf-8")
+            assert "2024" in text.splitlines()[0]
+            assert "€100.00" in text
+
+    async def test_x_opens_export_modal(self, tmp_path: Path) -> None:
+        from hledger_textual.screens.export_modal import ExportModal
+
+        journal = tmp_path / "empty.journal"
+        journal.write_text("")
+        app = HledgerTuiApp(journal_file=journal)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = await self._mounted_screen(app, pilot, journal)
+            screen._populate_table(["2024-01"], {"expenses:food": [_row("1.00", "2.00")]})
+            await pilot.pause()
+            await pilot.press("x")
+            await pilot.pause()
+            assert isinstance(app.screen, ExportModal)
