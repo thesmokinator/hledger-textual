@@ -49,7 +49,13 @@ def test_report_labels_cover_report_types():
 def test_report_period_labels_cover_period_ranges():
     """Period labels cover exactly the selectable period ranges."""
     assert REPORT_PERIOD_LABELS == {months: label for label, months in REPORT_PERIOD_RANGES}
-    assert BUDGET_OVERVIEW_PERIOD_OPTIONS == REPORT_PERIOD_RANGES[:3]
+    assert BUDGET_OVERVIEW_PERIOD_OPTIONS == [
+        ("3 months", 3),
+        ("6 months", 6),
+        ("12 months", 12),
+        ("24 months", 24),
+        ("36 months", 36),
+    ]
 
 
 def test_recurring_period_options_extend_supported_periods():

@@ -998,7 +998,9 @@ def load_multi_period_budget_report(
         col = col.strip().strip('"')
         if i == 0:
             continue
-        if col.endswith(" budget"):
+        # hledger emits the budget column either as "YYYY-MM budget" or as
+        # a bare "budget" right after its period (1.52 shape).
+        if col == "budget" or col.endswith(" budget"):
             budget_indices.append(i)
         else:
             periods.append(col)

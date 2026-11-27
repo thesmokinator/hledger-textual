@@ -2179,6 +2179,35 @@ class TestLoadMultiPeriodBudgetReport:
         rent = rows["expenses:rent"]
         assert all(row.actual == Decimal("800") for row in rent)
 
+    _BARE_BUDGET_CSV = (
+        '"Account","2026-01","budget","2026-02","budget","2026-03","budget"\n'
+        '"expenses:food","€120.00","€150.00","€130.00","€150.00","€110.00","€150.00"\n'
+    )
+
+    def test_bare_budget_columns_excluded_from_periods(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """Bare budget columns (hledger 1.52 shape) are not periods."""
+        self._patch(monkeypatch, self._BARE_BUDGET_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        periods, _ = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        assert periods == ["2026-01", "2026-02", "2026-03"]
+
+    def test_bare_budget_columns_yield_budgets(
+        self, monkeypatch, tmp_path: Path
+    ):
+        """Bare budget columns parse into budget values, actuals stay aligned."""
+        self._patch(monkeypatch, self._BARE_BUDGET_CSV)
+        journal = tmp_path / "t.journal"
+        journal.write_text("", encoding="utf-8")
+        _, rows = load_multi_period_budget_report(journal, "2026-01", "2026-03")
+        food = rows["expenses:food"]
+        assert [r.actual for r in food] == [
+            Decimal("120"), Decimal("130"), Decimal("110")
+        ]
+        assert all(r.budget == Decimal("150") for r in food)
+
     def test_empty_budget_cell_returns_zero(self, monkeypatch, tmp_path: Path):
         """A missing budget cell returns a zero budget."""
         csv_output = (
