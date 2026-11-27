@@ -18,6 +18,9 @@ from hledger_textual.widgets.formatting import fmt_amount, split_raw_commodities
 #: Placeholder shown when a growth rate cannot be computed.
 NO_GROWTH = "—"
 
+#: Trailing columns appended by :func:`append_comparison_columns`.
+COMPARISON_TRAIL = ("Δ", "Δ%")
+
 
 def parse_cell(cell: str) -> dict[str, Decimal]:
     """Parse a report amount cell into per-commodity quantities.
@@ -122,3 +125,60 @@ def append_comparison_columns(data: ReportData) -> ReportData:
             )
         )
     return ReportData(title=data.title, period_headers=headers, rows=rows)
+
+
+def without_comparison_columns(data: ReportData) -> ReportData:
+    """Return a copy of *data* without trailing ``Δ`` / ``Δ%`` columns.
+
+    Used for charting, where the delta columns would otherwise appear as
+    extra periods.
+
+    Args:
+        data: A report as produced by :func:`append_comparison_columns`.
+    """
+    if list(data.period_headers[-2:]) != list(COMPARISON_TRAIL):
+        return data
+    return ReportData(
+        title=data.title,
+        period_headers=data.period_headers[:-2],
+        rows=[
+            ReportRow(
+                account=row.account,
+                amounts=row.amounts[:-2],
+                is_section_header=row.is_section_header,
+                is_total=row.is_total,
+                depth=row.depth,
+            )
+            for row in data.rows
+        ],
+    )
+
+
+def normalize_comparison_headers(
+    headers: list[str], mode: str
+) -> list[str]:
+    """Collapse balance-sheet date headers to compact period labels.
+
+    ``hledger bs -Y`` names columns ``2022-12-31`` and ``bs -Q`` names
+    them ``2022-03-31``; IS/CF already use ``2022`` / ``2022Q1``.  This
+    maps the date forms onto the same labels so year columns read
+    uniformly.
+
+    Args:
+        headers: Raw period headers from hledger.
+        mode: ``"year"`` or ``"quarter"``.
+    """
+    import re
+
+    out = []
+    for header in headers:
+        match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", header.strip())
+        if not match:
+            out.append(header)
+            continue
+        year, month = match.group(1), int(match.group(2))
+        if mode == "quarter":
+            out.append(f"{year}Q{(month + 2) // 3}")
+        else:
+            out.append(year)
+    return out

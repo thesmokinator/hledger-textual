@@ -287,12 +287,16 @@ class TestReportsPaneWindowNavigation:
         pane = ReportsPane.__new__(ReportsPane)
         pane._period_months = 6
         pane._period_fallback = month_selection(date(2024, 3, 1))
+        pane._comparison = "off"
+        pane._comparison_years = []
         assert pane._window_display_range() == "2023-10 → 2024-03"
 
     def test_drill_down_date_query_for_shifted_window(self):
         """Drill-down column dates derive from the shifted window begin."""
         pane = ReportsPane.__new__(ReportsPane)
         pane._period_begin = date(2023, 10, 1)
+        pane._comparison = "off"
+        pane._comparison_years = []
         assert pane._column_to_date_query(0) == "date:2023-10"
         assert pane._column_to_date_query(3) == "date:2024-01"
 
