@@ -648,6 +648,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
     )
     parser.add_argument(
+        "--query",
+        help=(
+            "Extra hledger query applied to every pane, composed with the "
+            "period (e.g. --query tag:reimbursable). Repeatable."
+        ),
+        action="append",
+        default=None,
+    )
+    parser.add_argument(
         "--read-only",
         help="Open the journal for viewing only: disable every write path.",
         action="store_true",

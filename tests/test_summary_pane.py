@@ -920,13 +920,14 @@ class TestSummaryPaneMulticurrency:
 
         captured: dict = {}
 
-        def _fake_summary(file, period=None, cache=None, commodity=None):
+        def _fake_summary(file, period=None, cache=None, commodity=None, query=None):
             captured["commodity"] = commodity
+            captured["query"] = query
             return PeriodSummary(
                 income=Decimal("100"), expenses=Decimal("40"), commodity="€"
             )
 
-        def _fake_net(file, period=None, cache=None):
+        def _fake_net(file, period=None, cache=None, query=None):
             captured["net_called"] = True
             return [("€", Decimal("50")), ("£", Decimal("10"))]
 
@@ -948,6 +949,7 @@ class TestSummaryPaneMulticurrency:
         async with app.run_test() as pilot:
             await wait_until(pilot, lambda: _cards_applied(app))
             assert captured["commodity"] == "€"
+            assert captured["query"] == ""
             assert captured["net_called"] is True
             marquee = app.query_one(".summary-multicurrency", CurrencyMarquee)
             assert marquee.display is True
@@ -961,8 +963,9 @@ class TestSummaryPaneMulticurrency:
 
         captured: dict = {}
 
-        def _fake_summary(file, period=None, cache=None, commodity=None):
+        def _fake_summary(file, period=None, cache=None, commodity=None, query=None):
             captured["commodity"] = commodity
+            captured["query"] = query
             return PeriodSummary(
                 income=Decimal("100"), expenses=Decimal("40"), commodity="€"
             )
@@ -985,6 +988,7 @@ class TestSummaryPaneMulticurrency:
         async with app.run_test() as pilot:
             await wait_until(pilot, lambda: _cards_applied(app))
             assert captured["commodity"] is None
+            assert captured["query"] == ""
 
     async def test_net_by_commodity_error_falls_back_to_empty(
         self, summary_journal: Path, monkeypatch

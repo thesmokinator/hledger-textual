@@ -57,6 +57,7 @@ class TestMain:
         args.period = None
         args.begin = None
         args.end = None
+        args.query = None
         args.read_only = False
         app = MagicMock()
 
@@ -71,7 +72,10 @@ class TestMain:
 
         resolve.assert_called_once_with(cli_file=None)
         app_cls.assert_called_once_with(
-            journal_file=journal, initial_period=None, read_only=False
+            journal_file=journal,
+            initial_period=None,
+            initial_query=None,
+            read_only=False,
         )
         app.run.assert_called_once_with()
 

@@ -27,7 +27,7 @@ from hledger_textual.widgets.formatting import (
     fmt_amount,
 )
 from hledger_textual.widgets.loading import hide_loading_overlay, show_loading_overlay
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, get_period, set_period
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, get_global_query, get_period, set_period
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.hledger import (
     HledgerError,
@@ -603,13 +603,16 @@ class SummaryPane(DataTablePaneMixin, Widget):
         ) = gather_loads(
             [
                 lambda: load_period_summary(
-                    self.journal_file, period, cache=self._cache, commodity=commodity
+                    self.journal_file, period, cache=self._cache, commodity=commodity,
+                    query=get_global_query(self),
                 ),
                 lambda: load_period_net_by_commodity(
-                    self.journal_file, period, cache=self._cache
+                    self.journal_file, period, cache=self._cache,
+                    query=get_global_query(self),
                 ),
                 lambda: load_liabilities_breakdown(
-                    self.journal_file, commodity=commodity, cache=self._cache
+                    self.journal_file, commodity=commodity, cache=self._cache,
+                    query=get_global_query(self),
                 ),
                 # Stats also carry the transaction date span used for the
                 # startup landing heuristic (issue #267); loaded once here so
@@ -630,13 +633,15 @@ class SummaryPane(DataTablePaneMixin, Widget):
         # loader, so these calls normally do not start a subprocess.
         try:
             income_by_commodity = load_period_income_by_commodity(
-                self.journal_file, period, cache=self._cache
+                self.journal_file, period, cache=self._cache,
+                query=get_global_query(self),
             )
         except HledgerError:
             income_by_commodity = []
         try:
             expenses_by_commodity = load_period_expenses_by_commodity(
-                self.journal_file, period, cache=self._cache
+                self.journal_file, period, cache=self._cache,
+                query=get_global_query(self),
             )
         except HledgerError:
             expenses_by_commodity = []
@@ -839,10 +844,12 @@ class SummaryPane(DataTablePaneMixin, Widget):
         summary_result, net_result = gather_loads(
             [
                 lambda: load_period_summary(
-                    self.journal_file, period, cache=self._cache, commodity=commodity
+                    self.journal_file, period, cache=self._cache, commodity=commodity,
+                    query=get_global_query(self),
                 ),
                 lambda: load_period_net_by_commodity(
-                    self.journal_file, period, cache=self._cache
+                    self.journal_file, period, cache=self._cache,
+                    query=get_global_query(self),
                 ),
             ]
         )
@@ -850,13 +857,15 @@ class SummaryPane(DataTablePaneMixin, Widget):
         net_by_commodity = _load_result(net_result, [])
         try:
             income_by_commodity = load_period_income_by_commodity(
-                self.journal_file, period, cache=self._cache
+                self.journal_file, period, cache=self._cache,
+                query=get_global_query(self),
             )
         except HledgerError:
             income_by_commodity = []
         try:
             expenses_by_commodity = load_period_expenses_by_commodity(
-                self.journal_file, period, cache=self._cache
+                self.journal_file, period, cache=self._cache,
+                query=get_global_query(self),
             )
         except HledgerError:
             expenses_by_commodity = []
@@ -1084,10 +1093,12 @@ class SummaryPane(DataTablePaneMixin, Widget):
         income_result, expense_result = gather_loads(
             [
                 lambda: load_income_breakdown(
-                    self.journal_file, period, commodity=commodity, cache=self._cache
+                    self.journal_file, period, commodity=commodity, cache=self._cache,
+                    query=get_global_query(self),
                 ),
                 lambda: load_expense_breakdown(
-                    self.journal_file, period, commodity=commodity, cache=self._cache
+                    self.journal_file, period, commodity=commodity, cache=self._cache,
+                    query=get_global_query(self),
                 ),
             ]
         )

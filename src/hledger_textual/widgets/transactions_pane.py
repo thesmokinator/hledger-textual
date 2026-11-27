@@ -16,7 +16,7 @@ from hledger_textual.config import resolve_default_commodity
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.hledger import HledgerError, load_period_summary
 from hledger_textual.models import Transaction, TransactionStatus
-from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, request_initial_load
+from hledger_textual.widgets.pane_mixin import DataTablePaneMixin, get_global_query, request_initial_load
 from hledger_textual.widgets.period_summary_cards import PeriodSummaryCards
 from hledger_textual.widgets.transactions_table import TransactionsTable
 
@@ -278,6 +278,7 @@ class TransactionsPane(DataTablePaneMixin, Widget):
                 period,
                 cache=self._cache,
                 commodity=resolve_default_commodity(self.journal_file),
+                query=get_global_query(self),
             )
         except HledgerError:
             summary = None

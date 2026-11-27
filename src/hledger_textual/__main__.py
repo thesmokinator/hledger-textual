@@ -9,6 +9,7 @@ from hledger_textual.config import (
     parse_args,
     resolve_journal_file,
 )
+from hledger_textual.query import InvalidQueryError, validate_query
 from hledger_textual.textual_compat import (
     MIN_TEXTUAL_VERSION,
     is_supported_textual,
@@ -92,6 +93,31 @@ def _resolve_initial_period(args, journal_file):
     return selection
 
 
+def _resolve_initial_query(
+    queries: list[str] | None, journal_file,
+) -> str | None:
+    """Resolve and validate the startup global query (issue #281).
+
+    Args:
+        queries: Values from the repeatable ``--query`` flag, or None.
+        journal_file: Path to the journal file.
+
+    Returns:
+        The space-joined query, or ``None`` when no query was requested.
+
+    Raises:
+        ValueError: If hledger rejects the composed query.
+    """
+    if not queries:
+        return None
+    query = " ".join(queries)
+    try:
+        validate_query(journal_file, query)
+    except InvalidQueryError as exc:
+        raise ValueError(f"Invalid --query {query!r}: {exc}") from exc
+    return query
+
+
 def main() -> None:
     """Run the hledger-textual application."""
     _check_textual_version()
@@ -99,12 +125,14 @@ def main() -> None:
     journal_file = resolve_journal_file(cli_file=args.file)
     try:
         initial_period = _resolve_initial_period(args, journal_file)
+        initial_query = _resolve_initial_query(args.query, journal_file)
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     app = HledgerTuiApp(
         journal_file=journal_file,
         initial_period=initial_period,
+        initial_query=initial_query,
         read_only=args.read_only or load_read_only(),
     )
     app.run()

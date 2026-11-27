@@ -36,6 +36,24 @@ def get_period(widget) -> PeriodSelection:
     return fallback if fallback is not None else current_month_selection()
 
 
+def get_global_query(widget) -> str:
+    """Return the app-owned global query *widget* should compose with its scope.
+
+    Widgets mounted inside :class:`~hledger_textual.app.HledgerTuiApp` read
+    the app-owned ``active_query``; anything else falls back to ``""``
+    (no global filter).
+
+    Args:
+        widget: The pane or table widget asking for the global query.
+    """
+    try:
+        app = widget.app
+    except Exception:
+        return ""
+    query = getattr(app, "active_query", "")
+    return query if isinstance(query, str) else ""
+
+
 def set_period(widget, selection: PeriodSelection) -> bool:
     """Apply a new shared period selection.
 

@@ -16,7 +16,7 @@ from hledger_textual.dateutil import prev_month as _prev_month
 from hledger_textual.hledger import HledgerError, load_multi_period_budget_report
 from hledger_textual.models import BudgetRule
 from hledger_textual.widgets.constants import BUDGET_OVERVIEW_PERIOD_OPTIONS
-from hledger_textual.widgets.pane_mixin import get_period
+from hledger_textual.widgets.pane_mixin import get_global_query, get_period
 
 
 def _months_range(end: date, n: int) -> tuple[str, str]:
@@ -96,7 +96,8 @@ class BudgetOverviewScreen(ModalScreen[None]):
         start_str, end_str = _months_range(end, self._num_periods)
         try:
             periods, rows = load_multi_period_budget_report(
-                self.journal_file, start_str, end_str
+                self.journal_file, start_str, end_str,
+                query=get_global_query(self) or None,
             )
         except HledgerError as exc:
             self.app.call_from_thread(self._show_load_error, str(exc))

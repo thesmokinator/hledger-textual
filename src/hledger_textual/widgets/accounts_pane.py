@@ -30,6 +30,7 @@ from hledger_textual.widgets.formatting import fmt_amount_str
 from hledger_textual.widgets.loading import hide_loading_overlay
 from hledger_textual.widgets.pane_mixin import (
     DataTablePaneMixin,
+    get_global_query,
     request_initial_load,
     run_pane_load,
     set_empty_state_visible,
@@ -112,6 +113,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
                         self.journal_file,
                         commodity=self._commodity,
                         cache=self._cache,
+                        query=get_global_query(self),
                     ),
                 )
             return (
@@ -120,6 +122,7 @@ class AccountsPane(DataTablePaneMixin, Widget):
                     self.journal_file,
                     cache=self._cache,
                     commodity=self._commodity,
+                    query=get_global_query(self),
                 ),
             )
 

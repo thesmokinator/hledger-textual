@@ -148,6 +148,10 @@ class HledgerTuiApp(App):
     #: read this reactive and reload when it changes.
     period_selection: reactive[PeriodSelection | None] = reactive(None, init=False)
 
+    #: Global hledger query every transaction-backed pane composes with the
+    #: period (issue #281).  Empty string means "no global filter".
+    active_query: reactive[str] = reactive("", init=False)
+
     BINDINGS = [
         # Number keys follow the visual tab order (see tab_order in config),
         # so their help descriptions name the default sections at each slot.
@@ -159,6 +163,8 @@ class HledgerTuiApp(App):
         Binding("6", "switch_nth(5)", "Reports", show=False),
         Binding("s", "sync", "Sync", show=False),
         Binding("question_mark", "show_help", "Help", show=False),
+        Binding("Q", "query_bar", "Query", show=True),
+        Binding("X", "clear_query", "Clear query", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -166,6 +172,7 @@ class HledgerTuiApp(App):
         self,
         journal_file: Path,
         initial_period: PeriodSelection | None = None,
+        initial_query: str | None = None,
         read_only: bool = False,
     ) -> None:
         """Initialize the app.
@@ -176,6 +183,8 @@ class HledgerTuiApp(App):
                 flags or the ``default_period`` config key); None means the
                 current month, with the landing heuristic of #267 allowed to
                 move to the latest activity when the current month is empty.
+            initial_query: Global hledger query from ``--query`` (issue #281);
+                None means no global filter.
             read_only: Disable every write path (issue #271). Exports,
                 search, period navigation and drill-down stay available.
         """
@@ -215,18 +224,21 @@ class HledgerTuiApp(App):
         if theme:
             self.theme = theme
         self.period_selection = initial_period or current_month_selection()
+        self.active_query = initial_query or ""
 
     # ------------------------------------------------------------------
     # Shared period state (issue #263)
     # ------------------------------------------------------------------
 
-    def watch_period_selection(self, new: PeriodSelection | None) -> None:
-        """Refresh the visible pane and mark the others stale on a period change.
+    def _refresh_scope(self) -> None:
+        """Refresh the visible pane and mark the others stale.
 
-        Panes are not rebuilt: the visible one reloads now, the period-aware
+        Shared by the period and global-query watchers: both change what
+        every transaction-backed pane displays (issues #263, #281).  Panes
+        are not rebuilt: the visible one reloads now, the period-aware
         ones reload when they are next activated (via ``_stale_panes``).
         """
-        if new is None or not self.is_mounted:
+        if not self.is_mounted:
             return
         try:
             switcher = self.query_one("#content-switcher", ContentSwitcher)
@@ -238,6 +250,42 @@ class HledgerTuiApp(App):
         period_sections = {"summary", "transactions", "budget", "reports"}
         self._stale_panes |= period_sections - {visible}
         self._refresh_pane(visible, period_only=True)
+
+    def watch_period_selection(self, new: PeriodSelection | None) -> None:
+        """Refresh the visible pane and mark the others stale on a period change.
+
+        Panes are not rebuilt: the visible one reloads now, the period-aware
+        ones reload when they are next activated (via ``_stale_panes``).
+        """
+        if new is None:
+            return
+        self._refresh_scope()
+
+    def watch_active_query(self, _new: str) -> None:
+        """Refresh panes when the global query changes (issue #281)."""
+        self._refresh_scope()
+        try:
+            switcher = self.query_one("#content-switcher", ContentSwitcher)
+            visible = switcher.current or "summary"
+        except Exception:
+            return
+        try:
+            self.query_one("#footer-bar", Static).update(
+                self._footer_text(visible)
+            )
+        except Exception:
+            return
+
+    def _footer_text(self, section: str) -> str:
+        """Return the footer text for *section*, flagging the global query.
+
+        When a global query is active every pane is filtered, so the footer
+        names it with its one-action clear key (issue #281).
+        """
+        base = self._footer_commands.get(section, "")
+        if self.active_query:
+            return f"{base}  Query: {self.active_query} (X: clear)"
+        return base
 
     def _pane_for_section(self, section: str):
         """Build the pane widget for a tab section."""
@@ -269,7 +317,7 @@ class HledgerTuiApp(App):
             for section in self._tab_order:
                 yield self._pane_for_section(section)
 
-        yield Static(self._footer_commands["summary"], id="footer-bar")
+        yield Static(self._footer_text("summary"), id="footer-bar")
 
     def on_mount(self) -> None:
         """Focus the default section after mount."""
@@ -460,7 +508,7 @@ class HledgerTuiApp(App):
         section = event.tab.id.removeprefix("tab-")
         self.query_one("#content-switcher", ContentSwitcher).current = section
         self.query_one("#footer-bar", Static).update(
-            self._footer_commands.get(section, "")
+            self._footer_text(section)
         )
         self._flush_deferred_section(section)
         if section in self._stale_panes:
@@ -544,7 +592,7 @@ class HledgerTuiApp(App):
         """Update the Reports footer when switching between built-in and custom modes."""
         key = "reports-custom" if event.active else "reports"
         self.query_one("#footer-bar", Static).update(
-            self._footer_commands.get(key, "")
+            self._footer_text(key)
         )
 
     def action_switch_section(self, section: str) -> None:
@@ -555,6 +603,28 @@ class HledgerTuiApp(App):
         """Switch to the tab at the given position (number keys 1-6)."""
         if 0 <= index < len(self._tab_order):
             self._activate_section(self._tab_order[index])
+
+    def action_query_bar(self) -> None:
+        """Open the global query bar and apply the edited query."""
+        from hledger_textual.screens.query_bar import QueryBarModal
+
+        def on_result(query: str | None) -> None:
+            if query is not None:
+                self.active_query = query
+
+        self.push_screen(
+            QueryBarModal(
+                current_query=self.active_query,
+                journal_file=self.journal_file,
+            ),
+            callback=on_result,
+        )
+
+    def action_clear_query(self) -> None:
+        """Clear the global query with one action (issue #281)."""
+        if self.active_query:
+            self.active_query = ""
+            self.notify("Query cleared", timeout=3)
 
     def action_show_help(self) -> None:
         """Open the combined help and about panel."""

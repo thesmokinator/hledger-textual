@@ -360,6 +360,7 @@ def load_account_balances(
     file: str | Path,
     cache: HledgerCache | None = None,
     commodity: str | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, str]]:
     """Load all accounts with their current balances.
 
@@ -378,7 +379,7 @@ def load_account_balances(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_account_balances", str(file), commodity)
+    cache_key = ("load_account_balances", str(file), commodity, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
@@ -387,6 +388,8 @@ def load_account_balances(
     args = ["--flat", "--no-total", "-O", "csv"]
     if commodity:
         args.extend(["-X", commodity, "--infer-market-prices"])
+    if query:
+        args.extend(query.split())
     output = run_hledger("balance", *args, file=file)
     reader = csv.reader(io.StringIO(output))
     next(reader, None)  # skip header row ("account","balance")
@@ -426,6 +429,7 @@ def load_account_tree_balances(
     file: str | Path,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[AccountNode]:
     """Load accounts as a tree with hierarchical balances.
 
@@ -449,7 +453,7 @@ def load_account_tree_balances(
     """
     from hledger_textual.models import AccountNode
 
-    cache_key = ("load_account_tree_balances", str(file), commodity)
+    cache_key = ("load_account_tree_balances", str(file), commodity, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
@@ -458,6 +462,8 @@ def load_account_tree_balances(
     args = ["--tree", "--no-total", "-O", "csv"]
     if commodity:
         args.extend(["-X", commodity, "--infer-market-prices"])
+    if query:
+        args.extend(query.split())
     output = run_hledger("balance", *args, file=file)
     reader = csv.reader(io.StringIO(output))
     next(reader, None)  # skip header row
@@ -854,6 +860,7 @@ def load_budget_report(
     file: str | Path,
     period: str,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[BudgetRow]:
     """Load budget vs actual data for a given period.
 
@@ -870,15 +877,16 @@ def load_budget_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_budget_report", str(file), period)
+    cache_key = ("load_budget_report", str(file), period, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
+    query_args = tuple(query.split()) if query else ()
     output = run_hledger(
         "balance", "--budget", "-p", period, "-O", "csv",
-        "--no-total", "Expenses",
+        "--no-total", "Expenses", *query_args,
         file=file,
     )
 
@@ -943,6 +951,7 @@ def load_multi_period_budget_report(
     start: str,
     end: str,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> tuple[list[str], dict[str, list[BudgetRow]]]:
     """Load budget vs actual data for multiple months side-by-side.
 
@@ -965,15 +974,16 @@ def load_multi_period_budget_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_multi_period_budget_report", str(file), start, end)
+    cache_key = ("load_multi_period_budget_report", str(file), start, end, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
+    query_args = tuple(query.split()) if query else ()
     output = run_hledger(
         "balance", "--budget", "-p", f"{start}..{end}", "-M", "-O", "csv",
-        "--no-total", "Expenses",
+        "--no-total", "Expenses", *query_args,
         file=file,
     )
 
@@ -1126,6 +1136,7 @@ def load_period_summary(
     period: str | None = None,
     cache: HledgerCache | None = None,
     commodity: str | None = None,
+    query: str | None = None,
 ) -> PeriodSummary:
     """Load income, expense, and investment totals for a single period.
 
@@ -1159,7 +1170,7 @@ def load_period_summary(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_period_summary", str(file), period, commodity)
+    cache_key = ("load_period_summary", str(file), period, commodity, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
@@ -1169,6 +1180,7 @@ def load_period_summary(
 
     period_args = ("-p", period) if period else ()
     x_args = ("-X", commodity, "--infer-market-prices") if commodity else ()
+    query_args = tuple(query.split()) if query else ()
 
     def _sum_by_commodity(output: str) -> dict[str, Decimal]:
         """Split a flat balance CSV into absolute totals per commodity."""
@@ -1188,14 +1200,16 @@ def load_period_summary(
     def _income_query() -> str:
         return run_hledger(
             "balance", "type:R",
-            *period_args, *x_args, "--flat", "--no-total", "-O", "csv",
+            *period_args, *x_args,
+            "--flat", "--no-total", "-O", "csv", *query_args,
             file=file,
         )
 
     def _expense_query() -> str:
         return run_hledger(
             "balance", "type:X",
-            *period_args, *x_args, "--flat", "--no-total", "-O", "csv",
+            *period_args, *x_args,
+            "--flat", "--no-total", "-O", "csv", *query_args,
             file=file,
         )
 
@@ -1204,7 +1218,8 @@ def load_period_summary(
             return run_hledger(
                 "balance", "assets:investments",
                 "-B",
-                *period_args, "--flat", "--no-total", "-O", "csv",
+                *period_args,
+                "--flat", "--no-total", "-O", "csv", *query_args,
                 file=file,
             )
         except HledgerError:
@@ -1285,6 +1300,7 @@ def _period_side_by_commodity(
     side: str,
     period: str | None,
     cache: HledgerCache | None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal]]:
     """Shared helper: |sum| of ``side`` (``type:R``/``type:X``) per commodity.
 
@@ -1294,16 +1310,17 @@ def _period_side_by_commodity(
     """
     from hledger_textual.widgets.formatting import split_raw_commodities
 
-    cache_key = (f"load_period_{side}_by_commodity", str(file), period)
+    cache_key = (f"load_period_{side}_by_commodity", str(file), period, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
             return cached
 
     period_args = ("-p", period) if period else ()
+    query_args = tuple(query.split()) if query else ()
     output = run_hledger(
         "balance", side,
-        *period_args, "--flat", "--no-total", "-O", "csv",
+        *period_args, "--flat", "--no-total", "-O", "csv", *query_args,
         file=file,
     )
     reader = csv.reader(io.StringIO(output))
@@ -1329,24 +1346,27 @@ def load_period_income_by_commodity(
     file: str | Path,
     period: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal]]:
     """Income per commodity for the period (no ``-X`` conversion)."""
-    return _period_side_by_commodity(file, "type:R", period, cache)
+    return _period_side_by_commodity(file, "type:R", period, cache, query)
 
 
 def load_period_expenses_by_commodity(
     file: str | Path,
     period: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal]]:
     """Expenses per commodity for the period (no ``-X`` conversion)."""
-    return _period_side_by_commodity(file, "type:X", period, cache)
+    return _period_side_by_commodity(file, "type:X", period, cache, query)
 
 
 def load_period_flows_by_commodity(
     file: str | Path,
     period: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> tuple[
     list[tuple[str, Decimal]],
     list[tuple[str, Decimal]],
@@ -1372,8 +1392,8 @@ def load_period_flows_by_commodity(
     """
     results = gather_loads(
         [
-            lambda: _period_side_by_commodity(file, "type:R", period, cache),
-            lambda: _period_side_by_commodity(file, "type:X", period, cache),
+            lambda: _period_side_by_commodity(file, "type:R", period, cache, query),
+            lambda: _period_side_by_commodity(file, "type:X", period, cache, query),
         ]
     )
     income_result, expenses_result = results
@@ -1395,6 +1415,7 @@ def load_period_net_by_commodity(
     file: str | Path,
     period: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal]]:
     """Load net income per commodity for a period, without any conversion.
 
@@ -1416,7 +1437,7 @@ def load_period_net_by_commodity(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return load_period_flows_by_commodity(file, period, cache)[2]
+    return load_period_flows_by_commodity(file, period, cache, query)[2]
 
 
 def _parse_breakdown_csv(
@@ -1471,6 +1492,7 @@ def _load_account_breakdown(
     period: str,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account breakdown for a single period.
 
@@ -1492,7 +1514,7 @@ def _load_account_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_account_breakdown", str(file), account_type, period, commodity)
+    cache_key = ("load_account_breakdown", str(file), account_type, period, commodity, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
@@ -1504,6 +1526,8 @@ def _load_account_breakdown(
     ]
     if commodity:
         args.extend(["-X", commodity, "--infer-market-prices"])
+    if query:
+        args.extend(query.split())
     output = run_hledger(*args, file=file)
     result = _parse_breakdown_csv(output, commodity)
 
@@ -1518,6 +1542,7 @@ def load_expense_breakdown(
     period: str,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account expense breakdown for a single period.
 
@@ -1534,7 +1559,7 @@ def load_expense_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return _load_account_breakdown(file, "type:X", period, commodity, cache)
+    return _load_account_breakdown(file, "type:X", period, commodity, cache, query)
 
 
 def load_income_breakdown(
@@ -1542,6 +1567,7 @@ def load_income_breakdown(
     period: str,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account income breakdown for a single period.
 
@@ -1558,13 +1584,14 @@ def load_income_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    return _load_account_breakdown(file, "type:R", period, commodity, cache)
+    return _load_account_breakdown(file, "type:R", period, commodity, cache, query)
 
 
 def load_liabilities_breakdown(
     file: str | Path,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> list[tuple[str, Decimal, str]]:
     """Load per-account liabilities breakdown (total outstanding balance).
 
@@ -1584,7 +1611,7 @@ def load_liabilities_breakdown(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_liabilities_breakdown", str(file), commodity)
+    cache_key = ("load_liabilities_breakdown", str(file), commodity, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
@@ -1593,6 +1620,8 @@ def load_liabilities_breakdown(
     args = ["balance", "type:L", "--flat", "--no-total", "-O", "csv"]
     if commodity:
         args.extend(["-X", commodity, "--infer-market-prices"])
+    if query:
+        args.extend(query.split())
     output = run_hledger(*args, file=file)
     result = _parse_breakdown_csv(output, commodity)
 
@@ -1856,6 +1885,7 @@ def load_investment_report(
     period_end: str | None = None,
     commodity: str | None = None,
     cache: HledgerCache | None = None,
+    query: str | None = None,
 ) -> ReportData:
     """Load a multi-period investment balance report from hledger.
 
@@ -1881,6 +1911,7 @@ def load_investment_report(
         period_begin,
         period_end,
         commodity,
+        query,
     )
     if cache is not None:
         cached = cache.get(cache_key, file=file)
@@ -1894,6 +1925,8 @@ def load_investment_report(
         args.extend(["-b", period_begin])
     if period_end:
         args.extend(["-e", period_end])
+    if query:
+        args.extend(query.split())
 
     output = run_hledger(*args, file=file)
     result = _parse_report_csv(output)
@@ -1978,6 +2011,7 @@ def load_report(
     sort_amount: bool = False,
     cache: HledgerCache | None = None,
     mode: Literal["tree", "flat"] = "flat",
+    query: str | None = None,
 ) -> ReportData:
     """Load a multi-period financial report from hledger.
 
@@ -2001,7 +2035,7 @@ def load_report(
     Raises:
         HledgerError: If hledger fails or is not found.
     """
-    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, sort_amount, mode)
+    cache_key = ("load_report", str(file), report_type, period_begin, period_end, commodity, sort_amount, mode, query)
     if cache is not None:
         cached = cache.get(cache_key, file=file)
         if cached is not None:
@@ -2016,6 +2050,8 @@ def load_report(
         args.extend(["-b", period_begin])
     if period_end:
         args.extend(["-e", period_end])
+    if query:
+        args.extend(query.split())
 
     output = run_hledger(*args, file=file)
     result = _parse_report_csv(output)
