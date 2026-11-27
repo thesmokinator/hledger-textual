@@ -153,7 +153,28 @@ class TestPaneLoaderWiring:
             pane = app.screen.query_one(pane_id)
             worker = getattr(pane, trigger)()
             await worker.wait()
-            assert seen.get("query") == "expenses:food"
+            await pilot.pause()
+            from textual.widgets import DataTable
+
+            table_rows = -1
+            for _table_id in (
+                "#accounts-table",
+                "#budget-table",
+                "#reports-table",
+            ):
+                try:
+                    table_rows = app.screen.query_one(
+                        _table_id, DataTable
+                    ).row_count
+                    break
+                except Exception:
+                    continue
+            assert seen.get("query") == "expenses:food", (
+                f"loader={name} worker_state={worker.state} "
+                f"tree_mode={getattr(pane, '_tree_mode', '?')} "
+                f"active_query={getattr(app, 'active_query', '?')!r} "
+                f"table_rows={table_rows} seen={seen!r}"
+            )
             return seen
 
     async def test_summary_receives_query(
