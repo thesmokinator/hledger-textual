@@ -245,6 +245,21 @@ async def _measure_all_time(journal: Path) -> dict[str, float]:
                 if app.journal_stats is not None
                 else 0
             )
+            # Phase 1: fast polls until first paint (empty table = cheap).
+            while first_paint is None and time.perf_counter() - started < 600:
+                await pilot.pause(delay=0.1)
+                try:
+                    from textual.widgets import DataTable
+
+                    rows = app.screen.query_one(
+                        "#transactions-table", DataTable
+                    ).row_count
+                except Exception:
+                    rows = -1
+                if rows > 0:
+                    first_paint = round(time.perf_counter() - started, 3)
+            # Phase 2: sparse polls to full fill (rendering a huge table
+            # every 0.1 s would pollute the measurement).
             while True:
                 await pilot.pause(delay=2.0)
                 elapsed = time.perf_counter() - started
@@ -256,8 +271,6 @@ async def _measure_all_time(journal: Path) -> dict[str, float]:
                     ).row_count
                 except Exception:
                     rows = -1
-                if first_paint is None and rows > 0:
-                    first_paint = round(elapsed, 3)
                 if (total and rows >= total) or elapsed > 600:
                     break
             return {
