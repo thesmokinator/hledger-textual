@@ -51,6 +51,8 @@ from hledger_textual.hledger import (  # noqa: E402
     load_transactions,
 )
 from hledger_textual.period import all_selection  # noqa: E402
+from hledger_textual.widgets.pane_mixin import set_period  # noqa: E402
+from hledger_textual.widgets.transactions_table import TransactionsTable  # noqa: E402
 from hledger_textual.widgets.accounts_pane import AccountsPane  # noqa: E402
 from hledger_textual.widgets.reports_pane import ReportsPane  # noqa: E402
 from hledger_textual.widgets.summary_pane import SummaryPane  # noqa: E402
@@ -221,22 +223,35 @@ async def _measure_all_time(journal: Path) -> dict[str, float]:
     """Time the all-time transactions view: first paint and full fill.
 
     The threshold modal is bypassed (patched sky-high) so the measurement
-    covers the bucketed load itself.  Polling is sparse (2 s): tight polls
-    force re-renders of a huge table and pollute the measurement.
+    covers the bucketed load itself.  Startup settles first (preload
+    complete on the current month), so the clock isolates the all-time
+    load instead of startup contention.  Polling is sparse (2 s): tight
+    polls force re-renders of a huge table and pollute the measurement.
 
     Returns:
         Dict with ``alltime_first_paint_s``, ``alltime_full_fill_s`` and
         ``alltime_rows`` (0 when the journal span is unknown).
     """
+    from hledger_textual.widgets.transactions_pane import TransactionsPane
+
     with patch(
         "hledger_textual.widgets.transactions_table.load_all_time_threshold",
         return_value=10**9,
     ):
-        app = HledgerTuiApp(
-            journal_file=journal, initial_period=all_selection()
-        )
+        app = HledgerTuiApp(journal_file=journal)
         async with app.run_test(size=(160, 45)) as pilot:
             await pilot.pause(delay=2.0)
+            await _wait_until(pilot, lambda: app.journal_stats is not None)
+            await _wait_until(
+                pilot,
+                lambda: bool(
+                    app.query_one(TransactionsPane)
+                    ._table._all_transactions
+                ),
+            )
+            await pilot.pause(delay=1.0)
+            table = app.screen.query_one(TransactionsTable)
+            set_period(table, all_selection())
             await pilot.press("3")
             started = time.perf_counter()
             first_paint: float | None = None
