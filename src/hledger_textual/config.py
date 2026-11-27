@@ -316,6 +316,75 @@ def delete_filter(name: str) -> None:
     _save_config_dict(data)
 
 
+def load_period_views() -> dict[str, str]:
+    """Return saved named period views from config.toml.
+
+    Reads the ``[period_views]`` section, where each key is a display name
+    and each value is an hledger period expression (``period_expr``; the
+    empty string means All time).
+
+    Returns:
+        A dict mapping view name → period expression.
+        Returns an empty dict when no ``[period_views]`` section exists.
+    """
+    config = _load_config_dict()
+    views = config.get("period_views", {})
+    if not isinstance(views, dict):
+        return {}
+    return {str(k): str(v) for k, v in views.items()}
+
+
+def save_period_view(name: str, expr: str) -> None:
+    """Save a named period view to config.toml.
+
+    Args:
+        name: Display name for the view.  Blank names are rejected.
+        expr: hledger period expression (``""`` for All time).
+    """
+    name = name.strip()
+    if not name:
+        return
+    data = _load_config_dict()
+    if not isinstance(data.get("period_views"), dict):
+        data["period_views"] = {}
+    data["period_views"][name] = str(expr)
+    _save_config_dict(data)
+
+
+def delete_period_view(name: str) -> None:
+    """Delete a named period view from config.toml.
+
+    Args:
+        name: The view name to remove.  No-op if the name does not exist.
+    """
+    data = _load_config_dict()
+    views = data.get("period_views", {})
+    if not isinstance(views, dict):
+        return
+    views.pop(name, None)
+    data["period_views"] = views
+    _save_config_dict(data)
+
+
+def rename_period_view(old: str, new: str) -> None:
+    """Rename a saved period view, keeping its expression.
+
+    Args:
+        old: Current view name.  No-op if it does not exist.
+        new: New view name.  Blank names are rejected (old entry kept).
+    """
+    new = new.strip()
+    if not new:
+        return
+    data = _load_config_dict()
+    views = data.get("period_views", {})
+    if not isinstance(views, dict) or old not in views:
+        return
+    views[new] = views.pop(old)
+    data["period_views"] = views
+    _save_config_dict(data)
+
+
 def load_accounts_view() -> str:
     """Return the saved accounts view mode, or ``"flat"`` if not set.
 
