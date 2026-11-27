@@ -71,7 +71,13 @@ REPORT_PERIOD_RANGES: list[tuple[str, int]] = [
 REPORT_PERIOD_LABELS: dict[int, str] = {months: label for label, months in REPORT_PERIOD_RANGES}
 """Human-readable label for each report period length in months."""
 
-BUDGET_OVERVIEW_PERIOD_OPTIONS: list[tuple[str, int]] = REPORT_PERIOD_RANGES[:3]
+BUDGET_OVERVIEW_PERIOD_OPTIONS: list[tuple[str, int]] = [
+    ("3 months", 3),
+    ("6 months", 6),
+    ("12 months", 12),
+    ("24 months", 24),
+    ("36 months", 36),
+]
 """Selectable period ranges in the budget overview (no year-to-date option)."""
 
 # ---------------------------------------------------------------------------
