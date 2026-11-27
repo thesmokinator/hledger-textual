@@ -127,6 +127,33 @@ The startup period is resolved in this order:
 3. the current month — or, when the current month has no transactions, the
    month of the journal's latest activity (with an explanatory notice)
 
+### Filtering everything with a global query
+
+Power users can scope every transaction-backed pane (Transactions, Summary,
+Accounts, Budget, Reports) with one query, composed with the period:
+
+```bash
+hledger-textual -f all.journal --query tag:reimbursable --query "not:cleared"
+```
+
+Inside the app:
+
+| Key | Effect |
+| --- | --- |
+| `Q` | Open the query bar (also in the command palette) |
+| `X` | Clear the global query with one action |
+
+The bar validates the query with `hledger print` before applying it: a
+mistake shows the hledger error and keeps the previous view instead of
+blanking the UI. Saved queries reuse the existing `[filters]` store —
+press `f` in the bar to browse them, `ctrl+s` to save the current one.
+An invalid `--query` at startup aborts with a clear message and a
+non-zero status.
+
+Not covered: Recurring shows generation rules rather than transactions,
+and investment holdings stay whole (the query filters transaction flows,
+not point-in-time positions).
+
 ### Read-only mode
 
 Open the journal for viewing only — every write path is disabled:
