@@ -18,8 +18,10 @@ from hledger_textual.cache import HledgerCache
 from hledger_textual.error_messages import humanize_error
 from hledger_textual.config import (
     load_custom_reports,
+    load_fiscal_year_start,
     resolve_default_commodity,
 )
+from hledger_textual.fiscal import fiscal_year_begin, fiscal_year_of
 from hledger_textual.hledger import HledgerError, load_investment_report, load_report, run_custom_report
 from hledger_textual.models import ReportData, ReportRow
 from hledger_textual.parallel import gather_loads
@@ -211,7 +213,8 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         anchor = period.begin or date.today()
         anchor = anchor.replace(day=1)
         if self._period_months == 0:
-            begin = date(anchor.year, 1, 1)
+            start = load_fiscal_year_start()
+            begin = fiscal_year_begin(fiscal_year_of(anchor, start), start)
         else:
             total = anchor.year * 12 + anchor.month - self._period_months
             begin_year, begin_month = divmod(total, 12)
@@ -307,7 +310,8 @@ class ReportsPane(ReportsCustomActionsMixin, DataTablePaneMixin, Widget):
         end = date(end_year, end_month, 1)
 
         if self._period_months == 0:
-            begin = date(anchor.year, 1, 1)
+            start = load_fiscal_year_start()
+            begin = fiscal_year_begin(fiscal_year_of(anchor, start), start)
         else:
             total = anchor.year * 12 + anchor.month - self._period_months
             begin_year, begin_month = divmod(total, 12)

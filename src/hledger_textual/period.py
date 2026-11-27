@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from typing import Literal
 
 from hledger_textual.dateutil import next_month, prev_month
+from hledger_textual.fiscal import fiscal_year_begin, fiscal_year_end_exclusive
 
 #: Kinds of period selection.
 PeriodKind = Literal["month", "range", "all"]
@@ -265,6 +266,22 @@ def year_selection(year: int) -> PeriodSelection:
         year: The calendar year to cover.
     """
     return month_range_selection(date(year, 1, 1), date(year, 12, 1))
+
+
+def fiscal_year_selection(year: int, start_month: int = 1) -> PeriodSelection:
+    """Build a selection covering fiscal year *year* (issue #279).
+
+    The year is labelled by the calendar year it starts in: with an April
+    start, ``fiscal_year_selection(2024, 4)`` spans April 2024 through
+    March 2025.  A January start matches :func:`year_selection` exactly.
+
+    Args:
+        year: Fiscal year label (the calendar year it starts in).
+        start_month: First month of the fiscal year (1–12).
+    """
+    begin = fiscal_year_begin(year, start_month)
+    last = prev_month(fiscal_year_end_exclusive(year, start_month))
+    return month_range_selection(begin, last)
 
 
 def all_selection() -> PeriodSelection:

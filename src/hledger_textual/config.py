@@ -407,6 +407,27 @@ def load_read_only() -> bool:
     return val is True
 
 
+def load_fiscal_year_start() -> int:
+    """Return the configured first month of the fiscal year (issue #279).
+
+    Reads the ``fiscal_year_start`` key from config.toml, e.g.::
+
+        fiscal_year_start = 4
+
+    Returns:
+        The start month 1–12.  Defaults to 1 (calendar year) when absent
+        or invalid.
+    """
+    val = _load_config_dict().get("fiscal_year_start", 1)
+    if isinstance(val, bool):
+        return 1
+    try:
+        month = int(val)
+    except (TypeError, ValueError):
+        return 1
+    return month if 1 <= month <= 12 else 1
+
+
 def load_default_period() -> str | None:
     """Return the configured startup period, or ``None`` when not set.
 
