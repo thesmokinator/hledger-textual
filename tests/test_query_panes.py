@@ -154,14 +154,6 @@ class TestPaneLoaderWiring:
             worker = getattr(pane, trigger)()
             await worker.wait()
             await pilot.pause()
-            if not seen:
-                # worker.wait() may resolve before a cancelled-then-rescheduled
-                # worker runs; poll briefly for the recorded call instead of
-                # trusting the handle alone.
-                try:
-                    await wait_until(pilot, lambda: bool(seen), timeout=30.0)
-                except Exception:
-                    pass
             from textual.widgets import DataTable
 
             table_rows = -1
@@ -196,8 +188,13 @@ class TestPaneLoaderWiring:
         )
 
     async def test_accounts_receives_query(
-        self, query_journal: Path, monkeypatch: pytest.MonkeyPatch
+        self, query_journal: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
+        # Isolate the real user config: the view mode (flat/tree) decides
+        # which loader runs, and toggle tests elsewhere rewrite it.
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", tmp_path / "q.toml"
+        )
         await self._query_seen_by(
             monkeypatch,
             "hledger_textual.widgets.accounts_pane.load_account_balances",

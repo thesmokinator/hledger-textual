@@ -190,6 +190,19 @@ class TestAccountDrillDown:
 class TestAccountsToggleView:
     """Tests for the 't' (toggle flat/tree) keybinding."""
 
+    @pytest.fixture(autouse=True)
+    def _isolated_config(self, tmp_path, monkeypatch):
+        """Never touch the real user config when toggling (issue #281).
+
+        These tests press 't', which persists via save_accounts_view;
+        without isolation they rewrite ~/.config/hledger-textual/config.toml
+        and flip later tests (e.g. query wiring) into tree mode.
+        """
+        config_file = tmp_path / "config.toml"
+        monkeypatch.setattr(
+            "hledger_textual.config._CONFIG_PATH", config_file
+        )
+
     async def test_toggle_changes_tree_mode(self, accounts_app: HledgerTuiApp):
         """Pressing 't' switches between flat and tree mode."""
         from hledger_textual.widgets.accounts_pane import AccountsPane
