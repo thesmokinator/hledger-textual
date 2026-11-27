@@ -132,9 +132,9 @@ class TestPaneLoaderWiring:
 
     async def _query_seen_by(
         self, monkeypatch: pytest.MonkeyPatch, module_path: str, name: str,
-        tab_key: str, journal: Path,
+        pane_id: str, trigger: str, journal: Path,
     ) -> dict:
-        """Spy on a pane-module loader from before mount; return kwargs."""
+        """Spy on a pane-module loader, drive the pane load, await it."""
         import hledger_textual.hledger as hledger_mod
 
         real = getattr(hledger_mod, name)
@@ -150,8 +150,9 @@ class TestPaneLoaderWiring:
         )
         async with app.run_test() as pilot:
             await pilot.pause()
-            await pilot.press(tab_key)
-            await wait_until(pilot, lambda: bool(seen), timeout=60.0)
+            pane = app.screen.query_one(pane_id)
+            worker = getattr(pane, trigger)()
+            await worker.wait()
             assert seen.get("query") == "expenses:food"
             return seen
 
@@ -161,7 +162,8 @@ class TestPaneLoaderWiring:
         await self._query_seen_by(
             monkeypatch,
             "hledger_textual.widgets.summary_pane.load_period_summary",
-            "load_period_summary", "1", query_journal,
+            "load_period_summary", "#summary", "_load_month_data",
+            query_journal,
         )
 
     async def test_accounts_receives_query(
@@ -170,7 +172,8 @@ class TestPaneLoaderWiring:
         await self._query_seen_by(
             monkeypatch,
             "hledger_textual.widgets.accounts_pane.load_account_balances",
-            "load_account_balances", "2", query_journal,
+            "load_account_balances", "#accounts", "_load_data",
+            query_journal,
         )
 
     async def test_budget_receives_query(
@@ -179,7 +182,8 @@ class TestPaneLoaderWiring:
         await self._query_seen_by(
             monkeypatch,
             "hledger_textual.widgets.budget_pane.load_budget_report",
-            "load_budget_report", "4", query_journal,
+            "load_budget_report", "#budget", "_load_budget_data",
+            query_journal,
         )
 
     async def test_reports_receives_query(
@@ -188,5 +192,6 @@ class TestPaneLoaderWiring:
         await self._query_seen_by(
             monkeypatch,
             "hledger_textual.widgets.reports_pane.load_report",
-            "load_report", "6", query_journal,
+            "load_report", "#reports", "_load_report_data",
+            query_journal,
         )
